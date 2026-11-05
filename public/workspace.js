@@ -2,7 +2,7 @@
 /* User-facing V2 workspace. Never stores credentials or paid approval in browser storage. */
 (() => {
   const $ = id => document.getElementById(id);
-  const state = { projects: [], project: null, models: [], tools: [], skills: [], runs: [], run: null, timer: null, refreshing: false, dirty: false };
+  const state = { projects: [], project: null, models: [], tools: [], skills: [], runs: [], run: null, files: [], timer: null, refreshing: false, dirty: false };
   const list = (x, key) => Array.isArray(x) ? x : Array.isArray(x && x[key]) ? x[key] : [];
   const identity = x => x && (x.id || x.toolId || x.skillId);
   const stringify = x => typeof x === 'string' ? x : JSON.stringify(x, null, 2);
@@ -123,7 +123,8 @@
     $('intake-note').textContent=project.plan || project.intake ? '该项目来自智能立项草案；请在执行前确认岗位、模型、成果标准与工具需求。' : '';
     $('approve-paid').checked=false; // Explicit approval is per invocation and never restored.
     $('validation').hidden=true;
-    renderRoles();renderSteps();resourceCheckboxes('project-tools',state.tools,[],'projectTool');
+    const mat=project.materials || {mode:'all',fileIds:[],maxChars:40000};$('materials-mode').value=mat.mode;$('materials-max').value=mat.maxChars;
+    renderRoles();renderSteps();resourceCheckboxes('project-tools',state.tools,[],'projectTool');loadFiles().catch(e=>feedback(e.message,true));
     $('project-skills').textContent=state.skills.length?state.skills.map(s=>s.name || identity(s)).join('、'):'暂未注册 Skill';
     renderProjectList();
   }
@@ -135,6 +136,7 @@
     project.deliverables=$('project-deliverables').value.split('\n').map(s=>s.trim()).filter(Boolean);
     project.requiredToolIds=$('required-tools').value.split('\n').map(s=>s.trim()).filter(Boolean);
     project.maxReworks=Number($('max-reworks').value);
+    project.materials={mode:$('materials-mode').value,fileIds:[...document.querySelectorAll('[data-material]:checked')].map(x=>x.value),maxChars:Number($('materials-max').value) || 40000};
     for(const role of project.roles)if(!role.name || !role.duty)throw Error('请为每个岗位填写名称和职责');
     for(const step of project.steps){
       if(!step.title || !project.roles.some(r=>r.roleId===step.roleId))throw Error('每个步骤都必须有名称和有效负责人');
@@ -150,6 +152,42 @@
     const maxTokens=Number($('max-tokens').value),maxCost=Number($('max-cost').value),maxOutputTokens=Number($('max-output-tokens').value);
     if(!Number.isSafeInteger(maxTokens)||maxTokens<1||!Number.isFinite(maxCost)||maxCost<0||!Number.isSafeInteger(maxOutputTokens)||maxOutputTokens<1)throw Error('请填写有效的 Token 与费用上限');
     return {approvePaid:$('approve-paid').checked,maxTokens,maxCost,maxOutputTokens,prices,allowedTools:[...document.querySelectorAll('[data-project-tool]:checked')].map(x=>x.value)};
+  }
+  const STATUS_TEXT={ok:'已读取文字',no_text:'没有可读取的文字',tool_unavailable:'服务器缺少解析程序',metadata_only:'仅保存，不识别内容'};
+  async function loadFiles() {
+    const target=$('materials-list');state.files=[];
+    if(!state.project || !state.project.projectId){target.replaceChildren(node('p',{class:'empty',text:'保存项目后即可上传资料。'}));return;}
+    const data=await api('/api/v2/projects/'+encodeURIComponent(state.project.projectId)+'/files');state.files=list(data,'files');renderFiles();
+  }
+  function renderFiles() {
+    const target=$('materials-list');target.replaceChildren();
+    if(!state.files.length){target.append(node('p',{class:'empty',text:'还没有资料。'}));return;}
+    const chosen=new Set((state.project.materials && state.project.materials.fileIds) || []);
+    for(const f of state.files){
+      const pid=encodeURIComponent(state.project.projectId),fid=encodeURIComponent(f.fileId),ok=f.extraction && f.extraction.status==='ok';
+      const row=node('div',{class:'resource'});
+      const box=node('input',{type:'checkbox',value:f.fileId,'aria-label':'选用 '+f.filename});box.dataset.material='1';box.checked=chosen.has(f.fileId);
+      row.append(node('label',{class:'check'},[box,node('strong',{text:f.filename})]));
+      row.append(node('span',{class:'pill'+(ok?'':' bad'),text:(STATUS_TEXT[f.extraction && f.extraction.status] || '未知')+(ok?' · '+f.extraction.chars+' 字':'')}));
+      row.append(node('small',{text:f.kind.toUpperCase()+' · '+Math.ceil(f.bytes/1024)+' KB · SHA-256 '+f.sha256.slice(0,12)+'…'+(f.extraction && f.extraction.note?' · '+f.extraction.note:'')}));
+      if(ok)row.append(node('button',{type:'button',class:'small',text:'预览文字',onclick:work(async()=>{const d=await api('/api/v2/projects/'+pid+'/files/'+fid+'?limit=3000');const pre=$('material-preview');pre.hidden=false;pre.textContent=d.text.text+(d.text.nextOffset!=null?'\n……（共 '+d.text.total+' 字，仅显示开头）':'');})}));
+      row.append(node('a',{href:'/api/v2/projects/'+pid+'/files/'+fid+'/download',download:f.filename,text:'下载原文件'}));
+      row.append(node('button',{type:'button',class:'small danger',text:'删除',onclick:work(async()=>{if(!confirm('删除资料「'+f.filename+'」？'))return;await api('/api/v2/projects/'+pid+'/files/'+fid,'DELETE');await loadFiles();feedback('已删除资料。');})}));
+      target.append(row);
+    }
+  }
+  const fileBase64=file=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1] || '');r.onerror=()=>reject(Error('无法读取文件：'+file.name));r.readAsDataURL(file);});
+  async function uploadMaterials() {
+    if(!state.project || !state.project.projectId)await saveProject();
+    const files=[...$('material-input').files];if(!files.length)throw Error('请先选择要上传的文件');
+    const done=[],failed=[];
+    for(const file of files){
+      if(file.size>8*1024*1024){failed.push(file.name+'：超过 8 MB');continue;}
+      try{const data=await api('/api/v2/projects/'+encodeURIComponent(state.project.projectId)+'/files','POST',{filename:file.name,contentBase64:await fileBase64(file)});done.push(data.file);}
+      catch(e){failed.push(file.name+'：'+e.message);}
+    }
+    $('material-input').value='';await loadFiles();
+    feedback('已上传 '+done.length+' 个文件'+(failed.length?'；失败：'+failed.join('；'):'。'),failed.length>0);
   }
   async function refreshProjects() {
     const data=await api('/api/v2/projects');state.projects=list(data,'projects');renderProjectList();
@@ -167,7 +205,7 @@
     const project=saved.project || saved; state.project={...draft,...project};state.dirty=false;
     $('project-heading').textContent=state.project.name;
     const url=new URL(location.href);url.searchParams.set('project',state.project.projectId);history.replaceState(null,'',url);
-    await refreshProjects();feedback('项目已保存。执行前请检查模型、工具和预算。');return state.project;
+    await refreshProjects();await loadFiles();feedback('项目已保存。执行前请检查模型、工具和预算。');return state.project;
   }
   async function openProject(id) {
     if(state.dirty && !confirm('当前配置有未保存修改，仍要切换项目吗？'))return;
@@ -282,6 +320,7 @@
     await api('/api/v2/runs/'+state.run.runId+'/review','POST',{decision,feedback:comment,comment,...(decision==='rework'?approval():{})});$('approve-paid').checked=false;await loadRun(state.run.runId);feedback(decision==='approve'?'审核记录已保存':'返工要求已提交');
   }));
   $('export-run').addEventListener('click',work(downloadExport));
+  $('upload-materials').addEventListener('click',work(uploadMaterials));
   $('save-skill').addEventListener('click',work(async()=>{let skill;try{skill=JSON.parse($('skill-json').value);}catch{throw Error('Skill JSON 格式不正确');}await api('/api/v2/skills','POST',skill);await refreshResources();feedback('Skill 已注册。请在执行步骤中显式选择。');}));
   $('discover-tools').addEventListener('click',work(async()=>{const result=await api('/api/v2/tools/discover','POST',{});await refreshResources();feedback('已刷新服务端配置的 MCP 工具；新增工具需加入本次运行白名单。'+(result.servers?'\n连接诊断：'+JSON.stringify(result.servers):''));}));
   $('logout').addEventListener('click',work(async()=>{await api('/api/auth/logout','POST',{});location.assign('/login.html');}));

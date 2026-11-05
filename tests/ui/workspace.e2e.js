@@ -11,10 +11,12 @@ const H = require('../helpers');
 (async () => {
   let app, browser;
   let calls = 0;
+  const mockPrompts = [];
   const mock = http.createServer((req,res) => {
     let body=''; req.setEncoding('utf8');req.on('data',c=>body+=c);req.on('end',()=>{
       calls++;
       const payload=JSON.parse(body || '{}');
+      mockPrompts.push((payload.messages || []).map(m=>m.content).join('\n'));
       const text='LOCAL MOCK '+payload.model+': 已完成有证据的模拟模型输出。 <img src=x onerror="window.__unsafe=1">';
       res.writeHead(200,{'content-type':'text/event-stream'});
       res.end('data: '+JSON.stringify({choices:[{delta:{content:text}}]})+'\n\ndata: '+JSON.stringify({choices:[],usage:{prompt_tokens:10,completion_tokens:20}})+'\n\ndata: [DONE]\n\n');
@@ -55,6 +57,13 @@ const H = require('../helpers');
     await page.waitForFunction(()=>document.querySelector('#feedback').textContent.includes('已保存'));
     assert.ok(new URL(page.url()).searchParams.get('project'));
     assert.equal(await page.evaluate(()=>window.__unsafe),undefined);
+    // Real externally generated Word file: upload, parse, preview as text.
+    await page.setInputFiles('#material-input',require('path').join(__dirname,'..','fixtures','files','report.docx'));
+    await page.click('#upload-materials');
+    await page.waitForFunction(()=>document.querySelector('#materials-list').textContent.includes('已读取文字'));
+    await page.click('#materials-list button:has-text("预览文字")');
+    await page.waitForFunction(()=>document.querySelector('#material-preview').textContent.includes('季度复盘报告'));
+    assert.equal(await page.locator('#material-preview *').count(),0,'file text rendered as text only');
     await page.click('#validate-project');
     await page.waitForFunction(()=>document.querySelector('#validation-text').textContent.includes('"ok": true'));
     const beforeRun=calls;
@@ -62,6 +71,7 @@ const H = require('../helpers');
     await page.waitForFunction(()=>document.querySelector('#run-status').textContent==='等待审核',{timeout:15000});
     assert.ok(calls>=beforeRun+2,'both mock model roles really called');
     assert.match(await page.textContent('#run-steps'),/LOCAL MOCK/);
+    assert.ok(mockPrompts.some(p=>p.includes('客户满意度 92%')),'uploaded file text reached a model role');
     assert.equal(await page.evaluate(()=>window.__unsafe),undefined,'model output rendered as text');
     assert.equal(await page.locator('#run-steps img').count(),0,'model HTML never inserted');
     assert.match(await page.textContent('#run-tokens'),/60/);
@@ -90,7 +100,7 @@ const H = require('../helpers');
     assert.ok((await page.inputValue('#required-tools')).includes('pptx_generation'));
     assert.equal(await page.isChecked('#approve-paid'),false);
     assert.deepEqual(errors,[],'no JavaScript exceptions');
-    console.log('PASS workspace E2E: live login/session, project save/validate, two local MOCK model calls, XSS-safe output, human review, real DOCX export/persistence, conservative wizard draft handoff. No paid API used.');
+    console.log('PASS workspace E2E: live login/session, project save/validate, two local MOCK model calls, XSS-safe output, human review, real DOCX export/persistence, real DOCX upload+parse+role handoff, conservative wizard draft handoff. No paid API used.');
   } finally {
     if(browser)await browser.close();
     if(app)await app.stop();
