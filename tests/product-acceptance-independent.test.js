@@ -125,7 +125,7 @@ for(const c of cases) test('Independent E2/E3 cross-industry '+c.id+' workflow/p
   for(let j=1;j<f.state.prompts.length;j++) assert.ok(f.state.prompts[j].includes(c.fact),'role '+j+' did not receive actual prior output');
   assert.equal(completed.run.usage.cost,0);
   const runFull=await f.app.call('GET','/api/v2/runs/'+rid);
-  assert.ok(runFull.json.messages.length>=c.roles.length);
+  assert.ok(runFull.json.run.messages.length>=c.roles.length);
   assert.equal((await f.app.call('POST','/api/v2/runs/'+rid+'/review',{decision:'rework',feedback:''})).status,400);
   // Rework is a fresh, explicit human request. Avoid rework on all 3 projects to keep evidence distinct.
   if(c.id==='B-management'){
