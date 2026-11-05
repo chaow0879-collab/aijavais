@@ -10,7 +10,8 @@
     "test:workspace": "node tests/ui/workspace.e2e.js",
     "test:intake": "node tests/ui/intake-draft.e2e.js",
     "db:backup": "node tools/database.js backup",
-    "db:info": "node tools/database.js info"
+    "db:info": "node tools/database.js info",
+    "db:backup-inventory": "node tools/backup-inventory.js"
   },
   "engines": {
     "node": ">=24.0.0"

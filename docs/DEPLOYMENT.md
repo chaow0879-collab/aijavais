@@ -73,7 +73,7 @@ npm run db:info
 npm run db:backup -- /secure/new-backup.sqlite
 ```
 
-`db:backup` 通过只读连接与 SQLite 原生 backup API 创建一致性备份，并验证 `quick_check`。目标必须是不存在的新文件；它不会覆盖旧备份，也不会创建执行引擎或把运行中的任务误判为中断。示例目录需换成有权限的私有目录。
+`db:backup` 通过只读连接与 SQLite 原生 backup API 创建一致性备份，并验证 `quick_check`。目标必须是不存在的新文件；它不会覆盖旧备份，也不会创建执行引擎或把运行中的任务误判为中断。示例目录需换成有权限的私有目录。备份先在同目录的0700私有暂存目录内写入，校验0600与quick_check后以原子硬链接无覆盖发布（见 [BACKUP-OPERATIONS.md](BACKUP-OPERATIONS.md)）。遗留的 `.migration-backup-*` 等可用只读的 `npm run db:backup-inventory` 盘点，工具不会删除或恢复任何文件。
 
 容器中可将 SQLite 备份先写入卷内，再复制到独立的私有备份位置：
 

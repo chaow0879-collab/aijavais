@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync, backup } = require('node:sqlite');
+const { publishPrivateBackup } = require('../lib/private-backup');
 const dir = path.resolve(process.env.AIJ_DATA_DIR || path.join(__dirname, '..', 'data'));
 async function main() {
   const file = path.join(dir, 'projects.sqlite');
@@ -19,14 +20,10 @@ async function main() {
     } else if (process.argv[2] === 'backup') {
       const target = process.argv[3];
       if (!target) throw new Error('Usage: npm run db:backup -- /secure/path/projects-backup.sqlite');
-      const dest = path.resolve(target);
-      if (fs.existsSync(dest) || dest === file) throw new Error('Backup destination must be a new file');
-      fs.mkdirSync(path.dirname(dest), { recursive: true, mode: 0o700 });
-      await backup(db, dest);
-      fs.chmodSync(dest, 0o600);
-      const check = new DatabaseSync(dest, { readOnly: true });
-      try { if (check.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw new Error('Backup integrity check failed'); }
-      finally { check.close(); }
+      // Written inside a private 0700 staging directory, verified 0600 + quick_check,
+      // then atomically linked without overwriting (see lib/private-backup.js).
+      const out = await publishPrivateBackup(target, staged => backup(db, staged), { forbidden: [file, file + '-wal', file + '-shm'] });
+      console.log(JSON.stringify({ backup: out.filename, mode: out.mode, bytes: out.bytes, quickCheck: out.quickCheck }));
       console.log('SQLite backup verified. Store the complete private data directory separately for auth/model credentials.');
     } else throw new Error('Usage: node tools/database.js info | backup <new-file>');
   } finally { db.close(); }
