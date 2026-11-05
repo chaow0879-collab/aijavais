@@ -23,7 +23,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   delete env.ANTHROPIC_API_KEY; delete env.OPENAI_API_KEY;
   const child = spawn(process.execPath, [path.join(REPO, 'server.js')], { env, stdio: 'ignore' });
   await sleep(800);
-  const browser = await chromium.launch({ headless: true,
+  // Chromium derives download filenames from the process locale; without UTF-8 it drops non-ASCII names.
+  const browser = await chromium.launch({ headless: true, env: { ...process.env, LANG: process.env.LANG || 'C.UTF-8' },
     ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
       : fs.existsSync('/usr/bin/chromium') ? { executablePath: '/usr/bin/chromium' } : {}) });
   const page = await browser.newPage({ viewport: { width: 1360, height: 900 }, deviceScaleFactor: 1 });
@@ -118,5 +119,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const ok = /连接正常/.test(t1) && /连接正常/.test(t2) && !result.errors.length && !overflow && result.editorAfterDelete;
   console.log(ok ? 'UI 走查通过' : 'UI 走查失败');
   process.exitCode = ok ? 0 : 1;
-  await browser.close(); child.kill(); mock.close(); fs.rmSync(dir, { recursive: true, force: true });
+  await browser.close();
+  // Wait for the server's graceful shutdown to finish writing before deleting its data directory.
+  await new Promise(r => { if (child.exitCode !== null || child.signalCode !== null) return r(); child.once('exit', r); child.kill('SIGTERM'); });
+  mock.close(); fs.rmSync(dir, { recursive: true, force: true });
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

@@ -1,7 +1,7 @@
 name: AIJAVAIS validation
 on:
   push:
-    branches: [feat/codex-v2-integration]
+    branches: [feat/codex-v2-integration, feat/claude-v2-followup]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -33,13 +33,17 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/aij-ui-deps" --no-package-lock --ignore-scripts playwright@1.56.1
           "$RUNNER_TEMP/aij-ui-deps/node_modules/.bin/playwright" install --with-deps chromium
           mkdir -p "$RUNNER_TEMP/aij-ui-shots"
-      - name: Browser walkthrough with local model fixture
+      - name: Admin walkthrough with local model fixture
         env:
           NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
           UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
-        run: |
-          npm run test:ui
-          npm run test:workspace
+        run: npm run test:ui
+      - name: Workspace walkthrough with local model fixture
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:workspace
       - uses: actions/upload-artifact@v4
         if: always()
         with:

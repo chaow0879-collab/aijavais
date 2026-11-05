@@ -34,7 +34,8 @@ const H = require('../helpers');
       const probe=await app.call('POST','/api/models/'+id+'/test',{});
       assert.equal(probe.status,200,probe.text);assert.equal(probe.json.ok,true,probe.text);
     }
-    const options={headless:true};
+    // Chromium derives download filenames from the process locale; without UTF-8 it drops non-ASCII names.
+    const options={headless:true,env:{...process.env,LANG:process.env.LANG || 'C.UTF-8'}};
     if(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH)options.executablePath=process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
     else if(fs.existsSync('/usr/bin/chromium'))options.executablePath='/usr/bin/chromium';
     browser=await chromium.launch(options);
