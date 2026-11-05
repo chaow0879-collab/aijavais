@@ -628,6 +628,20 @@ function removeConnection(id, { replacement = '', force = false, detach = false 
   saveModels(); saveConfig();
   return { ok: true, removed: r.removed, replacement: replacement || null, teamRolesUpdated: replaced, defaultConnectionId: cfg.settings.defaultConnectionId, impact };
 }
+/* 保存前试连的结果：按（协议、地址、模型、凭证哈希）记 10 分钟，只记成功结果，只在服务端内存中 */
+const probeCache = new Map();
+const probeKey = rt => crypto.createHash('sha256').update([rt.type, rt.baseUrl, rt.model, providerKey(rt) || '-'].join('\u0000')).digest('hex');
+function rememberProbe(rt, ms) {
+  probeCache.set(probeKey(rt), { ms, at: Date.now() });
+  if (probeCache.size > 100) probeCache.delete(probeCache.keys().next().value);
+}
+function recallProbe(rt) {
+  if (!rt) return null;
+  const k = probeKey(rt), v = probeCache.get(k);
+  if (!v || Date.now() - v.at > 600e3) return null;
+  probeCache.delete(k);
+  return v;
+}
 async function testConnection(id) {
   const rt = models.runtime(id);
   const t0 = Date.now();
@@ -768,11 +782,23 @@ async function api(req, res, url) {
   if (p === '/api/models' && m === 'POST') {
     const r = models.add(await readBody(req));
     if (!r.ok) return json(res, 400, { error: r.error });
+    const probed = recallProbe(models.runtime(r.connection.connectionId));
+    if (probed) { models.recordTest(r.connection.connectionId, { ok: true, ms: probed.ms }); r.connection = models.view(models.get(r.connection.connectionId)); }
     if (!cfg.settings.defaultConnectionId) { cfg.settings.defaultConnectionId = r.connection.connectionId; saveConfig(); }
     saveModels();
     return json(res, 200, { connection: r.connection });
   }
   if (p === '/api/models/discover' && m === 'POST') return json(res, 200, await discoverModels(await readBody(req)));
+  if (p === '/api/models/probe' && m === 'POST') {
+    const d = models.draft(await readBody(req));
+    if (!d.ok) return json(res, 400, { error: d.error });
+    const t0 = Date.now();
+    try {
+      const r = await callModel(d.runtime, { role: '连接测试', task: '保存前试连', prompt: '只回复一个字：好', maxTokens: 32 });
+      rememberProbe(d.runtime, Date.now() - t0); // 保存同一组配置时沿用这次成功的测试结果，不再重复调用
+      return json(res, 200, { ok: true, ms: Date.now() - t0, reply: r.text.slice(0, 60) });
+    } catch (e) { return json(res, 200, { ok: false, ms: Date.now() - t0, error: e.message, hint: diagnose(e.message) }); }
+  }
   let mm;
   if ((mm = p.match(/^\/api\/models\/([\w-]{1,40})(?:\/(enable|disable|test|impact|capabilities))?$/))) {
     const id = mm[1], act = mm[2];
