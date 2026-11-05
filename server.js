@@ -20,14 +20,14 @@ const SEC = require('./lib/security');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
-const DATA = path.join(ROOT, 'data');
+const DATA = process.env.AIJ_DATA_DIR ? path.resolve(process.env.AIJ_DATA_DIR) : path.join(ROOT, 'data');
 const CONFIG_FILE = path.join(DATA, 'config.json');
 const TASKS_FILE = path.join(DATA, 'tasks.json');
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const HOST = process.env.HOST || '127.0.0.1';
-const LOCAL_ONLY = ['127.0.0.1', 'localhost', '::1'].includes(HOST);
-/* 安全策略（见 lib/security.js 顶部说明）：ALLOWED_BASE_HOSTS、ALLOW_PRIVATE_BASE_URLS、VIEW_TOKEN、TRUST_PROXY */
-const POLICY = SEC.policyFromEnv(process.env, LOCAL_ONLY);
+/* 出站安全策略（见 lib/security.js 顶部说明）：ALLOWED_BASE_HOSTS、ALLOWED_BASE_PORTS、LOCAL_MODEL_TARGETS；
+   另有 VIEW_TOKEN、TRUST_PROXY（后续批次使用） */
+const POLICY = SEC.policyFromEnv(process.env);
 const VIEW_TOKEN = process.env.VIEW_TOKEN && process.env.VIEW_TOKEN.length >= 12 ? process.env.VIEW_TOKEN : '';
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const authThrottle = new SEC.AuthThrottle();
@@ -245,10 +245,11 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
   if (!key) throw new Error('未配置 API Key（可在管理界面填写，或设置环境变量 ' + (p.envKey || '—') + '）');
   if (!p.model) throw new Error('未填写模型名');
   if (!p.baseUrl) throw new Error('未填写 Base URL');
-  /* SSRF 防护：协议 / 凭据 / 私网 / DNS 解析结果；官方环境变量密钥只发往对应官方主机 */
-  const chk = await SEC.validateBaseUrl(p.baseUrl, POLICY);
-  if (!chk.ok) throw new Error('Base URL 被拒绝：' + chk.error);
-  if (!p.apiKey && !SEC.envKeyHostOk(p.envKey, chk.url.hostname.toLowerCase(), POLICY)) {
+  /* 密钥来源优先级：供应商里显式保存的 apiKey > 环境变量（envKey）。
+     环境变量密钥与目标主机严格绑定：官方变量只发往官方主机，没有白名单例外；第三方接口请用 AIJ_*_KEY。 */
+  let host;
+  try { host = new URL(p.baseUrl).hostname.replace(/^\[|\]$/g, '').toLowerCase(); } catch { throw new Error('Base URL 格式不正确'); }
+  if (!p.apiKey && !SEC.envKeyHostOk(p.envKey, host)) {
     throw new Error('环境变量 ' + p.envKey + ' 只能用于其官方主机；第三方接口请直接填写 API Key，或改用 AIJ_ 开头的环境变量名');
   }
   const base = p.baseUrl.replace(/\/+$/, '');
@@ -268,10 +269,11 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
     body = { model: p.model, messages, stream: true };
     if (/api\.openai\.com/.test(base)) body.stream_options = { include_usage: true };
   }
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal, redirect: 'error' });
+  /* 出站：校验 + 固定解析 IP 连接 + 不跟随重定向（见 lib/security.js） */
+  const res = await SEC.pinnedFetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }, POLICY);
   if (!res.ok) {
     let t = '';
-    try { t = (await res.text()).replace(/\s+/g, ' ').slice(0, 240); } catch { /* ignore */ }
+    try { t = SEC.scrubSecrets((await res.text()).replace(/\s+/g, ' ').slice(0, 240), [key]); } catch { /* ignore */ }
     throw new Error('HTTP ' + res.status + (t ? '：' + t : ''));
   }
   await readSSE(res, data => {
@@ -320,7 +322,8 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId }) {
     ingest({ agent: p.id, status: 'done', eventType: 'model_done', durationMs: ms, tokenUsage: { input: inTok || undefined, output: outTok || undefined, total, estimated } }, T);
     return { text: out, tokens: total, inTokens: inTok, outTokens: outTok, ms, estimated };
   } catch (e) {
-    const msg = e?.name === 'TimeoutError' ? '请求超时' : (e?.message || String(e));
+    /* 写入事件 / 任务记录 / 响应前统一脱敏，防止上游错误回显密钥 */
+    const msg = SEC.scrubSecrets(e?.name === 'TimeoutError' ? '请求超时' : (e?.message || String(e)), [providerKey(p)]);
     ingest({ agent: p.id, status: 'error', eventType: 'task_error', error: msg }, T);
     throw new Error(msg);
   }
@@ -403,8 +406,32 @@ function readBody(req, limit = 1 << 20) {
 }
 const maskProvider = p => ({
   id: p.id, label: p.label, type: p.type, baseUrl: p.baseUrl, model: p.model, role: p.role || '', envKey: p.envKey || '',
-  enabled: p.enabled !== false, hasKey: !!p.apiKey, envReady: !!(p.envKey && process.env[p.envKey]), keyHint: p.apiKey ? '••••' + p.apiKey.slice(-4) : '',
+  enabled: p.enabled !== false, hasKey: !!p.apiKey, envReady: !!(p.envKey && SEC.isAllowedEnvKey(p.envKey) && process.env[p.envKey]), keyHint: p.apiKey ? '••••' + p.apiKey.slice(-4) : '',
 });
+const hostOf = u => { try { return new URL(u).hostname.replace(/^\[|\]$/g, '').toLowerCase(); } catch { return ''; } };
+/* 保存供应商前的统一校验。返回错误文本，或 null 表示通过。 */
+function validateProviderInput(next, existing, newKey, clearKey) {
+  if (!SEC.isAllowedEnvKey(next.envKey)) {
+    return 'envKey 只能是 ' + Object.keys(SEC.ENV_KEY_HOST).join(' / ') + '，或以 AIJ_ 开头、以 _KEY 结尾的自定义名称';
+  }
+  let host = '';
+  if (next.baseUrl) {
+    const c = SEC.checkBaseUrlSyntax(next.baseUrl, POLICY);
+    if (!c.ok) return c.error;
+    host = c.host;
+  }
+  const keyAfter = clearKey ? '' : (newKey || (existing && existing.apiKey) || '');
+  /* 没有显式 API Key 时将使用环境变量：官方变量必须与官方主机一一绑定 */
+  if (host && !keyAfter && next.envKey && !SEC.envKeyHostOk(next.envKey, host)) {
+    return '环境变量 ' + next.envKey + ' 只能用于 ' + SEC.ENV_KEY_HOST[next.envKey] + '；第三方接口请直接填写 API Key，或改用 AIJ_ 开头的环境变量名';
+  }
+  /* 已保存的 API Key 不会自动转发到新主机：换主机必须重新填写 */
+  if (existing && existing.apiKey && !newKey && !clearKey) {
+    const old = hostOf(existing.baseUrl);
+    if (old && host && old !== host) return '更换 Base URL 的主机后，需要重新填写 API Key（已保存的密钥不会自动发往新主机）';
+  }
+  return null;
+}
 const slug = s => (String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ai').slice(0, 24);
 
 function lanUrls() {
@@ -433,7 +460,7 @@ async function api(req, res, url) {
   if (p === '/api/config' && m === 'GET') {
     return json(res, 200, {
       providers: cfg.providers.map(maskProvider), settings: cfg.settings, presets: PRESETS,
-      token: isLoopbackAddr(req.socket.remoteAddress) ? cfg.token : undefined,
+      /* 不再通过配置接口回传管理令牌；令牌见服务启动日志或 data/config.json */
       server: { port: PORT, host: HOST, lan: lanUrls(), root: ROOT, node: process.version },
     });
   }
@@ -449,23 +476,30 @@ async function api(req, res, url) {
   }
   if (p === '/api/providers' && m === 'POST') {
     const b = await readBody(req);
-    let prov = b.id ? cfg.providers.find(x => x.id === b.id) : null;
+    const existing = b.id ? cfg.providers.find(x => x.id === b.id) : null;
+    const next = {
+      label: str(b.label || (existing && existing.label) || 'AI', 40),
+      type: b.type === 'anthropic' ? 'anthropic' : 'openai',
+      baseUrl: str(b.baseUrl, 300).trim(),
+      model: str(b.model, 80).trim(),
+      role: str(b.role, 80),
+      envKey: str(b.envKey, 60).trim(),
+      enabled: b.enabled !== false,
+    };
+    const newKey = typeof b.apiKey === 'string' ? b.apiKey.trim() : '';
+    /* 先校验、通过后才修改配置：校验失败不留下任何半成品 */
+    const bad = validateProviderInput(next, existing, newKey, !!b.clearKey);
+    if (bad) return json(res, 400, { error: bad });
+    let prov = existing;
     if (!prov) {
       let id = slug(b.label || b.id || 'ai'), n = 2;
       while (cfg.providers.some(x => x.id === id)) id = slug(b.label || 'ai') + '-' + n++;
       prov = { id, apiKey: '' };
       cfg.providers.push(prov);
     }
-    prov.label = str(b.label || prov.label || 'AI', 40);
-    prov.type = b.type === 'anthropic' ? 'anthropic' : 'openai';
-    prov.baseUrl = str(b.baseUrl, 300).trim();
-    if (prov.baseUrl && !/^https?:\/\//i.test(prov.baseUrl)) return json(res, 400, { error: 'Base URL 必须以 http:// 或 https:// 开头' });
-    prov.model = str(b.model, 80).trim();
-    prov.role = str(b.role, 80);
-    prov.envKey = str(b.envKey, 60).trim();
-    prov.enabled = b.enabled !== false;
+    Object.assign(prov, next);
     if (b.clearKey) prov.apiKey = '';
-    else if (typeof b.apiKey === 'string' && b.apiKey.trim()) prov.apiKey = b.apiKey.trim();
+    else if (newKey) prov.apiKey = newKey;
     saveConfig();
     return json(res, 200, { provider: maskProvider(prov) });
   }

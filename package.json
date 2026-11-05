@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "description": "AI 星环：外部 AI 开始工作时，大屏同步转动（基于 HALOFLUX 修改，见 NOTICE.md）",
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/all.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "license": "SEE LICENSE IN LICENSE"
 }
