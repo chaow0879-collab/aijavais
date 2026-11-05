@@ -21,6 +21,8 @@ const MSG = require('./lib/messages');
 const SSE = require('./lib/sse');
 const { Runtime } = require('./lib/runtime');
 const { ArtifactStore } = require('./lib/artifacts');
+const ACC = require('./lib/access');
+const PERM = require('./lib/permissions');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -30,12 +32,20 @@ const TASKS_FILE = path.join(DATA, 'tasks.json');
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const HOST = process.env.HOST || '127.0.0.1';
 /* 出站安全策略（见 lib/security.js 顶部说明）：ALLOWED_BASE_HOSTS、ALLOWED_BASE_PORTS、LOCAL_MODEL_TARGETS；
-   另有 VIEW_TOKEN、TRUST_PROXY（后续批次使用） */
+   访问控制：VIEW_TOKEN（观看令牌）、INGEST_TOKEN + INGEST_AGENTS（外部上报凭证）、ANON_VIEW=0（禁止匿名观看）、TRUST_PROXY=1（反向代理后取真实 IP） */
 const POLICY = SEC.policyFromEnv(process.env);
 const VIEW_TOKEN = process.env.VIEW_TOKEN && process.env.VIEW_TOKEN.length >= 12 ? process.env.VIEW_TOKEN : '';
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
-const authThrottle = new SEC.AuthThrottle();
-const externalLimiter = new SEC.RateLimiter(100, 200); // 外部上报：每秒 100 条，突发 200
+const ANON_VIEW = process.env.ANON_VIEW !== '0';
+const authThrottle = new SEC.AuthThrottle(); // 每个来源 IP：1 分钟内 8 次无效凭证后锁定 5 分钟
+/* 限流：按主体分别计数（外部上报每秒 100 条、突发 200；新建任务每秒 2 个、突发 5） */
+const limiters = new Map();
+function rateOk(kind, key, perSec, burst) {
+  const k = kind + '\u0000' + key;
+  let l = limiters.get(k);
+  if (!l) { l = new SEC.RateLimiter(perSec, burst); limiters.set(k, l); if (limiters.size > 2000) limiters.delete(limiters.keys().next().value); }
+  return l.take();
+}
 
 /* ------------------------------------------------------------------ 配置 */
 const PRESETS = {
@@ -49,7 +59,7 @@ const PRESETS = {
 const DEFAULT_SETTINGS = { showText: false, idleTimeoutSec: 120, maxTokens: 4096, timeoutSec: 300 };
 
 function defaultConfig() {
-  return { token: crypto.randomBytes(12).toString('hex'), settings: { ...DEFAULT_SETTINGS }, providers: [] };
+  return { token: crypto.randomBytes(12).toString('hex'), settings: { ...DEFAULT_SETTINGS }, providers: [], ingestTokens: [] };
 }
 function saveConfig() {
   fs.mkdirSync(DATA, { recursive: true });
@@ -65,11 +75,19 @@ function loadConfig() {
   c.token = c.token || d.token;
   c.settings = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
   c.providers = Array.isArray(c.providers) ? c.providers : [];
+  c.ingestTokens = Array.isArray(c.ingestTokens) ? c.ingestTokens.filter(t => t && /^[\w-]{1,32}$/.test(t.name) && /^[a-f0-9]{64}$/.test(t.hash)) : [];
   /* 旧配置里不合规的 envKey 一律清空（防止借它读取任意环境变量） */
   for (const p of c.providers) if (!SEC.isAllowedEnvKey(p.envKey)) { console.error(`供应商 ${p.id} 的 envKey 不在允许范围，已清空：`, p.envKey); p.envKey = ''; }
   return c;
 }
 const cfg = loadConfig();
+/* 环境变量提供的上报凭证（云端部署用），不写入配置文件 */
+const ENV_INGEST = process.env.INGEST_TOKEN && process.env.INGEST_TOKEN.length >= 16
+  ? { name: 'env', hash: ACC.sha256(process.env.INGEST_TOKEN), agents: String(process.env.INGEST_AGENTS || '').split(',').map(s => s.trim()).filter(Boolean) } : null;
+const access = ACC.createAccess({
+  adminToken: () => cfg.token, viewToken: VIEW_TOKEN, trustProxy: TRUST_PROXY,
+  ingestTokens: () => (ENV_INGEST ? [ENV_INGEST, ...cfg.ingestTokens] : cfg.ingestTokens),
+});
 /* 云端部署（配置不持久）：用环境变量固定令牌并自动建立供应商。
    ADMIN_TOKEN=管理令牌；<KEY 环境变量> + <ID>_MODEL，如 ANTHROPIC_API_KEY + CLAUDE_MODEL。 */
 if (process.env.ADMIN_TOKEN && process.env.ADMIN_TOKEN.length >= 12) cfg.token = process.env.ADMIN_TOKEN;
@@ -218,10 +236,10 @@ function ingest(ev, opts = {}) {
 }
 
 function snapshot(level = 2) {
-  const list = RT.publicAgents(24).map(a => EV.redact(a, level));
+  const list = RT.publicAgents(24).map(a => ACC.redactAgent(a, level));
   return {
     type: 'state', now: Date.now(), working: list.filter(a => a.status === 'working').length, agents: list,
-    providers: cfg.providers.map(p => ({ id: p.id, label: p.label, model: p.model, enabled: p.enabled !== false, ready: providerReady(p) })),
+    providers: level >= ACC.LEVEL.VIEWER ? cfg.providers.map(p => ({ id: p.id, label: p.label, model: p.model, enabled: p.enabled !== false, ready: providerReady(p) })) : [],
     totals: { ...RT.totals, agents: RT.agents.size }, showText: level >= 2 && !!cfg.settings.showText,
   };
 }
@@ -230,7 +248,7 @@ function broadcast(obj) {
   const cache = {};
   for (const res of clients) {
     const lvl = res._lvl;
-    sseSend(res, cache[lvl] || (cache[lvl] = 'data: ' + JSON.stringify(EV.redact(obj, lvl)) + '\n\n'));
+    sseSend(res, cache[lvl] || (cache[lvl] = 'data: ' + JSON.stringify(ACC.redactEvent(obj, lvl)) + '\n\n'));
   }
 }
 function broadcastState() {
@@ -518,14 +536,6 @@ function startDemo(seconds) {
 
 /* ------------------------------------------------------------------ HTTP */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.mp3': 'audio/mpeg', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
-const isLoopbackAddr = a => a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
-const localHostHeader = req => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(req.headers.host || '');
-const safeEq = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
-function authOK(req) {
-  if (isLoopbackAddr(req.socket.remoteAddress) && localHostHeader(req)) return true;
-  const t = req.headers['x-admin-token'] || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  return !!t && safeEq(t, cfg.token);
-}
 function sameOrigin(req) {
   const o = req.headers.origin;
   if (!o) return true;
@@ -584,20 +594,63 @@ function lanUrls() {
 async function api(req, res, url) {
   const p = url.pathname, m = req.method;
   if (m !== 'GET' && !sameOrigin(req)) return json(res, 403, { error: '跨站请求被拒绝' });
+  const ip = access.clientIp(req);
+  /* 凭证防爆破：无效凭证累计到阈值后，该 IP 携带凭证的请求一律 429 */
+  if (authThrottle.locked(ip)) {
+    const pre = access.identify(req);
+    if (pre.presented && pre.kind !== 'local') return json(res, 429, { error: '无效凭证尝试过多，请 5 分钟后再试' });
+  }
+  const who = access.identify(req);
+  if (who.invalid) { authThrottle.fail(ip); return json(res, 401, { error: '凭证无效' }); }
 
-  if (p === '/api/events' && m === 'GET') {
+  if ((p === '/api/events' || p === '/api/state') && m === 'GET') {
+    if (who.kind === 'ingest') return json(res, 403, { error: '上报凭证不能订阅事件流' });
+    if (who.level === ACC.LEVEL.ANON && !ANON_VIEW) return json(res, 401, { error: '需要观看令牌（通过 ?view=令牌 访问大屏）' });
+    if (p === '/api/state') return json(res, 200, snapshot(who.level));
     res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no' });
-    /* 过渡实现：目前所有连接按完整级别（2）收发，与分级前行为一致；第三批将改为按令牌区分 0/1/2 级并做字段白名单 */
-    res._lvl = 2;
+    res._lvl = who.level; // 2 管理员/本机：完整；1 观看者；0 匿名：只含驱动动画的字段（见 lib/access.js 允许列表）
     res.write('retry: 2000\n\n');
-    res.write('data: ' + JSON.stringify(snapshot(2)) + '\n\n');
+    res.write('data: ' + JSON.stringify(snapshot(who.level)) + '\n\n');
     clients.add(res);
     req.on('close', () => clients.delete(res));
     return;
   }
-  if (p === '/api/state' && m === 'GET') return json(res, 200, snapshot());
+  if (p === '/api/event' && m === 'POST') {
+    if (!['local', 'admin', 'ingest'].includes(who.kind)) return json(res, 401, { error: '需要上报凭证（x-ingest-token）' });
+    if (!rateOk('ingest', who.id, 100, 200)) return json(res, 429, { error: '上报过于频繁' });
+    const b = await readBody(req, 64 << 10);
+    if (!b || typeof b !== 'object' || !(b.agent || b.agentId)) return json(res, 400, { error: '缺少 agent 字段' });
+    const r = ingest(b, { source: 'external', owner: who.id, allowedAgents: who.agents });
+    if (r.error) return json(res, r.code || 400, { error: r.error });
+    return json(res, 200, { ok: true, eventId: r.eventId, ...(r.duplicate ? { duplicate: true } : {}) });
+  }
 
-  if (!authOK(req)) return json(res, 401, { error: '需要管理令牌（x-admin-token）。令牌见服务启动日志或 data/config.json' });
+  /* 其余接口：仅管理员 / 本机 */
+  if (who.level < ACC.LEVEL.ADMIN) return json(res, 401, { error: '需要管理令牌（x-admin-token）。令牌保存在 data/config.json' });
+  const user = PERM.userFromPrincipal(who);
+
+  if (p === '/api/ingest-tokens' && m === 'GET') {
+    return json(res, 200, { tokens: [...(ENV_INGEST ? [{ name: 'env', agents: ENV_INGEST.agents, fromEnv: true }] : []), ...cfg.ingestTokens.map(t => ({ name: t.name, agents: t.agents, hint: t.hint, createdAt: t.createdAt }))] });
+  }
+  if (p === '/api/ingest-tokens' && m === 'POST') {
+    const b = await readBody(req);
+    const name = String(b.name || '').trim();
+    if (!/^[\w-]{1,32}$/.test(name) || name === 'env') return json(res, 400, { error: '名称只能包含字母、数字、下划线、连字符（1–32 位），且不能是 env' });
+    if (cfg.ingestTokens.some(t => t.name === name)) return json(res, 400, { error: '名称已存在' });
+    const agentsList = Array.isArray(b.agents) ? b.agents.map(x => String(x).trim()).filter(Boolean) : [];
+    if (agentsList.length > 20 || agentsList.some(x => !/^[\w.-]{1,40}$/.test(x) || /^demo-/i.test(x) || cfg.providers.some(pv => pv.id === x))) return json(res, 400, { error: 'agents 必须是最多 20 个合法 ID，且不能是模型连接 ID 或 demo- 开头' });
+    const t = ACC.newIngestToken();
+    cfg.ingestTokens.push({ name, hash: t.hash, hint: t.hint, agents: agentsList, createdAt: Date.now() });
+    saveConfig();
+    return json(res, 200, { name, token: t.token, agents: agentsList, note: '凭证只显示这一次，请妥善保存' });
+  }
+  let mt;
+  if ((mt = p.match(/^\/api\/ingest-tokens\/([\w-]{1,32})$/)) && m === 'DELETE') {
+    const i = cfg.ingestTokens.findIndex(t => t.name === mt[1]);
+    if (i < 0) return json(res, 404, { error: '不存在' });
+    cfg.ingestTokens.splice(i, 1); saveConfig();
+    return json(res, 200, { ok: true });
+  }
 
   if (p === '/api/config' && m === 'GET') {
     return json(res, 200, {
@@ -661,19 +714,13 @@ async function api(req, res, url) {
       return json(res, 200, { ok: true, ms: Date.now() - t0, tokens: r.tokens, reply: r.text.slice(0, 60) });
     } catch (e) { return json(res, 200, { ok: false, ms: Date.now() - t0, error: e.message }); }
   }
-  if (p === '/api/event' && m === 'POST') {
-    const b = await readBody(req);
-    if (!b || typeof b !== 'object' || !b.agent) return json(res, 400, { error: '缺少 agent 字段' });
-    const r = ingest(b, { source: 'external', owner: 'local' });
-    if (r.error) return json(res, r.code || 400, { error: r.error });
-    return json(res, 200, { ok: true, eventId: r.eventId, ...(r.duplicate ? { duplicate: true } : {}) });
-  }
   if (p === '/api/demo' && m === 'POST') {
     const b = await readBody(req);
     startDemo(b.seconds);
     return json(res, 200, { ok: true });
   }
   if (p === '/api/run' && m === 'POST') {
+    if (!rateOk('run', who.id, 2, 5)) return json(res, 429, { error: '提交任务过于频繁' });
     const b = await readBody(req);
     const task = typeof b.task === 'string' ? b.task.trim() : '';
     if (!task) return json(res, 400, { error: '任务内容为空' });
@@ -685,7 +732,7 @@ async function api(req, res, url) {
     if (mode !== 'single') { sb = connectionState(b.b); if (sb.error) return json(res, 400, { error: '模型 B ' + sb.error, code: sb.code }); }
     let id;
     do id = crypto.randomBytes(6).toString('hex'); while (tasks.has(id));
-    const run = { id, kind: 'internal', runId: EV.newRunId(), title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now() };
+    const run = { id, kind: 'internal', ownerId: user.userId, runId: EV.newRunId(), title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now() };
     tasks.set(id, run);
     trimTasks();
     persistTasks();
@@ -704,14 +751,30 @@ async function api(req, res, url) {
     if (!tasks.has(mm[1])) return json(res, 404, { error: '不存在' });
     return json(res, 200, { messages: bus.list(mm[1]), stats: bus.stats(mm[1]) }); // 仅内存；服务重启后为空
   }
+  if (p === '/api/runs' && m === 'GET') {
+    const list = [...tasks.values()].filter(t => PERM.can(user, 'task.view', { ownerId: t.ownerId || t.owner })).reverse().slice(0, 100).map(taskSummary);
+    return json(res, 200, { runs: list });
+  }
   if ((mm = p.match(/^\/api\/runs\/([\w-]+)$/)) && m === 'GET') {
     const r = tasks.get(mm[1]);
-    return r ? json(res, 200, r) : json(res, 404, { error: '不存在' });
+    if (!r || !PERM.can(user, 'task.view', { ownerId: r.ownerId || r.owner })) return json(res, 404, { error: '不存在' });
+    return json(res, 200, r);
   }
   return json(res, 404, { error: '未知接口' });
 }
 
 function serveStatic(req, res, url) {
+  /* 观看令牌换 Cookie：访问 /?view=令牌 后写入 HttpOnly Cookie 并去掉地址栏里的令牌；大屏的 EventSource 自动带上 Cookie */
+  const vt = url.searchParams.get('view');
+  if (vt !== null) {
+    const ip = access.clientIp(req);
+    if (authThrottle.locked(ip)) { res.writeHead(429, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('尝试过多，请稍后再试'); }
+    const clean = url.pathname + (() => { const q = new URLSearchParams(url.search); q.delete('view'); const s = q.toString(); return s ? '?' + s : ''; })();
+    if (!access.viewTokenOk(vt)) { authThrottle.fail(ip); res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('观看令牌无效'); }
+    const secure = req.socket.encrypted || (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https');
+    res.writeHead(303, { location: clean, 'set-cookie': `aij_view=${encodeURIComponent(vt)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${secure ? '; Secure' : ''}`, 'cache-control': 'no-store' });
+    return res.end();
+  }
   let rel = decodeURIComponent(url.pathname);
   if (rel === '/') rel = '/panel.html';
   if (rel === '/admin') rel = '/admin.html';

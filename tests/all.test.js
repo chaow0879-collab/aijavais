@@ -7,3 +7,4 @@ require('./server.test.js');
 require('./runtime.test.js');
 require('./hardening.test.js');
 require('./runtime-unit.test.js');
+require('./access.test.js');

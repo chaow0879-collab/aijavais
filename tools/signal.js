@@ -7,6 +7,7 @@
  *                  [--url http://localhost:8787] [--token 令牌]
  *
  * 环境变量：AI_PANEL_URL、AI_PANEL_TOKEN
+ * 令牌：本机发送无需令牌；从别的电脑发送请用管理员创建的“上报凭证”（推荐，只能上报事件），也兼容管理令牌。
  *
  * 作为 Claude Code hooks 使用时，会从标准输入读取 hook 的 JSON，仅取工具名（tool_name）作为任务说明，
  * 不会读取或上传你的提示词内容。
@@ -34,7 +35,7 @@ function send() {
   try { u = new URL(base + '/api/event'); } catch { process.exit(0); }
   const lib = u.protocol === 'https:' ? https : http;
   const headers = { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) };
-  if (token) headers['x-admin-token'] = token;
+  if (token) headers['x-ingest-token'] = token; // 服务端同样识别管理令牌
   const req = lib.request({ hostname: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers, timeout: 800 }, res => { res.resume(); res.on('end', () => process.exit(0)); });
   req.on('timeout', () => { req.destroy(); process.exit(0); });
   req.on('error', () => process.exit(0));
