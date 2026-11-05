@@ -23,9 +23,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   delete env.ANTHROPIC_API_KEY; delete env.OPENAI_API_KEY;
   const child = spawn(process.execPath, [path.join(REPO, 'server.js')], { env, stdio: 'ignore' });
   await sleep(800);
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ headless: true,
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+      : fs.existsSync('/usr/bin/chromium') ? { executablePath: '/usr/bin/chromium' } : {}) });
   const page = await browser.newPage({ viewport: { width: 1360, height: 900 }, deviceScaleFactor: 1 });
   const errors = [];
+  const httpErrors = [];
+  page.on('response', r => { if (r.status() >= 400) httpErrors.push({ path: new URL(r.url()).pathname, status: r.status() }); });
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('dialog', d => d.accept());
@@ -109,7 +113,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await page.screenshot({ path: path.join(OUT, '9-mobile.png'), fullPage: false });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   const team = await page.evaluate(async () => (await (await fetch('/api/teams')).json()).teams[0]);
-  const result = { t1, t2, errors: errors.filter(e => !/402/.test(e)), overflow, editorAfterDelete: team.roles.find(r => r.roleId === 'editor').primaryConnectionId === ids[0] };
+  const result = { t1, t2, errors: errors.filter(e => !/402/.test(e)), httpErrors, overflow, editorAfterDelete: team.roles.find(r => r.roleId === 'editor').primaryConnectionId === ids[0] };
   console.log(JSON.stringify(result, null, 1));
   const ok = /连接正常/.test(t1) && /连接正常/.test(t2) && !result.errors.length && !overflow && result.editorAfterDelete;
   console.log(ok ? 'UI 走查通过' : 'UI 走查失败');

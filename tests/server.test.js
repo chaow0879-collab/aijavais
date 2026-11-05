@@ -63,7 +63,9 @@ test('服务接口：供应商校验、密钥绑定、配置不回传令牌、�
   // 连接测试同样受 SSRF 防护：https://localhost 解析到回环，被拒绝，且错误信息不含密钥
   const lh = await post('/api/providers', { label: 'Loop', baseUrl: 'https://localhost/v1', apiKey: 'sk-loop-abcdefghijkl', model: 'm' });
   assert.equal(lh.status, 200);
-  const tr = await post(`/api/providers/${lh.json.provider.id}/test`, {});
+  // Explicit consent passes the cost gate, so this assertion still exercises
+  // the independent SSRF rejection before any network connection can occur.
+  const tr = await post(`/api/providers/${lh.json.provider.id}/test`, { approvePaid: true });
   assert.equal(tr.json.ok, false);
   assert.match(tr.json.error, /被拒绝/);
   assert.ok(!tr.text.includes('sk-loop-abcdefghijkl'));

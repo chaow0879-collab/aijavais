@@ -138,8 +138,8 @@
       '<div class="card"><h3>项目标准</h3><p>风险：'+html((p.quantification.find(q=>q.id==='risk')||{}).selectedText||p.risk)+'；审核：'+html((p.quantification.find(q=>q.id==='rigor')||{}).selectedText||p.rigor)+'</p></div></div>'+
       (r.warnings.length?'<div class="warnbox"><strong>实施前需要注意：</strong><br>'+r.warnings.map(x=>'· '+html(x)).join('<br>')+'</div>':'')+
       '<h3 class="label" style="font-size:17px">可直接复用的项目提示词</h3><pre class="result" id="prompt-output">'+html(E.formatPrompt(p))+'</pre>'+
-      '<div class="actions" style="margin-top:15px"><button class="btn primary" data-action="copy">复制提示词</button><button class="btn" data-action="prompt">导出提示词 TXT</button><button class="btn" data-action="json">导出结构化方案 JSON</button></div>'+
-      '<p class="hint">本模块只完成立项指导，不会擅自运行 AI、访问文件或消耗 Token。要执行完整项目，需由 Claude 将此结构化方案接入 V2.0 任务调度器。</p>';
+      '<div class="actions" style="margin-top:15px"><button class="btn primary" data-action="save-project">保存草案并进入工作台</button><button class="btn" data-action="copy">复制提示词</button><button class="btn" data-action="prompt">导出提示词 TXT</button><button class="btn" data-action="json">导出结构化方案 JSON</button></div>'+
+      '<p class="hint">保存草案不会调用模型或消耗 Token。工作台会重新检查模型、工具与预算；需要你明确开始执行后才运行任务。</p>';
   }
   function render() {
     showError('');
@@ -228,7 +228,17 @@
     }
     if(action){
       const r=state.result;if(!r||!r.ok)return;
-      if(action==='copy'){const ok=await copyText(E.formatPrompt(r.plan));event.target.textContent=ok?'已复制 ✓':'复制失败，请手动选择文字';}
+      if(action==='save-project'){
+        event.target.disabled=true;
+        try{
+          const response=await fetch('/api/v2/intake/projects',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(opts())});
+          const saved=await response.json().catch(()=>({}));
+          if(!response.ok)throw Error(saved.error||'保存项目失败（HTTP '+response.status+'）');
+          if(!saved.project?.projectId)throw Error('服务端未返回项目 ID');
+          window.location.assign('/workspace.html?project='+encodeURIComponent(saved.project.projectId));
+        }catch(error){showError(error.message);event.target.disabled=false;}
+      }
+      else if(action==='copy'){const ok=await copyText(E.formatPrompt(r.plan));event.target.textContent=ok?'已复制 ✓':'复制失败，请手动选择文字';}
       else if(action==='prompt')download('AIJAVAIS-项目描述词.txt',E.formatPrompt(r.plan),'text/plain;charset=utf-8');
       else if(action==='json')download('AIJAVAIS-项目立项.json',JSON.stringify(r.plan,null,2),'application/json;charset=utf-8');
     }

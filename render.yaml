@@ -1,22 +1,24 @@
-# Render Blueprint：在 Render 里选 New → Blueprint，指向本仓库即可
+# Optional paid Render deployment blueprint. Do not Apply without cost approval.
+# Render terminates HTTPS; access to the app must go through its ingress.
 services:
   - type: web
-    name: longchuang-ai-ring
-    runtime: node
-    plan: free
-    buildCommand: echo "no build"
-    startCommand: node server.js
-    healthCheckPath: /api/state
+    name: aijavais-v2
+    runtime: docker
+    plan: starter
+    autoDeploy: false
+    healthCheckPath: /healthz
+    disk:
+      name: aijavais-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: HOST
         value: 0.0.0.0
-      - key: ADMIN_TOKEN
-        generateValue: true
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: CLAUDE_MODEL
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: CHATGPT_MODEL
-        sync: false
+      - key: PORT
+        value: "8787"
+      - key: AIJ_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: AIJ_DATA_DIR
+        value: /data

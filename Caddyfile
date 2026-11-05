@@ -1,0 +1,9 @@
+{$AIJAVAIS_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8787 {
+		# Overwrite forwarded identity; never pass client-supplied values to app.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		flush_interval -1
+	}
+}

@@ -6,6 +6,7 @@
 -->
 <html lang="zh-CN">
 <head>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%2398e0cf' stroke-width='3'/%3E%3C/svg%3E">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AIJAVAIS 管理中心</title>
@@ -100,6 +101,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
 </style>
 </head>
 <body>
+<div style="padding:8px 22px;border-bottom:1px solid #25282e"><a href="/workspace.html">AIJAVAIS V2 工作台：立项、协作、审核与文件交付 →</a> · <a href="/project-intake.html">项目立项向导</a></div>
 <header>
   <div>
     <h1>AIJAVAIS 管理中心</h1>
@@ -381,9 +383,10 @@ $('#wDiscover').addEventListener('click', async () => {
 });
 $('#wModelSel').addEventListener('change', () => { $('#wModel').value = $('#wModelSel').value; $('#w3').classList.toggle('done', !!$('#wModel').value); });
 $('#wTest').addEventListener('click', async () => {
+  if (!confirm('连接测试将真实调用所选模型（最多 32 输出 token），可能产生 API 费用。是否批准这一次测试？')) return;
   $('#wTestRes').className = 'note'; $('#wTestRes').textContent = '测试中…（大屏会转动）';
   try {
-    const r = await api('/api/models/probe', 'POST', wInput());
+    const r = await api('/api/models/probe', 'POST', { ...wInput(), approvePaid: true });
     $('#wTestRes').className = r.ok ? 'ok' : 'bad';
     $('#wTestRes').textContent = r.ok ? `连接正常 · ${r.ms} ms · 回复「${r.reply}」` : (r.hint || '') + '（' + r.error + '）';
     $('#w4').classList.toggle('done', r.ok);
@@ -427,8 +430,9 @@ $('#mList').addEventListener('click', async e => {
   const card = e.target.closest('.card'), id = card.dataset.id, res = card.querySelector('[data-res]'), m = MODELS.find(x => x.connectionId === id);
   try {
     if (act === 'test') {
+      if (!confirm('连接测试将真实调用此模型（最多 32 输出 token），可能产生 API 费用。是否批准这一次测试？')) return;
       res.className = 'note'; res.textContent = '测试中…';
-      const r = await api(`/api/models/${id}/test`, 'POST', {});
+      const r = await api(`/api/models/${id}/test`, 'POST', { approvePaid: true });
       res.className = r.ok ? 'ok' : 'bad'; res.textContent = r.ok ? `连接正常 · ${r.ms} ms` : (r.hint || r.error);
       await load(false);
     } else if (act === 'toggle') {

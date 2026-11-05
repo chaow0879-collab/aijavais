@@ -28,6 +28,8 @@ const { ModelRegistry, diagnose } = require('./lib/models');
 const { TeamRegistry } = require('./lib/teams');
 const { recommend } = require('./lib/matcher');
 const { AuthStore } = require('./lib/auth');
+const { createV2Api } = require('./lib/v2-api');
+let v2;
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -197,7 +199,10 @@ function taskSummary(t) {
 /* 把事件挂到任务上：逐 token 的 model_stream 只计数，不逐条保存，避免膨胀 */
 function recordTaskEvent(ev) {
   const t = ev.taskId && tasks.get(ev.taskId);
-  if (!t) return;
+  if (!t) {
+    if (ev.taskId && v2?.store.getRun(ev.taskId) && ev.eventType !== 'model_stream') v2.store.appendEvent(ev.taskId, ev);
+    return;
+  }
   t.eventCount = (t.eventCount || 0) + 1;
   if (ev.eventType === 'model_stream') { t.streamEvents = (t.streamEvents || 0) + 1; return; }
   (t.events || (t.events = [])).push(ev);
@@ -329,7 +334,7 @@ if (Number(process.env.AIJ_TEST_MAX_CALL_BYTES) > 0) LIMITS.maxCallBytes = Numbe
 const taskBytes = new Map();
 const providerKey = p => p.apiKey || (p.envKey && SEC.isAllowedEnvKey(p.envKey) && process.env[p.envKey]) || '';
 
-async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onActivity, onBytes }) {
+async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onActivity, onBytes, signal: callerSignal }) {
   const key = providerKey(p);
   if (!key && !p.noKey) throw new Error('未配置 API Key（可在管理界面填写，或设置环境变量 ' + (p.envKey || '—') + '）');
   if (!p.model) throw new Error('未填写模型名');
@@ -342,7 +347,8 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
     throw new Error('环境变量 ' + p.envKey + ' 只能用于其官方主机；第三方接口请直接填写 API Key，或改用 AIJ_ 开头的环境变量名');
   }
   const base = p.baseUrl.replace(/\/+$/, '');
-  const signal = AbortSignal.timeout(TEST_TIMEOUT_MS || cfg.settings.timeoutSec * 1000);
+  const timeout = AbortSignal.timeout(TEST_TIMEOUT_MS || cfg.settings.timeoutSec * 1000);
+  const signal = callerSignal ? AbortSignal.any([timeout, callerSignal]) : timeout;
   let url, headers, body;
   if (p.type === 'anthropic') {
     url = /\/v1$/.test(base) ? base + '/messages' : base + '/v1/messages';
@@ -356,7 +362,7 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
     const messages = [];
     if (system) messages.push({ role: 'system', content: system });
     messages.push({ role: 'user', content: prompt });
-    body = { model: p.model, messages, stream: true };
+    body = { model: p.model, messages, stream: true, max_tokens: maxTokens || cfg.settings.maxTokens };
     if (/api\.openai\.com/.test(base)) body.stream_options = { include_usage: true };
   }
   /* 出站：校验 + 固定解析 IP 连接 + 不跟随重定向（见 lib/security.js） */
@@ -385,7 +391,7 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
   }, { maxEventBytes: LIMITS.maxEventBytes, maxTotalBytes: LIMITS.maxCallBytes, onBytes });
 }
 
-async function callModel(p, { role, task, system, prompt, maxTokens, taskId, runId, parentSpanId, attempt, agentInstanceId, roleId }) {
+async function callModel(p, { role, task, system, prompt, maxTokens, taskId, runId, parentSpanId, attempt, agentInstanceId, roleId, signal }) {
   const spanId = EV.newSpanId();
   const T = { taskId, runId, spanId, parentSpanId, attempt, agentInstanceId, roleId };
   ingest({ agent: p.id, label: p.label, model: p.model, role, task, eventType: 'model_start' }, T);
@@ -407,7 +413,7 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId, run
   };
   try {
     await streamChat(p, {
-      system, prompt, maxTokens,
+      system, prompt, maxTokens, signal,
       onDelta: t => { out += t; if (cfg.settings.showText) pending += t; flush(false); },
       onUsage: (i, o) => {
         if (Number.isFinite(i) && i >= 0 && (i > 0 || !inSeen)) { inTok = i; inSeen = true; }
@@ -427,14 +433,14 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId, run
     const u = usageNow() || { usage: { total: Math.ceil(prompt.length / 1.6) }, source: 'estimated' };
     /* 厂商未返回 usage 时为估算值，事件里明确标记 estimated，不当作真实计费依据 */
     ingest({ agent: p.id, eventType: 'model_done', durationMs: ms, tokenUsage: u.usage }, { ...T, usageSource: u.source });
-    return { text: out, tokens: u.usage.total, inTokens: inTok, outTokens: outTok, ms, estimated: u.source !== 'provider', spanId };
+    return { text: out, tokens: u.usage.total, inTokens: inSeen ? inTok : undefined, outTokens: outSeen ? outTok : undefined, usageComplete: inSeen && outSeen, ms, estimated: u.source !== 'provider', spanId };
   } catch (e) {
     /* 写入事件 / 任务记录 / 响应前统一脱敏，防止上游错误回显密钥 */
     const msg = SEC.scrubSecrets(e?.name === 'TimeoutError' ? '请求超时' : (e?.message || String(e)), [providerKey(p)]);
     /* 失败调用：已有用量则如实结算（厂商值或估算），没有任何输出时不附用量（= 未知） */
     const u = usageNow();
     ingest({ agent: p.id, eventType: 'model_error', error: msg, durationMs: Date.now() - t0, ...(u ? { tokenUsage: u.usage } : {}) }, u ? { ...T, usageSource: u.source } : T);
-    throw new Error(msg);
+    throw Object.assign(new Error(msg), { tokens: u?.usage?.total || 0, inTokens: inSeen ? inTok : undefined, outTokens: outSeen ? outTok : undefined, usageComplete: inSeen && outSeen, estimated: u?.source !== 'provider', usageUnknown: !u });
   }
 }
 
@@ -673,15 +679,32 @@ function recallProbe(rt) {
 }
 async function testConnection(id) {
   const rt = models.runtime(id);
+  const targetKey = probeKey(rt), revision = models.get(id)?.updatedAt;
   const t0 = Date.now();
   let out;
   try {
     const r = await callModel(rt, { role: '连接测试', task: '连接测试', prompt: '只回复一个字：好', maxTokens: 32 });
     out = { ok: true, ms: Date.now() - t0, tokens: r.tokens, reply: r.text.slice(0, 60) };
   } catch (e) { out = { ok: false, ms: Date.now() - t0, error: e.message, hint: diagnose(e.message) }; }
+  const current = models.get(id);
+  if (!current || current.updatedAt !== revision || probeKey(models.runtime(id)) !== targetKey) {
+    return { ok: false, error: '连接配置在测试期间已改变；旧配置结果不会用于新配置，请重新测试', code: 'connection_changed', ...(current ? { connection: models.view(current) } : {}) };
+  }
   models.recordTest(id, out);
   saveModels();
   return { ...out, connection: models.view(models.get(id)) };
+}
+// Legacy routes cannot bypass the durable V2 approval and reservation ledger.
+// A precise, explicitly allowlisted loopback target is the only no-cost legacy
+// execution path. Remote probes require separate consent for a 32-token call.
+function legacyLocal(p) {
+  const target = SEC.checkBaseUrlSyntax(p.baseUrl, POLICY);
+  return !!(target.ok && target.local && ['127.0.0.1', 'localhost', '::1'].includes(target.host));
+}
+function probeConsent(res, runtime, input) {
+  if (legacyLocal(runtime) || input.approvePaid === true) return true;
+  json(res, 402, { ok: false, error: '远程连接测试可能收费：请明确批准一次最多 32 输出 token 的试连', code: 'probe_approval_required' });
+  return false;
 }
 /* 从服务商接口读取可用模型列表（不预置、不编造模型名）。可用已保存连接的凭证，或本次粘贴的 Key（不保存） */
 async function discoverModels(b) {
@@ -713,6 +736,14 @@ async function discoverModels(b) {
   }
 }
 const slug = s => (String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ai').slice(0, 24);
+
+v2 = createV2Api({ dir: DATA, models, teams, callModel,
+  emit: event => {
+    const line = 'data: ' + JSON.stringify({ ...event, type: 'v2' }) + '\n\n';
+    // Project/tool payloads are administrator-only. The existing visual adapter
+    // independently publishes redacted model events to display sessions.
+    for (const res of clients) if (res._lvl >= ACC.LEVEL.ADMIN) sseSend(res, line);
+  }, audit: (event, detail) => auth.audit(event, detail) });
 
 function lanUrls() {
   if (HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1') return [];
@@ -805,6 +836,8 @@ async function api(req, res, url) {
   if (who.kind !== 'admin') return json(res, 403, { error: '大屏观看会话不能访问工作台数据' });
   const user = PERM.userFromPrincipal(who);
 
+  if (await v2.handle(req, res, url, { readBody, json, user })) return;
+
   /* ---------------- 账户与会话管理 ---------------- */
   if (p === '/api/auth/password' && m === 'POST') {
     if (loginLocked(ip)) return json(res, 429, { error: '尝试次数过多，请 15 分钟后再试' });
@@ -894,8 +927,10 @@ async function api(req, res, url) {
   }
   if (p === '/api/models/discover' && m === 'POST') return json(res, 200, await discoverModels(await readBody(req)));
   if (p === '/api/models/probe' && m === 'POST') {
-    const d = models.draft(await readBody(req));
+    const b = await readBody(req);
+    const d = models.draft(b);
     if (!d.ok) return json(res, 400, { error: d.error });
+    if (!probeConsent(res, d.runtime, b)) return;
     const t0 = Date.now();
     try {
       const r = await callModel(d.runtime, { role: '连接测试', task: '保存前试连', prompt: '只回复一个字：好', maxTokens: 32 });
@@ -919,7 +954,10 @@ async function api(req, res, url) {
       saveModels();
       return json(res, 200, { connection: r.connection, impact: act === 'disable' ? modelImpact(id) : undefined });
     }
-    if (act === 'test' && m === 'POST') return json(res, 200, await testConnection(id));
+    if (act === 'test' && m === 'POST') {
+      if (!probeConsent(res, models.runtime(id), await readBody(req))) return;
+      return json(res, 200, await testConnection(id));
+    }
     if (act === 'impact' && m === 'GET') return json(res, 200, modelImpact(id));
     if (act === 'capabilities' && m === 'GET') return json(res, 200, models.getCapabilities(id));
     if (!act && m === 'DELETE') {
@@ -946,6 +984,7 @@ async function api(req, res, url) {
   }
   if ((mm = p.match(/^\/api\/providers\/([\w-]+)\/test$/)) && m === 'POST') {
     if (!models.has(mm[1])) return json(res, 404, { error: '不存在' });
+    if (!probeConsent(res, models.runtime(mm[1]), await readBody(req))) return;
     return json(res, 200, await testConnection(mm[1]));
   }
   if (p === '/api/demo' && m === 'POST') {
@@ -983,6 +1022,9 @@ async function api(req, res, url) {
       sa = connectionState(b.a || cfg.settings.defaultConnectionId);
       if (sa.error) return json(res, 400, { error: '模型 A ' + sa.error, code: sa.code });
       if (mode !== 'single') { sb = connectionState(b.b || b.a || cfg.settings.defaultConnectionId); if (sb.error) return json(res, 400, { error: '模型 B ' + sb.error, code: sb.code }); }
+    }
+    if (![sa.p, sb && sb.p].filter(Boolean).every(legacyLocal)) {
+      return json(res, 402, { error: '远程或可能收费的任务请使用 V2 工作台，逐次批准价格、预算与 token 上限', code: 'use_v2_budgeted_run' });
     }
     let id;
     do id = crypto.randomBytes(6).toString('hex'); while (tasks.has(id));
@@ -1127,6 +1169,13 @@ function securityHeaders(req, res) {
 const handler = async (req, res) => {
   try {
     securityHeaders(req, res);
+    // Public, data-free liveness for container/platform probes. It grants no
+    // session, database content or access to protected application endpoints.
+    if (req.url === '/healthz' && (req.method === 'GET' || req.method === 'HEAD')) {
+      if (req.method === 'HEAD') { res.writeHead(200, { 'cache-control': 'no-store' }); res.end(); }
+      else json(res, 200, { ok: true });
+      return;
+    }
     if (PROD && !isHttps(req)) { res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('生产环境必须通过 HTTPS 访问'); }
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname.startsWith('/api/')) await api(req, res, url);
@@ -1144,12 +1193,20 @@ server.on('error', e => {
   process.exit(1);
 });
 /* 关闭时：仍在运行的任务标记为中断并立即落盘，避免重启后状态与实际不一致 */
-function shutdown() {
+async function shutdown() {
   for (const t of tasks.values()) if (t.status === 'running') { t.status = 'interrupted'; t.error = '服务停止，任务中断'; t.endedAt = Date.now(); }
   flushTasks();
+  await v2.close();
 }
-process.on('SIGINT', () => { shutdown(); process.exit(0); });
-process.on('SIGTERM', () => { shutdown(); process.exit(0); });
+let stopping = false;
+const stop = async () => {
+  if (stopping) return; stopping = true;
+  server.close();
+  try { await shutdown(); process.exit(0); }
+  catch (e) { console.error('Shutdown failed:', e.message); process.exit(1); }
+};
+process.on('SIGINT', stop);
+process.on('SIGTERM', stop);
 const SETUP_CODE = auth.ensureSetupCode(); // 先生成设置码，再开始接受请求
 server.listen(PORT, HOST, () => {
   const scheme = TLS ? 'https' : 'http';

@@ -1,15 +1,18 @@
 {
   "name": "aijavais",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "AIJAVAIS：多 AI 协作与可视化平台——模型自由接入、AI 团队、实时大屏（大屏基于 HALOFLUX 修改，见 NOTICE.md）",
   "scripts": {
     "start": "node server.js",
     "test": "node --test tests/all.test.js",
-    "test:ui": "node tests/ui/admin.e2e.js"
+    "test:ui": "node tests/ui/admin.e2e.js",
+    "test:workspace": "node tests/ui/workspace.e2e.js",
+    "db:backup": "node tools/database.js backup",
+    "db:info": "node tools/database.js info"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24.0.0"
   },
   "license": "SEE LICENSE IN LICENSE"
 }

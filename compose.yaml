@@ -1,0 +1,50 @@
+name: aijavais
+services:
+  app:
+    image: aijavais:local
+    build: .
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      AIJ_ENV: production
+      TRUST_PROXY: "1"
+      HOST: 0.0.0.0
+      PORT: "8787"
+      AIJ_DATA_DIR: /data
+    # No ports entry: never expose the trusting HTTP backend directly to Internet.
+    volumes:
+      - aij_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 1g
+    networks: [backend]
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      AIJAVAIS_DOMAIN: ${AIJAVAIS_DOMAIN:?Set AIJAVAIS_DOMAIN to a hostname pointing to this server}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [backend]
+networks:
+  backend:
+    driver: bridge
+volumes:
+  aij_data:
+    name: ${AIJAVAIS_DATA_VOLUME:-aijavais_data}
+  caddy_data:
+  caddy_config:

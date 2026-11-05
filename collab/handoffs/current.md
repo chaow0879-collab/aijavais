@@ -1,3 +1,5 @@
+> V2最新交接：请优先阅读 [../HANDOFF.md](../HANDOFF.md)；下文保留历史阶段交接记录。
+
 # 当前交接（第三阶段 A–E 完成，等待 OpenAI 复核）
 
 分支：`feat/event-protocol-security`（未合并 main）。`public/panel.html`、`docs/*` 与 main 零差异；`public/admin.html` 按授权重写。

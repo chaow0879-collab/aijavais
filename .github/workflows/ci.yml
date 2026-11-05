@@ -1,0 +1,67 @@
+name: AIJAVAIS validation
+on:
+  push:
+    branches: [feat/codex-v2-integration]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Unit and HTTP integration tests (local protocol fixtures; no paid APIs)
+        run: npm test
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install isolated, pinned browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/aij-ui-deps" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/aij-ui-deps/node_modules/.bin/playwright" install --with-deps chromium
+          mkdir -p "$RUNNER_TEMP/aij-ui-shots"
+      - name: Browser walkthrough with local model fixture
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: |
+          npm run test:ui
+          npm run test:workspace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-screenshots
+          path: ${{ runner.temp }}/aij-ui-shots
+          if-no-files-found: ignore
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build independent production image
+        run: docker build --tag aijavais:ci .
+      - name: Start isolated backend and verify health (no public host port)
+        run: |
+          docker run --detach --name aij-ci aijavais:ci
+          for attempt in $(seq 1 30); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' aij-ci)" = healthy ]; then exit 0; fi
+            if [ "$(docker inspect --format '{{.State.Status}}' aij-ci)" = exited ]; then exit 1; fi
+            sleep 2
+          done
+          exit 1
+      - name: Remove isolated container and its generated test data
+        if: always()
+        run: docker rm --force --volumes aij-ci || true
