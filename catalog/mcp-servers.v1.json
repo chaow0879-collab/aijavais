@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-05",
+  "note": "Reviewed directory for the MCP management center. AIJAVAIS never downloads or installs these programs: a server administrator installs a pinned version, verifies its source and licence, and lists its absolute executable path in AIJ_MCP_SERVERS_FILE. Remote (HTTP) servers can be added in the UI because no local program is executed; their URLs obey the same outbound security policy as model APIs. Verify current package names, versions and licences in the upstream repository before installing.",
+  "servers": [
+    { "id": "time", "name": "时间与时区", "category": "通用", "transport": "stdio", "free": true, "needsApiKey": false, "network": false,
+      "permissions": ["无文件或网络访问"], "description": "查询当前时间、换算时区。适合用来第一次体验 MCP。",
+      "source": "https://github.com/modelcontextprotocol/servers", "package": "PyPI: mcp-server-time",
+      "install": "服务器管理员：uv tool install mcp-server-time==<核实后的版本>（或 pipx install）", "configExample": { "id": "time", "command": "/绝对路径/mcp-server-time", "args": [] } },
+    { "id": "filesystem", "name": "指定文件夹读写", "category": "文件", "transport": "stdio", "free": true, "needsApiKey": false, "network": false,
+      "permissions": ["读写管理员指定的文件夹（不要指定数据目录或系统目录）"], "description": "让 AI 岗位读取或写入服务器上一个专用共享文件夹中的文件。",
+      "source": "https://github.com/modelcontextprotocol/servers", "package": "npm: @modelcontextprotocol/server-filesystem",
+      "install": "服务器管理员：npm install -g @modelcontextprotocol/server-filesystem@<核实后的版本>", "configExample": { "id": "filesystem", "command": "/绝对路径/mcp-server-filesystem", "args": ["/srv/aijavais-shared"] } },
+    { "id": "fetch", "name": "网页读取", "category": "联网", "transport": "stdio", "free": true, "needsApiKey": false, "network": true,
+      "permissions": ["访问互联网（以服务账户身份）"], "description": "读取指定网址的网页内容并转为文字。注意：该程序自己联网，不经过 AIJAVAIS 的出站安全策略，可能访问内网地址；请在隔离容器或受限网络中运行。",
+      "source": "https://github.com/modelcontextprotocol/servers", "package": "PyPI: mcp-server-fetch",
+      "install": "服务器管理员：uv tool install mcp-server-fetch==<核实后的版本>", "configExample": { "id": "fetch", "command": "/绝对路径/mcp-server-fetch", "args": [] } },
+    { "id": "git", "name": "Git 仓库查看", "category": "代码", "transport": "stdio", "free": true, "needsApiKey": false, "network": false,
+      "permissions": ["读取（及可能修改）指定 Git 仓库"], "description": "查看提交历史、差异与文件。只指定专用仓库副本。",
+      "source": "https://github.com/modelcontextprotocol/servers", "package": "PyPI: mcp-server-git",
+      "install": "服务器管理员：uv tool install mcp-server-git==<核实后的版本>", "configExample": { "id": "git", "command": "/绝对路径/mcp-server-git", "args": ["--repository", "/srv/aijavais-repos/示例仓库"] } },
+    { "id": "memory", "name": "知识图谱记忆", "category": "通用", "transport": "stdio", "free": true, "needsApiKey": false, "network": false,
+      "permissions": ["在其自身存储文件中读写记忆"], "description": "以实体与关系保存可在多次会话间复用的记忆。",
+      "source": "https://github.com/modelcontextprotocol/servers", "package": "npm: @modelcontextprotocol/server-memory",
+      "install": "服务器管理员：npm install -g @modelcontextprotocol/server-memory@<核实后的版本>", "configExample": { "id": "memory", "command": "/绝对路径/mcp-server-memory", "args": [] } },
+    { "id": "remote-http", "name": "远程 MCP 服务（HTTP）", "category": "外部服务", "transport": "http", "free": null, "needsApiKey": null, "network": true,
+      "permissions": ["由远程服务决定"], "description": "连接服务商提供的远程 MCP 地址（Streamable HTTP）。可在本页直接添加；如服务需要令牌，填写服务商给出的静态访问令牌。暂不支持 OAuth 登录授权。费用与权限以服务商说明为准。",
+      "source": "", "package": "", "install": "在本页「添加远程 MCP」中填写名称、https 地址和（可选）访问令牌。", "configExample": null }
+  ]
+}
