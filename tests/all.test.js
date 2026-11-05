@@ -15,6 +15,8 @@ require('./project-intake.test.js');
 require('./budget.test.js');
 require('./intake-draft.test.js');
 require('./intake-draft-api.test.js');
+require('./model-request-recovery.test.js');
+require('./intake-draft-idempotency.test.js');
 require('./proxy.test.js');
 require('./projects-v2.test.js');
 require('./tools-v2.test.js');

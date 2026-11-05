@@ -110,7 +110,7 @@ test('store: schema v1 database migrates to v2 with an automatic consistent back
   store.close();
   // Recreate the exact v1 shape: no project_files table, user_version=1, no v2 migration row.
   const db = new DatabaseSync(path.join(dir, 'projects.sqlite'));
-  db.exec('DROP TABLE project_files; DROP TABLE system_usage; DELETE FROM schema_migrations WHERE version>=2; PRAGMA user_version=1;'); db.close();
+  db.exec('DROP TABLE model_requests; DROP TABLE project_files; DROP TABLE system_usage; DELETE FROM schema_migrations WHERE version>=2; PRAGMA user_version=1;'); db.close();
   store = new ProjectStore({ dir });
   t.after(() => store.close());
   assert.equal(store.schemaVersion, SCHEMA_VERSION);
@@ -121,7 +121,7 @@ test('store: schema v1 database migrates to v2 with an automatic consistent back
   assert.equal(backup.prepare('SELECT count(*) n FROM projects').get().n, 1); backup.close();
   assert.equal((fs.statSync(store.migrationBackups[0]).mode & 0o777), 0o600);
   const rows = store.db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(r => r.version);
-  assert.deepEqual(rows, [1, 2, 3]);
+  assert.deepEqual(rows, Array.from({ length: SCHEMA_VERSION }, (_, i) => i + 1));
   const f = store.putProjectFile(p.projectId, { buffer: Buffer.from('abc'), filename: 'a.txt', mime: 'text/plain', kind: 'text', extraction: { status: 'ok', text: 'abc', extractor: 'utf8' } });
   assert.equal(f.sha256, crypto.createHash('sha256').update('abc').digest('hex'));
   store.deleteProject(p.projectId);

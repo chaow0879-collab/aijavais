@@ -1,7 +1,7 @@
 name: AIJAVAIS validation
 on:
   push:
-    branches: [feat/codex-v2-integration, feat/claude-v2-followup, feat/codex-v2-ai-draft]
+    branches: [feat/codex-v2-integration, feat/claude-v2-followup, feat/codex-v2-ai-draft, feat/codex-v2-p1-ledger-recovery]
   pull_request:
   workflow_dispatch:
 permissions:
