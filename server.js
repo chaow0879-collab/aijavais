@@ -327,7 +327,7 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId }) {
 }
 
 /* ------------------------------------------------------------------ 双模型任务 */
-const SYS_DRAFT = '你是任职资格体系管理系统开发团队的助手。请直接完成用户任务，输出可直接使用的结果，语言精炼，不要寒暄。';
+const SYS_DRAFT = '你是多 AI 协作平台中的通用助手。请直接完成用户任务，输出可直接使用的结果，语言精炼，不要寒暄。';
 const SYS_REVIEW = '你是严格的交叉审核者。请逐条指出上一份输出中的错误、遗漏、前后不一致之处，并给出可执行的修改建议。只给审核意见，不要重写全文。';
 const SYS_REVISE = '请根据审核意见修订你的原稿，直接输出最终版本；末尾单独一行列出“采纳 / 未采纳”的审核意见编号。';
 
@@ -337,7 +337,7 @@ async function runPipeline(run, A, B) {
     const s = { label, providerId: p.id, provider: p.label, status: 'running', text: '', tokens: 0, ms: 0 };
     steps.push(s);
     try {
-      const r = await callModel(p, { role, task: run.title, system, prompt });
+      const r = await callModel(p, { role, task: run.title, system, prompt, taskId: run.id });
       Object.assign(s, { status: 'done', text: r.text, tokens: r.tokens, ms: r.ms });
       return r.text;
     } catch (e) { Object.assign(s, { status: 'error', error: e.message }); throw e; }
@@ -345,10 +345,10 @@ async function runPipeline(run, A, B) {
   try {
     const draft = await doStep('起草', A, '起草', SYS_DRAFT, run.task);
     if (run.mode === 'single') { run.status = 'done'; return; }
-    ingest({ agent: A.id, status: 'handoff', to: B.id, role: '交接审核' });
+    ingest({ agent: A.id, status: 'handoff', to: B.id, role: '交接审核', eventType: 'handoff' }, { taskId: run.id });
     const review = await doStep('交叉审核', B, '审核', SYS_REVIEW, `【任务】\n${run.task}\n\n【待审核输出】\n${draft}`);
     if (run.mode === 'review') { run.status = 'done'; return; }
-    ingest({ agent: B.id, status: 'handoff', to: A.id, role: '回交修订' });
+    ingest({ agent: B.id, status: 'handoff', to: A.id, role: '回交修订', eventType: 'handoff' }, { taskId: run.id });
     await doStep('修订', A, '修订', SYS_REVISE, `【任务】\n${run.task}\n\n【你的原稿】\n${draft}\n\n【审核意见】\n${review}`);
     run.status = 'done';
   } catch (e) { run.status = 'error'; run.error = e.message; }
@@ -362,14 +362,14 @@ function startDemo(seconds) {
   const total = Math.max(6, Math.min(120, seconds | 0 || 15)), t0 = Date.now();
   let phase = 0, tok = 0;
   const third = total / 3;
-  ingest({ ...A, status: 'start', role: '起草', task: '演示：起草评审流程' });
+  ingest({ ...A, status: 'start', role: '起草', task: '演示：起草评审流程' }, { source: 'demo' });
   demoTimer = setInterval(() => {
     const el = (Date.now() - t0) / 1000;
     tok += 30 + (Math.random() * 40 | 0);
-    if (phase === 0 && el > third) { phase = 1; ingest({ ...A, status: 'done', tokens: tok, ms: el * 1000 }); ingest({ ...A, status: 'handoff', to: B.agent }); ingest({ ...B, status: 'start', role: '审核', task: '演示：交叉审核' }); tok = 0; }
-    else if (phase === 1 && el > 2 * third) { phase = 2; ingest({ ...B, status: 'done', tokens: tok, ms: third * 1000 }); ingest({ ...B, status: 'handoff', to: A.agent }); ingest({ ...A, status: 'start', role: '修订', task: '演示：修订终稿' }); tok = 0; }
-    else if (el > total) { clearInterval(demoTimer); ingest({ ...A, status: 'done', tokens: tok, ms: third * 1000 }); return; }
-    ingest({ ...(phase === 1 ? B : A), status: 'stream', tokens: tok });
+    if (phase === 0 && el > third) { phase = 1; ingest({ ...A, status: 'done', tokens: tok, ms: el * 1000 }, { source: 'demo' }); ingest({ ...A, status: 'handoff', to: B.agent }, { source: 'demo' }); ingest({ ...B, status: 'start', role: '审核', task: '演示：交叉审核' }, { source: 'demo' }); tok = 0; }
+    else if (phase === 1 && el > 2 * third) { phase = 2; ingest({ ...B, status: 'done', tokens: tok, ms: third * 1000 }, { source: 'demo' }); ingest({ ...B, status: 'handoff', to: A.agent }, { source: 'demo' }); ingest({ ...A, status: 'start', role: '修订', task: '演示：修订终稿' }, { source: 'demo' }); tok = 0; }
+    else if (el > total) { clearInterval(demoTimer); ingest({ ...A, status: 'done', tokens: tok, ms: third * 1000 }, { source: 'demo' }); return; }
+    ingest({ ...(phase === 1 ? B : A), status: 'stream', tokens: tok }, { source: 'demo' });
   }, 300);
 }
 
@@ -488,8 +488,9 @@ async function api(req, res, url) {
   if (p === '/api/event' && m === 'POST') {
     const b = await readBody(req);
     if (!b || typeof b !== 'object' || !b.agent) return json(res, 400, { error: '缺少 agent 字段' });
-    ingest(b);
-    return json(res, 200, { ok: true });
+    const r = ingest(b, { source: 'external' });
+    if (r.error) return json(res, 400, { error: r.error });
+    return json(res, 200, { ok: true, eventId: r.eventId });
   }
   if (p === '/api/demo' && m === 'POST') {
     const b = await readBody(req);
@@ -506,13 +507,14 @@ async function api(req, res, url) {
     if (mode !== 'single' && !B) return json(res, 400, { error: '请选择模型 B' });
     const id = crypto.randomBytes(6).toString('hex');
     const run = { id, title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now() };
-    runs.set(id, run);
-    while (runs.size > 20) runs.delete(runs.keys().next().value);
+    tasks.set(id, run);
+    trimTasks();
+    persistTasks();
     runPipeline(run, A, B);
     return json(res, 200, { runId: id });
   }
   if ((mm = p.match(/^\/api\/runs\/(\w+)$/)) && m === 'GET') {
-    const r = runs.get(mm[1]);
+    const r = tasks.get(mm[1]);
     return r ? json(res, 200, r) : json(res, 404, { error: '不存在' });
   }
   return json(res, 404, { error: '未知接口' });
