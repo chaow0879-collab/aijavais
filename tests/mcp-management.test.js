@@ -57,7 +57,15 @@ test('V2 HTTP: MCP management center — catalog, add remote, test, call, logs, 
   assert.equal(tested.json.state.available, true); assert.deepEqual(tested.json.tools.map(x => x.toolId).sort(), ['mcp:remote:echo', 'mcp:remote:sse_echo']);
   const local = await S.call('POST', '/api/v2/mcp/servers/local/test', {});
   assert.equal(local.json.state.available, true);
-  const call = await S.call('POST', '/api/v2/tools/call', { toolId: 'mcp:remote:sse_echo', args: { value: 'hi' }, allowedTools: ['mcp:remote:sse_echo'] });
+  // External tools: a browser-supplied grant is not enough; the server issues a single-use confirmation bound to tool + args.
+  const unconfirmed = await S.call('POST', '/api/v2/tools/call', { toolId: 'mcp:remote:sse_echo', args: { value: 'hi' }, allowedTools: ['mcp:remote:sse_echo'] });
+  assert.equal(unconfirmed.status, 428); assert.equal(unconfirmed.json.risk, 'external');
+  const prep = await S.call('POST', '/api/v2/tools/call/prepare', { toolId: 'mcp:remote:sse_echo', args: { value: 'hi' } });
+  assert.equal(prep.json.risk, 'external'); assert.match(prep.json.warnings.join(''), /费用/);
+  assert.equal((await S.call('POST', '/api/v2/tools/call', { toolId: 'mcp:remote:sse_echo', args: { value: 'other' }, confirmationId: prep.json.confirmationId })).status, 428, 'confirmation bound to the exact arguments');
+  const prep2 = await S.call('POST', '/api/v2/tools/call/prepare', { toolId: 'mcp:remote:sse_echo', args: { value: 'hi' } });
+  const call = await S.call('POST', '/api/v2/tools/call', { toolId: 'mcp:remote:sse_echo', args: { value: 'hi' }, confirmationId: prep2.json.confirmationId });
+  assert.equal((await S.call('POST', '/api/v2/tools/call', { toolId: 'mcp:remote:sse_echo', args: { value: 'hi' }, confirmationId: prep2.json.confirmationId })).status, 428, 'single use');
   assert.equal(call.json.result.content[0].text, 'sse:hi');
   assert.ok((await S.call('GET', '/api/v2/mcp')).json.logs.some(l => l.serverId === 'remote' && l.action === 'call' && l.status === 'done'));
   assert.equal((await S.call('POST', '/api/v2/mcp/servers/remote/disable', {})).status, 200);

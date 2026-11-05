@@ -126,6 +126,7 @@
     $('project-deliverables').value=(project.deliverables || []).join('\n');$('required-tools').value=(project.requiredToolIds || []).join('\n');
     $('intake-note').textContent=project.plan || project.intake ? '该项目来自智能立项草案；请在执行前确认岗位、模型、成果标准与工具需求。' : '';
     $('approve-paid').checked=false; // Explicit approval is per invocation and never restored.
+    $('approve-external').checked=false;
     $('validation').hidden=true;
     const mat=project.materials || {mode:'all',fileIds:[],maxChars:40000};$('materials-mode').value=mat.mode;$('materials-max').value=mat.maxChars;
     renderRoles();renderSteps();resourceCheckboxes('project-tools',state.tools,[],'projectTool');loadFiles().catch(e=>feedback(e.message,true));
@@ -155,7 +156,7 @@
     if(!prices || typeof prices!=='object' || Array.isArray(prices))throw Error('价格表必须是以模型连接 ID 为键的对象');
     const maxTokens=Number($('max-tokens').value),maxCost=Number($('max-cost').value),maxOutputTokens=Number($('max-output-tokens').value);
     if(!Number.isSafeInteger(maxTokens)||maxTokens<1||!Number.isFinite(maxCost)||maxCost<0||!Number.isSafeInteger(maxOutputTokens)||maxOutputTokens<1)throw Error('请填写有效的 Token 与费用上限');
-    return {approvePaid:$('approve-paid').checked,maxTokens,maxCost,maxOutputTokens,prices,allowedTools:[...document.querySelectorAll('[data-project-tool]:checked')].map(x=>x.value)};
+    return {approvePaid:$('approve-paid').checked,approveExternalTools:$('approve-external').checked,maxTokens,maxCost,maxOutputTokens,prices,allowedTools:[...document.querySelectorAll('[data-project-tool]:checked')].map(x=>x.value)};
   }
   const STATUS_TEXT={ok:'已读取文字',no_text:'没有可读取的文字',tool_unavailable:'服务器缺少解析程序',metadata_only:'仅保存，不识别内容'};
   async function loadFiles() {

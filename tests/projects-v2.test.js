@@ -331,3 +331,15 @@ test('V2 handoff: a step can receive all earlier role outputs, labelled by role 
   const msg = f.store.getMessages(run.runId).find(m => m.stepId === 'r1-d');
   assert.equal(msg.handoff, 'all'); assert.match(msg.content, /OUT-1[\s\S]*OUT-3/);
 });
+
+test('V2 runs: external (MCP) or code-executing tools need a separate explicit approval per run', async t => {
+  const calls = [];
+  const tools = { list: () => [{ toolId: 'mcp:svc:send', risk: 'external' }, { toolId: 'builtin:text-stats', risk: 'read' }], call: async (id) => { calls.push(id); return { toolId: id, executionMode: 'mcp', content: [{ type: 'text', text: 'sent' }] }; } };
+  const f = fixture(t, { tools });
+  const project = f.engine.create({ ...f.input, steps: [{ stepId: 'a', roleId: 'draft', title: 'Use external tool', toolCalls: [{ toolId: 'mcp:svc:send', args: {} }] }] });
+  assert.throws(() => f.engine.start(project.projectId, { allowedTools: ['mcp:svc:send'] }), e => e.code === 'external_tool_approval' && e.status === 403);
+  assert.equal(calls.length, 0, 'nothing executed without approval');
+  const run = await f.engine.wait(f.engine.start(project.projectId, { allowedTools: ['mcp:svc:send'], approveExternalTools: true }).runId);
+  assert.equal(run.status, 'review_required', run.error); assert.deepEqual(calls, ['mcp:svc:send']);
+  assert.equal(f.store.getRun(run.runId).approval.approveExternalTools, true, 'approval recorded in the run snapshot');
+});

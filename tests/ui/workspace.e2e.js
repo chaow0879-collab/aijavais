@@ -120,9 +120,11 @@ const H = require('../helpers');
     await page.waitForFunction(()=>document.querySelector('#add-note').textContent.includes('连接成功'));
     assert.equal(await page.inputValue('#add-token'),'','token field cleared after saving');
     await page.waitForSelector('#mcp-try:not([hidden])');
-    await page.selectOption('#try-tool','mcp:remote:sse_echo');await page.fill('#try-args','{"value":"界面调用"}');await page.click('#try-run');
+    await page.selectOption('#try-tool','mcp:remote:sse_echo');await page.fill('#try-args','{"value":"界面调用"}');
+    let riskDialog='';page.once('dialog',d=>{riskDialog=d.message();d.accept();});await page.click('#try-run');
     await page.waitForFunction(()=>document.querySelector('#try-result').textContent.includes('sse:界面调用'));
     await page.waitForFunction(()=>document.querySelector('#mcp-logs').textContent.includes('调用 mcp:remote:sse_echo'));
+    assert.match(riskDialog,/外部 MCP 工具/,'user saw the external-tool risk before the call');
     assert.doesNotMatch(await page.content(),/ui-token/,'token never rendered back');
     if(process.env.UI_SHOTS)await page.screenshot({path:require('path').join(process.env.UI_SHOTS,'mcp.png'),fullPage:true});
     if(process.env.UI_SHOTS){await page.click('#tab-ready');await page.screenshot({path:require('path').join(process.env.UI_SHOTS,'capabilities.png'),fullPage:true});}

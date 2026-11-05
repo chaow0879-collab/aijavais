@@ -225,3 +225,25 @@ test('Anthropic-protocol model discovery sends /v1/models?limit=100 with x-api-k
   assert.match(query.json.error, /查询参数/);
   assert.equal(seen.filter(s => s.url.includes('x=1')).length, 0, 'rejected before any request was sent');
 });
+
+test('connection tests are recorded in the system usage ledger; remote cost without a price table is null, never 0 (local fixtures)', async t => {
+  const mk = host => new Promise(r => { const srv = http.createServer((req, res) => { let b = ''; req.on('data', c => b += c); req.on('end', () => {
+    if (JSON.parse(b).model === 'broken') { res.writeHead(500); return res.end('boom'); }
+    res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: '好' } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 7, completion_tokens: 1 } }) + '\n\ndata: [DONE]\n\n'); }); });
+    srv.listen(0, host, () => r(srv)); });
+  const local = await mk('127.0.0.1'), other = await mk('127.0.0.2');
+  const S = await H.boot({ env: { LOCAL_MODEL_TARGETS: `127.0.0.1:${local.address().port},127.0.0.2:${other.address().port}` } });
+  t.after(async () => { await S.stop(); local.close(); other.close(); });
+  const add = async (host, port, modelId) => (await call(S.port, 'POST', '/api/models', { providerId: 'custom', baseUrl: `http://${host}:${port}/v1`, apiKey: 'k', modelId, displayName: modelId })).json.connection.connectionId;
+  const a = await add('127.0.0.1', local.address().port, 'loop'), b = await add('127.0.0.2', other.address().port, 'remote-like'), c = await add('127.0.0.2', other.address().port, 'broken');
+  assert.equal((await call(S.port, 'POST', `/api/models/${a}/test`)).json.ok, true);
+  assert.equal((await call(S.port, 'POST', `/api/models/${b}/test`, {})).status, 402, 'non-loopback probe still needs explicit consent');
+  assert.equal((await call(S.port, 'POST', `/api/models/${b}/test`, { approvePaid: true })).json.ok, true);
+  assert.equal((await call(S.port, 'POST', `/api/models/${c}/test`, { approvePaid: true })).json.ok, false);
+  const ledger = (await call(S.port, 'GET', '/api/v2/usage/system')).json.usage;
+  const by = id => ledger.find(u => u.connectionId === id);
+  assert.deepEqual([by(a).cost, by(a).costSource, by(a).tokens, by(a).tokenSource], [0, 'declared_local_target_no_api_cost', 8, 'provider']);
+  assert.deepEqual([by(b).cost, by(b).costSource, by(b).tokens, by(b).maxOutputTokens], [null, 'unknown_no_price_table', 8, 32]);
+  assert.equal(by(c).ok, false); assert.equal(by(c).cost, null); assert.equal(by(c).tokenSource, 'unknown'); assert.match(by(c).error, /HTTP 500/);
+  assert.doesNotMatch(JSON.stringify(ledger), /"k"/, 'no key material in the ledger');
+});

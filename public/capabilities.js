@@ -129,7 +129,12 @@
     const out = $('try-result'); out.hidden = false;
     let args; try { args = JSON.parse($('try-args').value || '{}'); } catch { out.textContent = '参数不是有效的 JSON'; return; }
     const toolId = $('try-tool').value;
-    try { const r = await api('/api/v2/tools/call', 'POST', { toolId, args, allowedTools: [toolId] }); out.textContent = JSON.stringify(r.result, null, 2); }
+    try {
+      // The server issues a single-use confirmation bound to this tool and these arguments; the user must read the risks first.
+      const prep = await api('/api/v2/tools/call/prepare', 'POST', { toolId, args });
+      if (prep.risk !== 'read' && !confirm('即将真实调用工具「' + toolId + '」一次。\n\n' + (prep.warnings || []).join('\n') + '\n\n确定继续吗？')) { out.textContent = '已取消，未调用。'; return; }
+      const r = await api('/api/v2/tools/call', 'POST', { toolId, args, confirmationId: prep.confirmationId, allowedTools: [toolId] }); out.textContent = JSON.stringify(r.result, null, 2);
+    }
     catch (e) { out.textContent = '调用失败：' + e.message; }
     await mcp().catch(() => {});
   });
