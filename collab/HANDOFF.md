@@ -7,6 +7,8 @@
 - 共同基线在本实例实际测试189/189，0失败/跳过；A阶段共享预算提取后193/193通过。两个指定SHA的GitHub Actions读取均返回403，当前环境尚未独立核实远程CI，不能沿用前开发者报告当作已核查。
 - A检查点：新增`lib/budget.js`纯策略函数（本地识别/授权/预留/完整与未知结算），ProjectEngine持久化适配后复用；没有改Claude保留的四文件，也没有数据库结构迁移。
 
+- B检查点：`POST /api/v2/intake/ai-draft` + `/estimate`（不发送模型请求）+ `/cancel`；`lib/intake-draft.js`只调用一次模型，严格白名单JSON、服务器模型推荐、草案不自动保存或执行。system_usage在调用前持久预留、调用后同一行结算，未知远程费用为null，另保留budgetCost；先写失败则不调用，后写失败明确usageRecorded:false。无schema升级（仍v3）。相关49项回归通过。
+
 ---
 
 # AIJAVAIS V2.0 · 当前交接（Claude Code 接力开发中）
