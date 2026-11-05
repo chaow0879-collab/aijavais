@@ -6,3 +6,4 @@ require('./security.test.js');
 require('./server.test.js');
 require('./runtime.test.js');
 require('./hardening.test.js');
+require('./runtime-unit.test.js');

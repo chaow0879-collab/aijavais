@@ -156,16 +156,23 @@ test('任务终止：未处理消息被取消，之后拒绝发送与投递；�
 });
 
 test('任务注册校验与内存上限', () => {
-  const bus = new MessageBus({ maxTasks: 3 });
+  let clock = 1000; const bus = new MessageBus({ maxTasks: 3, now: () => ++clock });
   assert.equal(bus.registerTask('../x', { runId: 'r', agents: ['a'] }).ok, false);
   assert.equal(bus.registerTask('t', { runId: 'bad id', agents: ['a'] }).ok, false);
   assert.equal(bus.registerTask('t', { runId: 'r', agents: [] }).ok, false);
   assert.ok(bus.registerTask('t', { runId: 'r', agents: ['a', 'b'] }).ok);
   assert.equal(bus.registerTask('t', { runId: 'r', agents: ['a', 'b'] }).ok, false, '重复注册');
   bus.registerTask('t2', { runId: 'r', agents: ['a'] }); bus.registerTask('t3', { runId: 'r', agents: ['a'] });
-  bus.endTask('t2', 'completed');
-  bus.registerTask('t4', { runId: 'r', agents: ['a'] });
-  assert.equal(bus.taskState('t2'), null, '优先淘汰已终止的任务'); assert.equal(bus.taskState('t'), 'active');
+  const full = bus.registerTask('t4', { runId: 'r', agents: ['a'] });
+  assert.equal(full.ok, false, '全部任务都在运行时拒绝新注册'); assert.match(full.error, /已满/);
+  assert.equal(bus.taskState('t'), 'active'); assert.equal(bus.taskState('t3'), 'active');
+  const evicted = []; bus.onEvict = id => evicted.push(id);
+  bus.endTask('t3', 'completed'); bus.endTask('t2', 'completed');
+  assert.ok(bus.registerTask('t4', { runId: 'r', agents: ['a'] }).ok);
+  assert.deepEqual(evicted, ['t3'], '只清理已结束的任务，最早结束的先清');
+  assert.equal(bus.taskState('t'), 'active', '运行中的任务永不被淘汰');
+  assert.equal(bus.activeCount(), 2);
+  assert.equal(bus.sweepEnded(0, clock + 10), 1); assert.equal(bus.taskState('t2'), null);
   assert.ok(MESSAGE_TYPES.includes('system_notice') && MESSAGE_TYPES.length === 9);
 });
 

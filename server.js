@@ -19,6 +19,8 @@ const EV = require('./lib/events');
 const SEC = require('./lib/security');
 const MSG = require('./lib/messages');
 const SSE = require('./lib/sse');
+const { Runtime } = require('./lib/runtime');
+const { ArtifactStore } = require('./lib/artifacts');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -79,10 +81,8 @@ for (const id of ['claude', 'chatgpt', 'kimi', 'deepseek']) {
 try { saveConfig(); } catch (e) { console.error('无法写入 data/config.json：', e.message); }
 
 /* ------------------------------------------------------------------ 状态 */
-const agents = new Map();
-/* totals 只统计平台自己发起并观察到的真实模型调用（source=server）。
-   tokens = 厂商返回的真实用量；estimatedTokens = 估算值，单独统计，不当作计费依据；外部上报与演示只计事件数。 */
-const totals = { calls: 0, tokens: 0, estimatedTokens: 0, errors: 0, reportedEvents: 0, simulatedEvents: 0 };
+/* 运行时计数见 lib/runtime.js：totals 只统计 source=server 的真实调用；tokens（厂商用量）与 estimatedTokens（估算）分开 */
+const RT = new Runtime();
 const clients = new Set(); // 每个 res 带 res._lvl：2 管理员/本机，1 观看者，0 匿名
 const str = (s, n) => String(s == null ? '' : s).slice(0, n);
 
@@ -118,7 +118,14 @@ function flushTasks() {
   if (tasksTimer) { clearTimeout(tasksTimer); tasksTimer = null; }
   writeTasksNow();
 }
-function trimTasks() { while (tasks.size > MAX_TASKS) tasks.delete(tasks.keys().next().value); }
+/* 超出上限时先删最早的已结束任务；运行中的任务永不删除 */
+function trimTasks() {
+  while (tasks.size > MAX_TASKS) {
+    const key = [...tasks.entries()].find(([, t]) => t.status !== 'running')?.[0];
+    if (key === undefined) return;
+    tasks.delete(key);
+  }
+}
 function taskSummary(t) {
   const { steps, events, ...rest } = t;
   return { ...rest, stepCount: (steps || []).length, eventCount: t.eventCount || 0 };
@@ -134,107 +141,74 @@ function recordTaskEvent(ev) {
   persistTasks();
 }
 
-/* 外部上报去重：同一 agent 的同一 clientEventId 只处理一次（重试 / 网络重发不会重复计数） */
+/* 外部上报去重：同一主体、同一 agent 的同一 clientEventId 只处理一次（重试 / 网络重发不会重复计数） */
 const seenClientEvents = new Map();
 const MAX_CLIENT_EVENTS = 5000;
+const MAX_EXTERNAL_TASKS_PER_OWNER = 50;
 const isProviderId = id => cfg.providers.some(p => p.id === id);
 
+/* 外部上报的任务归属：平台内部任务一律拒绝；外部任务只属于首次创建它的上报主体 */
+function claimExternalTask(taskId, owner, input) {
+  if (!taskId) return { ok: true };
+  const t = tasks.get(taskId);
+  if (t) {
+    if (t.kind !== 'external' || t.owner !== owner) return { ok: false, code: 403, error: '无权向任务 ' + taskId + ' 上报事件：该任务不属于当前上报主体' };
+    return { ok: true };
+  }
+  let n = 0;
+  for (const x of tasks.values()) if (x.kind === 'external' && x.owner === owner) n++;
+  if (n >= MAX_EXTERNAL_TASKS_PER_OWNER) return { ok: false, code: 429, error: '该上报主体的外部任务数量已达上限（' + MAX_EXTERNAL_TASKS_PER_OWNER + '）' };
+  tasks.set(taskId, { id: taskId, kind: 'external', owner, title: str(input.task || taskId, 30), status: 'reported', verification: 'reported', createdAt: Date.now(), steps: [], events: [] });
+  trimTasks(); persistTasks();
+  return { ok: true };
+}
+
 /*
- * ingest：校验 → 去重 → 规范化 → 更新运行时计数 → 记录到任务 → 广播。
- * opts：{ source, taskId, runId, spanId, parentSpanId, attempt, usageSource }（服务端上下文，优先于事件体内的同名字段）
- * 运行时计数规则：
- *   - 模型调用并发数按 spanId 集合统计（a.spans），一个供应商同时跑多个任务互不覆盖；
- *   - task_* 任务级事件不改变“正在调用模型”的状态；
- *   - totals 只计 source=server 的真实调用；external（reported）与 demo（simulated）不进入真实统计。
+ * ingest：身份与归属校验 → 去重 → 规范化 → 运行时计数（lib/runtime.js）→ 记录到任务 → 广播。
+ * opts：{ source, owner（外部上报主体）, allowedAgents（该主体允许使用的 agentId，可空）,
+ *         taskId, runId, spanId, parentSpanId, attempt, agentInstanceId, roleId, usageSource }
+ * 返回事件对象，或 { error, code }，或 { duplicate, eventId }。
  */
 function ingest(ev, opts = {}) {
   const source = opts.source || 'server';
+  const owner = source === 'external' ? (opts.owner || 'local') : null;
   const input = ev && typeof ev === 'object' && !Array.isArray(ev) ? ev : {};
   const aid = str(input.agentId !== undefined ? input.agentId : input.agent, 40).trim();
+  let dedupKey = null;
   if (source === 'external') {
-    if (aid && (isProviderId(aid) || /^demo-/i.test(aid))) return { error: '外部事件不能使用平台供应商 ID 或 demo- 前缀的 agentId，请换一个名称' };
+    if (aid && (isProviderId(aid) || /^demo-/i.test(aid))) return { code: 400, error: '外部事件不能使用平台模型连接 ID 或 demo- 前缀的 agentId，请换一个名称' };
+    if (aid && Array.isArray(opts.allowedAgents) && opts.allowedAgents.length && !opts.allowedAgents.includes(aid)) return { code: 403, error: '当前上报凭证无权使用 agentId "' + aid + '"' };
     if (input.clientEventId !== undefined && input.clientEventId !== null) {
-      if (typeof input.clientEventId !== 'string' || !EV.ID_RE.test(input.clientEventId)) return { error: 'clientEventId 格式不合法（字母、数字、下划线、点、连字符，最长 64 位）' };
-      const dk = aid + '\u0000' + input.clientEventId;
-      if (seenClientEvents.has(dk)) return { duplicate: true, eventId: seenClientEvents.get(dk) };
+      if (typeof input.clientEventId !== 'string' || !EV.ID_RE.test(input.clientEventId)) return { code: 400, error: 'clientEventId 格式不合法（字母、数字、下划线、点、连字符，最长 64 位）' };
+      dedupKey = owner + '\u0000' + aid + '\u0000' + input.clientEventId;
+      if (seenClientEvents.has(dedupKey)) return { duplicate: true, eventId: seenClientEvents.get(dedupKey) };
     }
-  } else if (source === 'demo' && !/^demo-/.test(aid)) return { error: '演示事件的 agentId 必须以 demo- 开头' };
-  const existing = aid ? agents.get(aid) : null;
-  if (existing && existing.source !== source) return { error: 'agentId "' + aid + '" 已被其它来源（' + existing.source + '）占用，不能以 ' + source + ' 身份写入' };
+  } else if (source === 'demo' && !/^demo-/.test(aid)) return { code: 400, error: '演示事件的 agentId 必须以 demo- 开头' };
+  const conflict = RT.check(aid, source, owner);
+  if (conflict) return { code: 409, error: conflict };
 
-  const norm = EV.normalize(input, { source, taskId: opts.taskId, runId: opts.runId, spanId: opts.spanId, parentSpanId: opts.parentSpanId, attempt: opts.attempt, usageSource: opts.usageSource });
-  if (!norm.ok) return { error: norm.error };
+  const norm = EV.normalize(input, {
+    source, taskId: opts.taskId, runId: opts.runId, spanId: opts.spanId, parentSpanId: opts.parentSpanId,
+    attempt: opts.attempt, agentInstanceId: opts.agentInstanceId, roleId: opts.roleId, usageSource: opts.usageSource,
+  });
+  if (!norm.ok) return { code: 400, error: norm.error };
   const env = norm.ev;
-  if (source === 'external' && input.clientEventId) {
-    seenClientEvents.set(aid + '\u0000' + input.clientEventId, env.eventId);
-    if (seenClientEvents.size > MAX_CLIENT_EVENTS) seenClientEvents.delete(seenClientEvents.keys().next().value);
-  }
-  const id = env.agentId;
-  const status = env.status;
-  const now = env.timestamp;
-  let a = existing;
-  if (!a) {
-    if (agents.size >= 200) {
-      const old = [...agents.values()].filter(x => x.status !== 'working').sort((x, y) => x.last - y.last)[0];
-      if (old) agents.delete(old.id);
-    }
-    a = { id, source, verification: env.verification, label: id, model: '', role: '', status: 'idle', task: '', calls: 0, tokens: 0, estimatedTokens: 0, errors: 0, since: now, last: now, ms: 0, live: 0, active: 0, spans: new Set() };
-    agents.set(id, a);
-  }
-  a.last = now;
-  if (input.label) a.label = str(input.label, 40);
-  if (input.model) a.model = str(input.model, 60);
-  if (input.role !== undefined) a.role = str(input.role, 40);
-  if (input.task !== undefined) a.task = str(input.task, 80);
-
-  const usage = env.tokenUsage;
-  const tk = usage && usage.total;
-  let tokens;
-  if (source === 'server') {
-    const et = env.eventType, sid = env.spanId;
-    if (et === 'model_start') {
-      a.spans.add(sid); a.status = 'working'; a.since = now; a.calls++; totals.calls++; a.live = 0;
-    } else if (et === 'model_stream') {
-      if (a.spans.has(sid) && a.status !== 'working') { a.status = 'working'; a.since = now; }
-      if (tk !== undefined) a.live = tk;
-    } else if (et === 'model_done') {
-      a.spans.delete(sid);
-      if (!a.spans.size) a.status = 'idle';
-      a.ms = env.durationMs !== undefined ? env.durationMs : now - a.since;
-      if (tk > 0) {
-        if (usage.source === 'provider') { a.tokens += tk; totals.tokens += tk; tokens = tk; }
-        else { a.estimatedTokens += tk; totals.estimatedTokens += tk; }
-      }
-    } else if (et === 'model_error') {
-      a.spans.delete(sid);
-      a.status = a.spans.size ? 'working' : 'error'; a.errors++; totals.errors++;
-    }
-    a.active = a.spans.size;
-  } else {
-    /* external / demo：沿用旧的 status 计数（供 signal.js 与演示使用），但不进入真实统计 */
-    if (source === 'external') totals.reportedEvents++; else totals.simulatedEvents++;
-    if (status === 'start') {
-      a.active++; a.status = 'working'; a.since = now; a.calls++; a.live = 0;
-    } else if (status === 'stream') {
-      if (a.status !== 'working') { a.status = 'working'; a.since = now; }
-      if (tk !== undefined) a.live = tk;
-    } else if (status === 'done') {
-      a.active = Math.max(0, a.active - 1);
-      if (!a.active) a.status = 'idle';
-      a.ms = env.durationMs !== undefined ? env.durationMs : now - a.since;
-      if (tk > 0) { a.tokens += tk; tokens = tk; }
-    } else if (status === 'error') {
-      a.active = Math.max(0, a.active - 1);
-      a.status = a.active ? 'working' : 'error'; a.errors++;
+  if (source === 'external') {
+    const claim = claimExternalTask(env.taskId, owner, input);
+    if (!claim.ok) return { code: claim.code, error: claim.error };
+    if (dedupKey) {
+      seenClientEvents.set(dedupKey, env.eventId);
+      if (seenClientEvents.size > MAX_CLIENT_EVENTS) seenClientEvents.delete(seenClientEvents.keys().next().value);
     }
   }
-  const working = [...agents.values()].filter(x => x.status === 'working').length;
+  const { agent: a, tokens } = RT.apply(env, input, owner);
+  const tk = env.tokenUsage && env.tokenUsage.total;
   /* 输出 = 新协议信封 + 旧版字段（大屏 panel.html 仍按旧字段响应，协议向后兼容） */
   const out = {
     ...env,
-    type: 'event', t: now, agent: id, label: a.label, model: a.model, role: a.role,
+    type: 'event', t: env.timestamp, agent: a.id, label: a.label, model: a.model, role: a.role,
     task: a.task, tokens: tokens !== undefined ? tokens : tk,
-    ms: env.durationMs, to: input.to ? str(input.to, 40) : undefined, working,
+    ms: env.durationMs, to: input.to ? str(input.to, 40) : undefined, working: RT.working(),
   };
   if (input.error) out.error = str(input.error, 160);
   if (cfg.settings.showText && input.text) out.text = str(input.text, 400);
@@ -244,15 +218,11 @@ function ingest(ev, opts = {}) {
 }
 
 function snapshot(level = 2) {
-  const list = [...agents.values()].sort((a, b) => b.last - a.last).slice(0, 24).map(a => EV.redact({
-    id: a.id, label: a.label, model: a.model, role: a.role, status: a.status, task: a.task,
-    calls: a.calls, tokens: a.tokens, estimatedTokens: a.estimatedTokens, errors: a.errors, since: a.since, last: a.last, ms: a.ms, live: a.live,
-    source: a.source, verification: a.verification,
-  }, level));
+  const list = RT.publicAgents(24).map(a => EV.redact(a, level));
   return {
     type: 'state', now: Date.now(), working: list.filter(a => a.status === 'working').length, agents: list,
     providers: cfg.providers.map(p => ({ id: p.id, label: p.label, model: p.model, enabled: p.enabled !== false, ready: providerReady(p) })),
-    totals: { ...totals, agents: agents.size }, showText: level >= 2 && !!cfg.settings.showText,
+    totals: { ...RT.totals, agents: RT.agents.size }, showText: level >= 2 && !!cfg.settings.showText,
   };
 }
 function sseSend(res, line) { try { res.write(line); } catch { clients.delete(res); } }
@@ -271,10 +241,8 @@ function broadcastState() {
   }
 }
 setInterval(() => {
-  const now = Date.now(), limit = cfg.settings.idleTimeoutSec * 1000;
-  for (const a of agents.values()) {
-    if (a.status === 'working' && now - a.last > limit) { a.status = 'idle'; a.active = 0; a.spans.clear(); ingest({ agent: a.id, eventType: 'activity', task: '超时，回到待机' }, { source: a.source }); }
-    else if (a.status === 'error' && now - a.last > 30000) a.status = 'idle';
+  for (const a of RT.sweep(Date.now(), cfg.settings.idleTimeoutSec * 1000)) {
+    ingest({ agent: a.id, eventType: 'activity', task: '超时，回到待机' }, { source: a.source, owner: a.owner });
   }
   broadcastState();
 }, 2000).unref?.();
@@ -284,6 +252,7 @@ setInterval(() => { for (const res of clients) sseSend(res, ': hb\n\n'); }, 1500
 loadTasks();
 /* 流量上限：单事件 / 单次调用 / 单任务累计，防止异常上游无限输出 */
 const LIMITS = { maxEventBytes: 1 << 20, maxCallBytes: 8 << 20, maxTaskBytes: 32 << 20 };
+const MAX_TASK_CHARS = 200000; // 单个任务输入上限：超过直接拒绝，不截断
 /* 仅供自动化测试：缩短超时 / 流量上限以便快速覆盖失败路径；生产环境不要设置 */
 const TEST_TIMEOUT_MS = Number(process.env.AIJ_TEST_TIMEOUT_MS) || 0;
 if (Number(process.env.AIJ_TEST_MAX_CALL_BYTES) > 0) LIMITS.maxCallBytes = Number(process.env.AIJ_TEST_MAX_CALL_BYTES);
@@ -331,10 +300,10 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
     if (!data || data === '[DONE]') return;
     let j; try { j = JSON.parse(data); } catch { return; }
     if (p.type === 'anthropic') {
-      if (j.type === 'message_start') onUsage(j.message?.usage?.input_tokens, 0);
+      if (j.type === 'message_start') onUsage(j.message?.usage?.input_tokens, undefined);
       else if (j.type === 'content_block_delta' && j.delta?.type === 'text_delta') onDelta(j.delta.text || '');
       else if (j.type === 'content_block_delta') onActivity();
-      else if (j.type === 'message_delta') onUsage(0, j.usage?.output_tokens);
+      else if (j.type === 'message_delta') onUsage(undefined, j.usage?.output_tokens);
       else if (j.type === 'error') throw new Error(j.error?.message || 'stream error');
     } else {
       if (j.error) throw new Error(j.error.message || 'stream error');
@@ -346,24 +315,34 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
   }, { maxEventBytes: LIMITS.maxEventBytes, maxTotalBytes: LIMITS.maxCallBytes, onBytes });
 }
 
-async function callModel(p, { role, task, system, prompt, maxTokens, taskId, runId, parentSpanId, attempt }) {
+async function callModel(p, { role, task, system, prompt, maxTokens, taskId, runId, parentSpanId, attempt, agentInstanceId, roleId }) {
   const spanId = EV.newSpanId();
-  const T = { taskId, runId, spanId, parentSpanId, attempt };
+  const T = { taskId, runId, spanId, parentSpanId, attempt, agentInstanceId, roleId };
   ingest({ agent: p.id, label: p.label, model: p.model, role, task, eventType: 'model_start' }, T);
   const t0 = Date.now();
-  let out = '', inTok = 0, outTok = 0, pending = '', lastEmit = 0;
+  /* inSeen / outSeen：厂商是否真的返回了该项用量 —— 区分“0”与“未知” */
+  let out = '', inTok = 0, outTok = 0, inSeen = false, outSeen = false, pending = '', lastEmit = 0;
   const flush = force => {
     const now = Date.now();
     if (!force && now - lastEmit < 150) return;
     lastEmit = now;
-    ingest({ agent: p.id, eventType: 'model_stream', tokenUsage: { total: outTok || Math.ceil(out.length / 1.6) }, text: pending }, { ...T, usageSource: outTok ? 'provider' : 'estimated' });
+    ingest({ agent: p.id, eventType: 'model_stream', tokenUsage: { total: outSeen ? outTok : Math.ceil(out.length / 1.6) }, text: pending }, { ...T, usageSource: outSeen ? 'provider' : 'estimated' });
     pending = '';
+  };
+  /* 当前用量：厂商返回过就用厂商值（含 0），否则估算；什么都没有时返回 null（未知） */
+  const usageNow = () => {
+    if (inSeen || outSeen) return { usage: { input: inSeen ? inTok : undefined, output: outSeen ? outTok : undefined, total: (inSeen ? inTok : 0) + (outSeen ? outTok : 0) }, source: 'provider' };
+    if (out.length) return { usage: { total: Math.ceil((prompt.length + out.length) / 1.6) }, source: 'estimated' };
+    return null;
   };
   try {
     await streamChat(p, {
       system, prompt, maxTokens,
       onDelta: t => { out += t; if (cfg.settings.showText) pending += t; flush(false); },
-      onUsage: (i, o) => { if (i) inTok = i; if (o) outTok = o; },
+      onUsage: (i, o) => {
+        if (Number.isFinite(i) && i >= 0 && (i > 0 || !inSeen)) { inTok = i; inSeen = true; }
+        if (Number.isFinite(o) && o >= 0 && (o > 0 || !outSeen)) { outTok = o; outSeen = true; }
+      },
       onActivity: () => flush(false),
       onBytes: n => {
         if (!taskId) return;
@@ -374,16 +353,17 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId, run
       },
     });
     flush(true);
-    const estimated = !(inTok + outTok);
-    const total = (inTok + outTok) || Math.ceil((prompt.length + out.length) / 1.6);
     const ms = Date.now() - t0;
+    const u = usageNow() || { usage: { total: Math.ceil(prompt.length / 1.6) }, source: 'estimated' };
     /* 厂商未返回 usage 时为估算值，事件里明确标记 estimated，不当作真实计费依据 */
-    ingest({ agent: p.id, eventType: 'model_done', durationMs: ms, tokenUsage: { input: inTok || undefined, output: outTok || undefined, total } }, { ...T, usageSource: estimated ? 'estimated' : 'provider' });
-    return { text: out, tokens: total, inTokens: inTok, outTokens: outTok, ms, estimated, spanId };
+    ingest({ agent: p.id, eventType: 'model_done', durationMs: ms, tokenUsage: u.usage }, { ...T, usageSource: u.source });
+    return { text: out, tokens: u.usage.total, inTokens: inTok, outTokens: outTok, ms, estimated: u.source !== 'provider', spanId };
   } catch (e) {
     /* 写入事件 / 任务记录 / 响应前统一脱敏，防止上游错误回显密钥 */
     const msg = SEC.scrubSecrets(e?.name === 'TimeoutError' ? '请求超时' : (e?.message || String(e)), [providerKey(p)]);
-    ingest({ agent: p.id, eventType: 'model_error', error: msg, durationMs: Date.now() - t0 }, T);
+    /* 失败调用：已有用量则如实结算（厂商值或估算），没有任何输出时不附用量（= 未知） */
+    const u = usageNow();
+    ingest({ agent: p.id, eventType: 'model_error', error: msg, durationMs: Date.now() - t0, ...(u ? { tokenUsage: u.usage } : {}) }, u ? { ...T, usageSource: u.source } : T);
     throw new Error(msg);
   }
 }
@@ -393,74 +373,126 @@ const SYS_DRAFT = '你是多 AI 协作平台中的通用助手。请直接完成
 const SYS_REVIEW = '你是严格的交叉审核者。请逐条指出上一份输出中的错误、遗漏、前后不一致之处，并给出可执行的修改建议。只给审核意见，不要重写全文。';
 const SYS_REVISE = '请根据审核意见修订你的原稿，直接输出最终版本；末尾单独一行列出“采纳 / 未采纳”的审核意见编号。';
 
-/* 消息总线：A→B→A 的交接以结构化消息完成。消息只保存在内存；“已交接”以投递事件为准（handoff 事件由消息投递驱动）。 */
+/*
+ * 消息总线 + 成果存储：A→B→A 的交接以结构化消息完成，消息与成果只保存在内存。
+ * 身份三层解耦：connectionId（用户配置的模型连接）≠ agentInstanceId（本任务中承担某岗位的实例）≠ roleId（岗位）。
+ * 同一个模型连接可以同时承担多个岗位，每个岗位是独立实例，照样通过消息总线通信；注册失败时任务直接失败，不切换执行机制。
+ */
 const bus = new MSG.MessageBus();
+const artifacts = new ArtifactStore();
+bus.onEvict = taskId => artifacts.drop(taskId);
+setInterval(() => bus.sweepEnded(3600e3), 60e3).unref?.(); // 结束超过 1 小时的任务释放消息与成果
+
+const instanceOf = (taskId, instanceId) => (tasks.get(taskId)?.agents || []).find(x => x.instanceId === instanceId);
 bus.onTransition = ({ message: m, to }) => {
-  if (to !== 'delivered' || m.from === MSG.RESERVED.USER || m.to === MSG.RESERVED.USER || m.from === MSG.RESERVED.SCHEDULER) return;
-  ingest({ agent: m.from, to: m.to, role: m.type === 'review' ? '回交修订' : '交接审核', eventType: 'handoff', metadata: { messageId: m.messageId, messageType: m.type, round: m.round } },
-    { taskId: m.taskId, runId: m.runId });
+  if (to !== 'delivered') return;
+  const from = instanceOf(m.taskId, m.from), dest = instanceOf(m.taskId, m.to);
+  if (!from || !dest) return; // user / scheduler 参与的投递不产生 handoff
+  ingest({ agent: from.connectionId, to: dest.connectionId, role: m.type === 'review' ? '回交修订' : '交接审核', eventType: 'handoff',
+    metadata: { messageId: m.messageId, messageType: m.type, round: m.round, toAgentInstanceId: dest.instanceId, toRoleId: dest.roleId } },
+  { taskId: m.taskId, runId: m.runId, agentInstanceId: from.instanceId, roleId: from.roleId });
 };
+
+/* 当前可用的模型连接：存在、未停用、已就绪 */
+function connectionState(id) {
+  const p = cfg.providers.find(x => x.id === id);
+  if (!p) return { error: '不存在（可能已被删除）', code: 'connection_missing' };
+  if (p.enabled === false) return { error: '已停用', code: 'connection_disabled' };
+  if (!providerReady(p)) return { error: '未就绪（缺少 API Key 或模型名）', code: 'connection_not_ready' };
+  return { p };
+}
+
+const MSG_PREVIEW = 2000;
+/* 把文本装进消息：超过正文上限时完整存为成果，消息只带预览与引用（不截断、不丢内容） */
+function packText(taskId, text, producer, label) {
+  if (text.length <= MSG.MAX_TEXT) return { content: { format: 'text', text } };
+  const r = artifacts.put(taskId, { kind: 'text', text, producer, label });
+  if (!r.ok) throw Object.assign(new Error('内容过长且无法保存为成果：' + r.error), { code: 'artifact_limit' });
+  const a = r.artifact;
+  return {
+    content: { format: 'text', text: text.slice(0, MSG_PREVIEW) + `\n…（全文 ${a.chars} 字符，见成果 ${a.artifactId}）` },
+    artifactRefs: [a.artifactId],
+    metadata: { fullTextArtifact: a.artifactId, chars: a.chars, sha256: a.sha256 },
+  };
+}
+/* 接收方读取消息全文：有成果引用就取成果，取不到则报错（绝不把预览当全文） */
+function readText(taskId, m) {
+  const ref = m.metadata && m.metadata.fullTextArtifact;
+  if (!ref) return m.content.text;
+  const a = artifacts.get(taskId, ref);
+  if (!a || a.chars !== m.metadata.chars) throw Object.assign(new Error('消息引用的成果 ' + ref + ' 缺失或不完整'), { code: 'artifact_missing' });
+  return a.text;
+}
 
 async function runPipeline(run, A, B) {
   const steps = run.steps;
-  const doStep = async (label, p, role, system, prompt) => {
-    const s = { label, providerId: p.id, provider: p.label, status: 'running', text: '', tokens: 0, ms: 0 };
+  const mkInst = (roleId, roleName, conn) => ({
+    instanceId: 'ai_' + crypto.randomBytes(4).toString('hex') + '_' + roleId, roleId, roleName,
+    connectionId: conn.id, connectionLabel: conn.label, model: conn.model, type: conn.type,
+  });
+  const drafter = mkInst('drafter', '起草', A);
+  const reviewer = run.mode === 'single' ? null : mkInst('reviewer', '审核', B);
+  run.agents = reviewer ? [drafter, reviewer] : [drafter]; // 落盘：历史任务保留执行时的模型信息
+  const T = { taskId: run.id, runId: run.runId };
+
+  /* 每一步开始前重新确认模型连接可用：停用 / 删除后不再发起新调用；已经发出的调用按开始时的配置完成 */
+  const doStep = async (label, inst, system, prompt) => {
+    const st = connectionState(inst.connectionId);
+    if (st.error) throw Object.assign(new Error(`模型连接「${inst.connectionLabel}」${st.error}，任务在「${label}」前停止`), { code: st.code });
+    const s = { label, roleId: inst.roleId, agentInstanceId: inst.instanceId, connectionId: inst.connectionId, provider: inst.connectionLabel, model: st.p.model, status: 'running', text: '', tokens: 0, ms: 0 };
     steps.push(s);
     try {
-      const r = await callModel(p, { role, task: run.title, system, prompt, taskId: run.id, runId: run.runId });
-      Object.assign(s, { status: 'done', text: r.text, tokens: r.tokens, ms: r.ms });
+      const r = await callModel({ ...st.p }, { role: inst.roleName, task: run.title, system, prompt, taskId: run.id, runId: run.runId, agentInstanceId: inst.instanceId, roleId: inst.roleId });
+      Object.assign(s, { status: 'done', text: r.text, tokens: r.tokens, ms: r.ms, estimated: r.estimated });
       return r.text;
     } catch (e) { Object.assign(s, { status: 'error', error: e.message }); throw e; }
   };
-  const T = { taskId: run.id, runId: run.runId };
-  /* 同一个供应商自己审自己时没有“两个参与者”，不走消息总线，仍直接发 handoff 事件 */
-  const useBus = !(B && B.id === A.id) && bus.registerTask(run.id, { runId: run.runId, agents: B ? [A.id, B.id] : [A.id] }).ok;
+  const idOf = x => (x === 'user' ? 'user' : x.instanceId);
   const hop = (from, to, type, text, o = {}) => {
-    if (!useBus) {
-      if (from !== 'user' && to !== 'user') ingest({ agent: from, to, role: type === 'review' ? '回交修订' : '交接审核', eventType: 'handoff' }, T);
-      return { messageId: null, threadId: null, content: { text } };
-    }
-    const cut = text.length > MSG.MAX_TEXT;
-    const sent = bus.send({ taskId: run.id, from, to, type, round: o.round, replyTo: o.replyTo, threadId: o.threadId,
-      content: { format: 'text', text: cut ? text.slice(0, MSG.MAX_TEXT - 20) + '\n…[内容过长已截断]' : text }, metadata: cut ? { truncated: true } : undefined });
-    if (!sent.ok) throw new Error('消息发送失败：' + sent.error);
+    const packed = packText(run.id, text, idOf(from), type);
+    const sent = bus.send({ taskId: run.id, from: idOf(from), to: idOf(to), type, round: o.round, replyTo: o.replyTo, threadId: o.threadId, ...packed });
+    if (!sent.ok) throw Object.assign(new Error('消息发送失败：' + sent.error), { code: 'message_rejected' });
     const id = sent.message.messageId;
-    if (!bus.queue(run.id, id).ok) throw new Error('消息入队失败');
-    const d = to === 'user' ? bus.deliver(run.id, id) : { ok: !!bus.next(run.id, to), message: bus.get(run.id, id) };
-    if (!d.ok) throw new Error('消息投递失败');
-    return d.message;
+    if (!bus.queue(run.id, id).ok) throw Object.assign(new Error('消息入队失败'), { code: 'message_rejected' });
+    const d = to === 'user' ? bus.deliver(run.id, id).message : bus.next(run.id, idOf(to));
+    if (!d || d.messageId !== id) throw Object.assign(new Error('消息投递失败'), { code: 'message_rejected' });
+    return d;
   };
-  const take = m => { if (m.messageId) bus.consume(run.id, m.messageId); };
+  const take = m => bus.consume(run.id, m.messageId);
 
-  ingest({ agent: A.id, label: A.label, task: run.title, eventType: 'task_start' }, T);
+  ingest({ agent: A.id, label: A.label, task: run.title, eventType: 'task_start' }, { ...T, agentInstanceId: drafter.instanceId, roleId: drafter.roleId });
+  let registered = false;
   try {
-    const req = hop('user', A.id, 'request', run.task, { round: 1 }); take(req);
-    const draft = await doStep('起草', A, '起草', SYS_DRAFT, req.content.text);
+    const reg = bus.registerTask(run.id, { runId: run.runId, agents: run.agents.map(x => x.instanceId) });
+    if (!reg.ok) throw Object.assign(new Error('消息总线注册失败：' + reg.error), { code: 'bus_unavailable' });
+    registered = true;
+    const req = hop('user', drafter, 'request', run.task, { round: 1 }); take(req);
+    const draft = await doStep('起草', drafter, SYS_DRAFT, readText(run.id, req));
     if (run.mode === 'single') {
-      take(hop(A.id, 'user', 'proposal', draft, { round: 1, threadId: req.threadId }));
+      take(hop(drafter, 'user', 'proposal', draft, { round: 1, threadId: req.threadId }));
     } else {
-      const m1 = hop(A.id, B.id, 'proposal', draft, { round: 1, threadId: req.threadId }); take(m1);
-      const review = await doStep('交叉审核', B, '审核', SYS_REVIEW, `【任务】\n${run.task}\n\n【待审核输出】\n${m1.content.text}`);
+      const m1 = hop(drafter, reviewer, 'proposal', draft, { round: 1, threadId: req.threadId }); take(m1);
+      const review = await doStep('交叉审核', reviewer, SYS_REVIEW, `【任务】\n${run.task}\n\n【待审核输出】\n${readText(run.id, m1)}`);
       if (run.mode === 'review') {
-        take(hop(B.id, 'user', 'review', review, { round: 1, threadId: m1.threadId }));
+        take(hop(reviewer, 'user', 'review', review, { round: 1, threadId: m1.threadId }));
       } else {
-        const m2 = hop(B.id, A.id, 'review', review, { round: 1, replyTo: m1.messageId }); take(m2);
-        const final = await doStep('修订', A, '修订', SYS_REVISE, `【任务】\n${run.task}\n\n【你的原稿】\n${draft}\n\n【审核意见】\n${m2.content.text}`);
-        take(hop(A.id, 'user', 'revision', final, { round: 2, threadId: m2.threadId }));
+        const m2 = hop(reviewer, drafter, 'review', review, { round: 1, replyTo: m1.messageId }); take(m2);
+        const final = await doStep('修订', drafter, SYS_REVISE, `【任务】\n${run.task}\n\n【你的原稿】\n${draft}\n\n【审核意见】\n${readText(run.id, m2)}`);
+        take(hop(drafter, 'user', 'revision', final, { round: 2, threadId: m2.threadId }));
       }
     }
     run.status = 'done';
-    if (useBus) bus.endTask(run.id, 'completed');
-    ingest({ agent: A.id, task: run.title, eventType: 'task_done' }, T);
+    bus.endTask(run.id, 'completed');
+    ingest({ agent: A.id, task: run.title, eventType: 'task_done' }, { ...T, agentInstanceId: drafter.instanceId, roleId: drafter.roleId });
   } catch (e) {
-    run.status = 'error'; run.error = e.message;
-    if (useBus) {
+    run.status = 'error'; run.error = e.message; run.errorCode = e.code || 'model_error';
+    if (registered) {
       for (const m of bus.list(run.id)) if (m.status === 'delivered') bus.fail(run.id, m.messageId, '处理失败：' + String(e.message).slice(0, 100));
       bus.endTask(run.id, 'failed');
     }
-    ingest({ agent: A.id, task: run.title, eventType: 'task_error', error: e.message }, T);
+    ingest({ agent: A.id, task: run.title, eventType: 'task_error', error: e.message }, { ...T, agentInstanceId: drafter.instanceId, roleId: drafter.roleId });
   }
-  if (useBus) run.messageStats = bus.stats(run.id); // 只保存统计，消息正文只在内存中
+  if (registered) { run.messageStats = bus.stats(run.id); run.artifacts = artifacts.list(run.id); } // 只保存统计与成果元数据，正文只在内存中
   run.endedAt = Date.now();
   flushTasks(); // 任务结束（成功 / 失败）立即落盘，不等防抖定时器
 }
@@ -632,8 +664,8 @@ async function api(req, res, url) {
   if (p === '/api/event' && m === 'POST') {
     const b = await readBody(req);
     if (!b || typeof b !== 'object' || !b.agent) return json(res, 400, { error: '缺少 agent 字段' });
-    const r = ingest(b, { source: 'external' });
-    if (r.error) return json(res, 400, { error: r.error });
+    const r = ingest(b, { source: 'external', owner: 'local' });
+    if (r.error) return json(res, r.code || 400, { error: r.error });
     return json(res, 200, { ok: true, eventId: r.eventId, ...(r.duplicate ? { duplicate: true } : {}) });
   }
   if (p === '/api/demo' && m === 'POST') {
@@ -643,25 +675,36 @@ async function api(req, res, url) {
   }
   if (p === '/api/run' && m === 'POST') {
     const b = await readBody(req);
-    const task = str(b.task, 20000).trim();
+    const task = typeof b.task === 'string' ? b.task.trim() : '';
     if (!task) return json(res, 400, { error: '任务内容为空' });
-    const A = cfg.providers.find(x => x.id === b.a), B = cfg.providers.find(x => x.id === b.b);
+    if (task.length > MAX_TASK_CHARS) return json(res, 400, { error: `任务内容 ${task.length} 字符，超过 ${MAX_TASK_CHARS} 字符上限。请精简或拆分后再提交（系统不会自动截断）` });
     const mode = ['single', 'review', 'full'].includes(b.mode) ? b.mode : 'full';
-    if (!A) return json(res, 400, { error: '请选择模型 A' });
-    if (mode !== 'single' && !B) return json(res, 400, { error: '请选择模型 B' });
-    const id = crypto.randomBytes(6).toString('hex');
-    const run = { id, runId: EV.newRunId(), title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now() };
+    const sa = connectionState(b.a);
+    if (sa.error) return json(res, 400, { error: '模型 A ' + sa.error, code: sa.code });
+    let sb = null;
+    if (mode !== 'single') { sb = connectionState(b.b); if (sb.error) return json(res, 400, { error: '模型 B ' + sb.error, code: sb.code }); }
+    let id;
+    do id = crypto.randomBytes(6).toString('hex'); while (tasks.has(id));
+    const run = { id, kind: 'internal', runId: EV.newRunId(), title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now() };
     tasks.set(id, run);
     trimTasks();
     persistTasks();
-    runPipeline(run, A, B);
+    runPipeline(run, sa.p, sb && sb.p).catch(e => console.error('任务执行异常：', e && e.message)); // 兜底：任何异常都不影响服务进程
     return json(res, 200, { runId: id });
   }
-  if ((mm = p.match(/^\/api\/runs\/(\w+)\/messages$/)) && m === 'GET') {
+  if ((mm = p.match(/^\/api\/runs\/([\w-]+)\/artifacts$/)) && m === 'GET') {
+    if (!tasks.has(mm[1])) return json(res, 404, { error: '不存在' });
+    return json(res, 200, { artifacts: artifacts.list(mm[1]) }); // 仅内存；服务重启或结束 1 小时后为空
+  }
+  if ((mm = p.match(/^\/api\/runs\/([\w-]+)\/artifacts\/(art_[a-f0-9]{12})$/)) && m === 'GET') {
+    const a = artifacts.get(mm[1], mm[2]);
+    return a ? json(res, 200, a) : json(res, 404, { error: '成果不存在或已过期' });
+  }
+  if ((mm = p.match(/^\/api\/runs\/([\w-]+)\/messages$/)) && m === 'GET') {
     if (!tasks.has(mm[1])) return json(res, 404, { error: '不存在' });
     return json(res, 200, { messages: bus.list(mm[1]), stats: bus.stats(mm[1]) }); // 仅内存；服务重启后为空
   }
-  if ((mm = p.match(/^\/api\/runs\/(\w+)$/)) && m === 'GET') {
+  if ((mm = p.match(/^\/api\/runs\/([\w-]+)$/)) && m === 'GET') {
     const r = tasks.get(mm[1]);
     return r ? json(res, 200, r) : json(res, 404, { error: '不存在' });
   }
