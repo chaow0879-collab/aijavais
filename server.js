@@ -15,13 +15,23 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const EV = require('./lib/events');
+const SEC = require('./lib/security');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
 const DATA = path.join(ROOT, 'data');
 const CONFIG_FILE = path.join(DATA, 'config.json');
+const TASKS_FILE = path.join(DATA, 'tasks.json');
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const HOST = process.env.HOST || '127.0.0.1';
+const LOCAL_ONLY = ['127.0.0.1', 'localhost', '::1'].includes(HOST);
+/* 安全策略（见 lib/security.js 顶部说明）：ALLOWED_BASE_HOSTS、ALLOW_PRIVATE_BASE_URLS、VIEW_TOKEN、TRUST_PROXY */
+const POLICY = SEC.policyFromEnv(process.env, LOCAL_ONLY);
+const VIEW_TOKEN = process.env.VIEW_TOKEN && process.env.VIEW_TOKEN.length >= 12 ? process.env.VIEW_TOKEN : '';
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+const authThrottle = new SEC.AuthThrottle();
+const externalLimiter = new SEC.RateLimiter(100, 200); // 外部上报：每秒 100 条，突发 200
 
 /* ------------------------------------------------------------------ 配置 */
 const PRESETS = {
@@ -51,6 +61,8 @@ function loadConfig() {
   c.token = c.token || d.token;
   c.settings = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
   c.providers = Array.isArray(c.providers) ? c.providers : [];
+  /* 旧配置里不合规的 envKey 一律清空（防止借它读取任意环境变量） */
+  for (const p of c.providers) if (!SEC.isAllowedEnvKey(p.envKey)) { console.error(`供应商 ${p.id} 的 envKey 不在允许范围，已清空：`, p.envKey); p.envKey = ''; }
   return c;
 }
 const cfg = loadConfig();
@@ -67,20 +79,68 @@ try { saveConfig(); } catch (e) { console.error('无法写入 data/config.json�
 /* ------------------------------------------------------------------ 状态 */
 const agents = new Map();
 const totals = { calls: 0, tokens: 0, errors: 0 };
-const clients = new Set();
+const clients = new Set(); // 每个 res 带 res._lvl：2 管理员/本机，1 观看者，0 匿名
 const str = (s, n) => String(s == null ? '' : s).slice(0, n);
 
-function ingest(ev) {
-  const id = str(ev.agent || 'unknown', 40).trim() || 'unknown';
-  const status = ['start', 'stream', 'done', 'error', 'info', 'handoff'].includes(ev.status) ? ev.status : 'info';
-  const now = Date.now();
+/* ------------------------------------------------------------------ 任务模型（事件与任务通过 taskId 关联，落盘保存） */
+const MAX_TASKS = 100, MAX_TASK_EVENTS = 300;
+const tasks = new Map();
+let tasksDirty = false, tasksTimer = null;
+function loadTasks() {
+  let arr; try { arr = JSON.parse(fs.readFileSync(TASKS_FILE, 'utf8')); } catch { arr = []; }
+  for (const t of Array.isArray(arr) ? arr : []) {
+    if (!t || !EV.TASK_ID_RE.test(String(t.id))) continue;
+    if (t.status === 'running') { t.status = 'interrupted'; t.error = '服务重启，任务中断'; }
+    tasks.set(t.id, t);
+  }
+}
+function persistTasks() {
+  tasksDirty = true;
+  if (tasksTimer) return;
+  tasksTimer = setTimeout(() => {
+    tasksTimer = null;
+    if (!tasksDirty) return;
+    tasksDirty = false;
+    try {
+      fs.mkdirSync(DATA, { recursive: true });
+      const tmp = TASKS_FILE + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify([...tasks.values()]), { mode: 0o600 });
+      fs.renameSync(tmp, TASKS_FILE);
+    } catch (e) { console.error('无法写入 data/tasks.json：', e.message); }
+  }, 800);
+  tasksTimer.unref?.();
+}
+function trimTasks() { while (tasks.size > MAX_TASKS) tasks.delete(tasks.keys().next().value); }
+function taskSummary(t) {
+  const { steps, events, ...rest } = t;
+  return { ...rest, stepCount: (steps || []).length, eventCount: t.eventCount || 0 };
+}
+/* 把事件挂到任务上：逐 token 的 model_stream 只计数，不逐条保存，避免膨胀 */
+function recordTaskEvent(ev) {
+  const t = ev.taskId && tasks.get(ev.taskId);
+  if (!t) return;
+  t.eventCount = (t.eventCount || 0) + 1;
+  if (ev.eventType === 'model_stream') { t.streamEvents = (t.streamEvents || 0) + 1; return; }
+  (t.events || (t.events = [])).push(ev);
+  if (t.events.length > MAX_TASK_EVENTS) t.events.splice(1, 1); // 保留首条 task_start，丢弃最旧的中间事件
+  persistTasks();
+}
+
+function ingest(ev, opts = {}) {
+  const source = opts.source || 'server';
+  const norm = EV.normalize(ev, { source, taskId: opts.taskId });
+  if (!norm.ok) return { error: norm.error };
+  const env = norm.ev;
+  const id = env.agentId;
+  const status = env.status;
+  const now = env.timestamp;
   let a = agents.get(id);
   if (!a) {
     if (agents.size >= 200) {
       const old = [...agents.values()].filter(x => x.status !== 'working').sort((x, y) => x.last - y.last)[0];
       if (old) agents.delete(old.id);
     }
-    a = { id, label: id, model: '', role: '', status: 'idle', task: '', calls: 0, tokens: 0, errors: 0, since: now, last: now, ms: 0, live: 0 };
+    a = { id, label: id, model: '', role: '', status: 'idle', task: '', calls: 0, tokens: 0, errors: 0, since: now, last: now, ms: 0, live: 0, active: 0 };
     agents.set(id, a);
   }
   a.last = now;
@@ -89,58 +149,78 @@ function ingest(ev) {
   if (ev.role !== undefined) a.role = str(ev.role, 40);
   if (ev.task !== undefined) a.task = str(ev.task, 80);
 
+  const tk = env.tokenUsage && env.tokenUsage.total;
   let tokens;
+  /* a.active：该智能体同时在飞的调用数，并行任务共用一个供应商时不再互相覆盖状态 */
   if (status === 'start') {
+    a.active = (a.active || 0) + 1;
     a.status = 'working'; a.since = now; a.calls++; totals.calls++; a.live = 0;
   } else if (status === 'stream') {
     if (a.status !== 'working') { a.status = 'working'; a.since = now; }
-    if (Number.isFinite(ev.tokens)) a.live = ev.tokens;
+    if (tk !== undefined) a.live = tk;
   } else if (status === 'done') {
-    a.status = 'idle';
-    a.ms = Number.isFinite(ev.ms) ? ev.ms : now - a.since;
-    if (Number.isFinite(ev.tokens) && ev.tokens > 0) { a.tokens += ev.tokens; totals.tokens += ev.tokens; tokens = ev.tokens; }
+    a.active = Math.max(0, (a.active || 0) - 1);
+    if (!a.active) a.status = 'idle';
+    a.ms = env.durationMs !== undefined ? env.durationMs : now - a.since;
+    if (tk > 0) { a.tokens += tk; totals.tokens += tk; tokens = tk; }
   } else if (status === 'error') {
-    a.status = 'error'; a.errors++; totals.errors++;
+    a.active = Math.max(0, (a.active || 0) - 1);
+    a.status = a.active ? 'working' : 'error'; a.errors++; totals.errors++;
   }
   const working = [...agents.values()].filter(x => x.status === 'working').length;
+  /* 输出 = 新协议信封 + 旧版字段（大屏 panel.html 仍按旧字段响应，协议向后兼容） */
   const out = {
-    type: 'event', t: now, agent: id, label: a.label, model: a.model, role: a.role, status,
-    task: a.task, tokens: tokens !== undefined ? tokens : (Number.isFinite(ev.tokens) ? ev.tokens : undefined),
-    ms: Number.isFinite(ev.ms) ? ev.ms : undefined, to: ev.to ? str(ev.to, 40) : undefined, working,
+    ...env,
+    type: 'event', t: now, agent: id, label: a.label, model: a.model, role: a.role,
+    task: a.task, tokens: tokens !== undefined ? tokens : tk,
+    ms: env.durationMs, to: ev.to ? str(ev.to, 40) : undefined, working,
   };
   if (ev.error) out.error = str(ev.error, 160);
   if (cfg.settings.showText && ev.text) out.text = str(ev.text, 400);
+  recordTaskEvent(out);
   broadcast(out);
   return out;
 }
 
-function snapshot() {
-  const list = [...agents.values()].sort((a, b) => b.last - a.last).slice(0, 24).map(a => ({
+function snapshot(level = 2) {
+  const list = [...agents.values()].sort((a, b) => b.last - a.last).slice(0, 24).map(a => EV.redact({
     id: a.id, label: a.label, model: a.model, role: a.role, status: a.status, task: a.task,
     calls: a.calls, tokens: a.tokens, errors: a.errors, since: a.since, last: a.last, ms: a.ms, live: a.live,
-  }));
+  }, level));
   return {
     type: 'state', now: Date.now(), working: list.filter(a => a.status === 'working').length, agents: list,
     providers: cfg.providers.map(p => ({ id: p.id, label: p.label, model: p.model, enabled: p.enabled !== false, ready: providerReady(p) })),
-    totals: { ...totals, agents: agents.size }, showText: !!cfg.settings.showText,
+    totals: { ...totals, agents: agents.size }, showText: level >= 2 && !!cfg.settings.showText,
   };
 }
+function sseSend(res, line) { try { res.write(line); } catch { clients.delete(res); } }
 function broadcast(obj) {
-  const line = 'data: ' + JSON.stringify(obj) + '\n\n';
-  for (const res of clients) { try { res.write(line); } catch { clients.delete(res); } }
+  const cache = {};
+  for (const res of clients) {
+    const lvl = res._lvl;
+    sseSend(res, cache[lvl] || (cache[lvl] = 'data: ' + JSON.stringify(EV.redact(obj, lvl)) + '\n\n'));
+  }
+}
+function broadcastState() {
+  const cache = {};
+  for (const res of clients) {
+    const lvl = res._lvl;
+    sseSend(res, cache[lvl] || (cache[lvl] = 'data: ' + JSON.stringify(snapshot(lvl)) + '\n\n'));
+  }
 }
 setInterval(() => {
   const now = Date.now(), limit = cfg.settings.idleTimeoutSec * 1000;
   for (const a of agents.values()) {
-    if (a.status === 'working' && now - a.last > limit) { a.status = 'idle'; ingest({ agent: a.id, status: 'info', task: '超时，回到待机' }); }
+    if (a.status === 'working' && now - a.last > limit) { a.status = 'idle'; a.active = 0; ingest({ agent: a.id, status: 'info', eventType: 'planning', task: '超时，回到待机' }); }
     else if (a.status === 'error' && now - a.last > 30000) a.status = 'idle';
   }
-  broadcast(snapshot());
+  broadcastState();
 }, 2000).unref?.();
-setInterval(() => { for (const res of clients) { try { res.write(': hb\n\n'); } catch { clients.delete(res); } } }, 15000).unref?.();
+setInterval(() => { for (const res of clients) sseSend(res, ': hb\n\n'); }, 15000).unref?.();
 
 /* ------------------------------------------------------------------ 模型调用 */
-const providerKey = p => p.apiKey || (p.envKey && process.env[p.envKey]) || '';
+loadTasks();
+const providerKey = p => p.apiKey || (p.envKey && SEC.isAllowedEnvKey(p.envKey) && process.env[p.envKey]) || '';
 const providerReady = p => !!(providerKey(p) && p.model);
 
 async function readSSE(res, onData) {
@@ -165,6 +245,12 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
   if (!key) throw new Error('未配置 API Key（可在管理界面填写，或设置环境变量 ' + (p.envKey || '—') + '）');
   if (!p.model) throw new Error('未填写模型名');
   if (!p.baseUrl) throw new Error('未填写 Base URL');
+  /* SSRF 防护：协议 / 凭据 / 私网 / DNS 解析结果；官方环境变量密钥只发往对应官方主机 */
+  const chk = await SEC.validateBaseUrl(p.baseUrl, POLICY);
+  if (!chk.ok) throw new Error('Base URL 被拒绝：' + chk.error);
+  if (!p.apiKey && !SEC.envKeyHostOk(p.envKey, chk.url.hostname.toLowerCase(), POLICY)) {
+    throw new Error('环境变量 ' + p.envKey + ' 只能用于其官方主机；第三方接口请直接填写 API Key，或改用 AIJ_ 开头的环境变量名');
+  }
   const base = p.baseUrl.replace(/\/+$/, '');
   const signal = AbortSignal.timeout(cfg.settings.timeoutSec * 1000);
   let url, headers, body;
@@ -182,7 +268,7 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
     body = { model: p.model, messages, stream: true };
     if (/api\.openai\.com/.test(base)) body.stream_options = { include_usage: true };
   }
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal, redirect: 'error' });
   if (!res.ok) {
     let t = '';
     try { t = (await res.text()).replace(/\s+/g, ' ').slice(0, 240); } catch { /* ignore */ }
@@ -207,15 +293,16 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
   });
 }
 
-async function callModel(p, { role, task, system, prompt, maxTokens }) {
-  ingest({ agent: p.id, label: p.label, model: p.model, role, task, status: 'start' });
+async function callModel(p, { role, task, system, prompt, maxTokens, taskId }) {
+  const T = { taskId };
+  ingest({ agent: p.id, label: p.label, model: p.model, role, task, status: 'start', eventType: 'model_start' }, T);
   const t0 = Date.now();
   let out = '', inTok = 0, outTok = 0, pending = '', lastEmit = 0;
   const flush = force => {
     const now = Date.now();
     if (!force && now - lastEmit < 150) return;
     lastEmit = now;
-    ingest({ agent: p.id, status: 'stream', tokens: outTok || Math.ceil(out.length / 1.6), text: pending });
+    ingest({ agent: p.id, status: 'stream', eventType: 'model_stream', tokenUsage: { total: outTok || Math.ceil(out.length / 1.6), estimated: !outTok }, text: pending }, T);
     pending = '';
   };
   try {
@@ -226,19 +313,20 @@ async function callModel(p, { role, task, system, prompt, maxTokens }) {
       onActivity: () => flush(false),
     });
     flush(true);
+    const estimated = !(inTok + outTok);
     const total = (inTok + outTok) || Math.ceil((prompt.length + out.length) / 1.6);
     const ms = Date.now() - t0;
-    ingest({ agent: p.id, status: 'done', tokens: total, ms });
-    return { text: out, tokens: total, ms, estimated: !(inTok + outTok) };
+    /* 厂商未返回 usage 时为估算值，事件里明确标记 estimated，不当作真实计费依据 */
+    ingest({ agent: p.id, status: 'done', eventType: 'model_done', durationMs: ms, tokenUsage: { input: inTok || undefined, output: outTok || undefined, total, estimated } }, T);
+    return { text: out, tokens: total, inTokens: inTok, outTokens: outTok, ms, estimated };
   } catch (e) {
     const msg = e?.name === 'TimeoutError' ? '请求超时' : (e?.message || String(e));
-    ingest({ agent: p.id, status: 'error', error: msg });
+    ingest({ agent: p.id, status: 'error', eventType: 'task_error', error: msg }, T);
     throw new Error(msg);
   }
 }
 
 /* ------------------------------------------------------------------ 双模型任务 */
-const runs = new Map();
 const SYS_DRAFT = '你是任职资格体系管理系统开发团队的助手。请直接完成用户任务，输出可直接使用的结果，语言精炼，不要寒暄。';
 const SYS_REVIEW = '你是严格的交叉审核者。请逐条指出上一份输出中的错误、遗漏、前后不一致之处，并给出可执行的修改建议。只给审核意见，不要重写全文。';
 const SYS_REVISE = '请根据审核意见修订你的原稿，直接输出最终版本；末尾单独一行列出“采纳 / 未采纳”的审核意见编号。';
