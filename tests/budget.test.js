@@ -41,4 +41,6 @@ test('shared budget: round accounting, currency/input limits and overrun stop de
   const r = B.reserveCall({ approval, usage: { ...B.initialUsage(), usedTokens: 900, roundStartTokens: 900 }, connection: local, policy, system: '', prompt: '' });
   const over = B.settleCall({ usage: r.usage, connectionId: 'local', reservation: r.reservation, result: { tokens: 300, inTokens: 290, outTokens: 10 } });
   assert.equal(over.overrun, true); assert.equal(over.usage.usedTokens, 1200);
+  const excessOutput = B.settleCall({ usage: r.usage, connectionId: 'local', reservation: r.reservation, result: { tokens: 11, inTokens: 0, outTokens: 11 } });
+  assert.equal(excessOutput.overrun, true, 'per-side output bound also holds when total tokens fit');
 });

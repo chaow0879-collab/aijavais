@@ -5,7 +5,7 @@
 ## 正确开始
 
 1. `git status --short --branch`，保护现存修改；`git fetch origin` 后核对交接 SHA。
-2. 本交付位于 `feat/codex-v2-integration`，没有合并 main。Claude 开始接力时从已验证提交建立自己的分支，例如 `feat/claude-v2-followup`，不要与 Codex 同时写一个分支。
+2. 当前工作单元2位于 `feat/codex-v2-ai-draft`，基线为 `4560c8a8ddb6fb1deceac753eea6fcb5e2627c71`；原始交付保留在 `feat/codex-v2-integration`。不得与其他开发者同时写同分支；当前所有权与最新SHA见collab/HANDOFF.md及ACTIVE-DEVELOPMENT.md。
 3. 检查三个来源分支的最新提交，不要用某分支旧版整份文件覆盖已集成代码。两份原始功能分支都保留在合并历史中。
 4. 云任务已隔离；使用现有 checkout，不创建 worktree，除非用户明确要求。
 5. Node.js **24+**（使用 `node:sqlite`、`AbortSignal.any`），零生产 npm 依赖，无 lockfile，无需 `npm install`。`npm start` 默认本机 8787；不要运行已有的桌面自动打开脚本作为云健康检查。
@@ -18,7 +18,7 @@
 - `lib/auth.js` / `access.js` / `permissions.js`：单管理员密码登录、服务端会话、只读大屏、上报凭证分离。不是企业多用户账户系统。
 - `lib/security.js` / `sse.js`：出站协议/端口/IP/密钥主机约束、HTTPS 代理、响应限制、流解析。
 - `lib/models.js` / `teams.js` / `matcher.js`、`catalog/`：模型注册、凭据分离、可编辑岗位与备用连接、基于声明能力的推荐。
-- `lib/project-store.js`：SQLite schema v1，项目、运行、步骤、消息、事件、真实成果 BLOB、费用账本、Skills 设置。DATA 独占 PID 锁、WAL、原子事务。
+- `lib/project-store.js`：SQLite schema v3（含资料与system_usage），项目、运行、步骤、消息、事件、真实成果 BLOB、费用账本、Skills 设置。DATA 独占 PID 锁、WAL、原子事务。
 - `lib/project-engine.js`：有限顺序多岗位调度、前序真实输出交接、工具/Skills、质量检查、人工审核/返工、取消和费用预留。
 - `lib/tools-v2.js` / `skills-v2.js`：精确授权的工具、受信 MCP stdio 子进程、版本化声明式 Skill。
 - `lib/deliverables.js`：真实 DOCX/XLSX/PPTX、CSV、文本、JSON、代码 ZIP；禁止冒充文件、穿越路径和公式注入。
@@ -46,7 +46,7 @@ Skill 是版本化 prompt/tool/check 配方，不能执行任意脚本。工具�
 
 ## 数据迁移与回滚
 
-旧 `config/providers` 通过现有模型迁移逻辑转为 `models.json` + `credentials.json`，其余旧 JSON/认证仍保留。V2 **不把旧内存任务伪装成 SQLite 项目历史**。SQLite 新库以事务创建 schema v1（`PRAGMA user_version`、`schema_migrations`）。以后每次结构变更新增迁移，先备份并测升级；拒绝高于本程序版本的数据库。
+旧 `config/providers` 通过现有模型迁移逻辑转为 `models.json` + `credentials.json`，其余旧 JSON/认证仍保留。V2 **不把旧内存任务伪装成 SQLite 项目历史**。SQLite 新库以事务建立当前schema v3；已有v1/v2库按版本前向迁移、先备份（`PRAGMA user_version`、`schema_migrations`）。以后每次结构变更新增迁移，先备份并测升级；拒绝高于本程序版本的数据库。
 
 `npm run db:info`；`npm run db:backup -- /secure/new.sqlite` 为在线 SQLite 一致备份。完整灾备还须包含全部私有 DATA（JSON、凭据、认证），不要提交到 Git。回滚必须先停止唯一实例，归档当前完整 DATA，再恢复匹配代码版本的完整备份；不要复制一个主 SQLite 文件而遗漏活跃 WAL。具体见 DEPLOYMENT。
 
@@ -62,3 +62,5 @@ Skill 是版本化 prompt/tool/check 配方，不能执行任意脚本。工具�
 - 在平台代理环境本地 DNS 不可用时，可在可信代理负责 DNS/IP 防护的前提下显式设置 `AIJ_PROXY_DNS=delegate`，并限制 `ALLOWED_BASE_HOSTS`。不能用它绕过出口策略。
 
 接力优先级：真实供应商协议回归（需负责人授权额度）→ 专业工具/文件读取与专业能力测试 → 更多 UI 异常路径 → 性能与保留策略 → 企业多用户/持久队列。如需自主工具选择，先设计有界授权及预算状态机，不直接执行模型返回的 shell。
+
+工作单元2使用 `lib/budget.js` 共享授权/预留/结算策略；`lib/intake-draft.js`只提一次模型草案，使用system_usage单行预留和结算。`public/project-intake/ai-draft.js`保留规则向导并提供编辑/确认保存。不得把生成草案当执行或绕过预算。新增浏览器命令`npm run test:intake`。接口、12类测试和待验证边界见`docs/AI-DRAFT.md`。

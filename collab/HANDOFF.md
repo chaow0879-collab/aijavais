@@ -1,10 +1,10 @@
-# 工作单元2：Codex独立开发登记
+# 工作单元2：Codex完成，待GPT审核
 
 - 共同基线：`4560c8a8ddb6fb1deceac753eea6fcb5e2627c71`。
-- 当前分支：`feat/codex-v2-ai-draft`，唯一主开发及集成人Codex；Claude在独立 `fix/claude-audit-truth` 修复其四个保留文件。完整所有权见ACTIVE-DEVELOPMENT。
+- 当前分支：`feat/codex-v2-ai-draft`，唯一主开发及集成人Codex；Claude四文件修复已按停写确认集成，未再改其文件。完整所有权见ACTIVE-DEVELOPMENT。
 - 按GPT正式指令依次完成A共享预算、B动态团队草案API、C保留规则向导的编辑交互、D测试/集成。草案绝不自动保存/执行或授权工具。
 - 不调用真实付费API、不修改main/生产服务器/S-UI/Caddy、不启用生产代码执行。
-- 共同基线在本实例实际测试189/189，0失败/跳过；A阶段共享预算提取后193/193通过。两个指定SHA的GitHub Actions读取均返回403，当前环境尚未独立核实远程CI，不能沿用前开发者报告当作已核查。
+- 共同基线在本实例实际测试189/189，0失败/跳过；A阶段共享预算提取后193/193通过。两个指定SHA的CI已通过GitHub网页独立核实（见下方run记录）；API读取403、步骤日志404，远程子测试计数不可独立读取。
 - A检查点：新增`lib/budget.js`纯策略函数（本地识别/授权/预留/完整与未知结算），ProjectEngine持久化适配后复用；没有改Claude保留的四文件，也没有数据库结构迁移。
 
 - B检查点：`POST /api/v2/intake/ai-draft` + `/estimate`（不发送模型请求）+ `/cancel`；`lib/intake-draft.js`只调用一次模型，严格白名单JSON、服务器模型推荐、草案不自动保存或执行。system_usage在调用前持久预留、调用后同一行结算，未知远程费用为null，另保留budgetCost；先写失败则不调用，后写失败明确usageRecorded:false。无schema升级（仍v3）。相关49项回归通过。
@@ -13,7 +13,22 @@
 - Claude修复：用户已确认`e74adee5c3d6c5b95b7b568385f278983adcf8a1`为最终提交且停写，审核仅四个指定文件，无冲突cherry-pick为`c2cded1`；43项相关回归通过。
 - CI独立核查：API通道403后改读允许的GitHub页面；06b540f对应run 42023627459，三任务均cancelled，不能算失败或通过；4560c8a对应run 42023677352，tests/browser/container均success。具体测试日志公开链接404，因此该远程run子测试计数未独立核实，不将旧文档计数冒称为本次核查。
 
+## 工作单元2最终本地验证与待审核边界
+
+- A预算检查点：`a570d065099625e9ed1ba9e952213acb3246fb92`（193/193，含共同基线全部189项）。
+- B后端检查点：`b73613bf5446ad682ab8e8b66538de50528f0035`（相关49/49）。
+- C向导检查点：`e41f5d3b811c81dbb5e42e4ad6d28a5f779900f0`（新草案E2E及原向导工作台E2E通过）。
+- Claude最终修复源：`e74adee5c3d6c5b95b7b568385f278983adcf8a1`；用户明确确认停写，审核只改约定四文件，无冲突cherry-pick。四文件内容与修复源一致，无额外覆盖。
+- D最终本地`npm test`：**207测试、207通过、0失败、0跳过**。`test:ui` / `test:workspace` / `test:intake`三个真实Chromium流程通过。新测试覆盖正式要求12类，矩阵和接口详见`docs/AI-DRAFT.md`。
+- 当前最终代码/文档完整SHA以本节所在提交和最终交付消息为准。新增CI定义覆盖本分支和新E2E，远程最终run仍须实际核查，不把本地通过当CI通过。
+- 无付费真实API、无生产工具执行、无服务器/S-UI/Caddy操作、无main修改或合并。Mock只代表模型响应模拟；SQLite、HTTP、Office既有回归、浏览器和账本是真实执行。
+- 数据库仍schema v3，无新迁移；system_usage预留/结算为原表JSON元数据更新。回滚先停实例并保存完整DATA，用匹配代码和SQLite/JSON完整备份恢复；不要复制活跃主库遗漏WAL。
+- 仍未验证真实厂商的草案输出可靠性或收费账单；请求ID去重限当前进程，进程中断后未结算预留需人工核对，不自动重试。专业能力仍未因模型声明而实测。
+- 下一步交GPT审核：先审共享预算、JSON白名单、费用/取消异常、Claude四文件修复；批准后再决定后续工作单元与真实付费验收，勿直接合main。
+
 ---
+
+# 上一阶段历史交接（保留，当前状态以本文件顶部为准）
 
 # AIJAVAIS V2.0 · 当前交接（Claude Code 接力开发中）
 

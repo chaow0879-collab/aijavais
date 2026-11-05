@@ -37,7 +37,7 @@ flowchart TD
 | artifacts | run FK、MIME、SHA-256、元数据、真实内容 BLOB |
 | usage_ledger | 调用用量、真实/部分/估算/未知来源、价格及保守费用 |
 | settings | 版本化 Skills 完整快照；MCP 远程连接、停用列表与访问令牌（令牌从不返回给前端） |
-| system_usage | （v3）项目运行以外的模型调用（连接测试）用量；无价表的远程费用记为 null（未知） |
+| system_usage | （v3）项目运行以外的模型调用（连接测试、AI团队草案）用量；无价表的远程费用记为 null（未知） |
 | project_files | （v2）项目资料原始字节、SHA-256、提取出的文字与提取状态；随项目级联删除 |
 
 `projects.sqlite.lock` 阻止第二应用实例打开同一数据目录；死 PID 恢复有独立 recovery 锁。恢复时将未结束运行和步骤标为 interrupted，并把遗留费用预留转为未知账单记录。没有自动重放。在线备份工具用只读 SQLite 连接，避免实例恢复副作用。
@@ -95,3 +95,7 @@ MCP 支持 stdio（管理员配置文件）与远程 Streamable HTTP（网页添
 **工具风险与授权（2026-11 GPT 审核 P1-01）**：每个工具有风险级别 `read` / `internal_write` / `exec` / `external`（全部 MCP 工具）。手动调用中，只读工具需在请求中显式授权；其他工具需要服务端签发的一次性确认（`/api/v2/tools/call/prepare`，绑定工具与参数哈希，120 秒）。项目运行中，`external` 与 `exec` 工具除了 `allowedTools` 外还需 `approveExternalTools: true`，并记入运行快照。MCP 的 readOnly 等标注只作为未经验证的提示。
 
 **交接**：默认后一步接收前一步完整输出；步骤可设 `handoff: 'all'` 接收本轮全部前序成果（按岗位与步骤标注），仍受 200k 字符输入上限约束。
+
+## 动态团队草案（工作单元2）
+
+`lib/budget.js`是ProjectEngine与IntakeDraftService共用的模型授权/预留/结算策略，持久化由各调用方负责。`POST /api/v2/intake/ai-draft`只调用一次已测模型，严格白名单JSON后返回可编辑项目数据；它没有工具权限，也不创建项目。system_usage先持久预留再更新同一行，未知远程费用null、保守budgetCost另列。前端单独批准调用，编辑后另行确认保存；执行仍由工作台另行授权。数据库结构保持v3。详情见AI-DRAFT.md。

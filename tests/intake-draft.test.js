@@ -43,6 +43,7 @@ test('AI draft: valid proposal is editable normalized data, server recommendatio
   assert.equal(f.store.listProjects().length, 0); assert.equal(f.store.activeRunCount(), 0);
   assert.ok(body.draft.planning.humanDecisions.length); assert.equal(body.usageRecorded, true);
   const row = f.store.listSystemUsage()[0]; assert.equal(row.kind, 'intake_draft'); assert.equal(row.status, 'completed'); assert.equal(row.tokens, 30); assert.equal(row.cost, 0);
+  assert.equal(row.reservedTokens, 0); assert.equal(row.reservedCost, 0);
 });
 test('AI draft: invalid JSON and invalid/duplicate role or step references are billed but fall back manually', async t => {
   const invalid = [ 'not JSON', '[]', JSON.stringify({ goal: 'Only a goal' }),

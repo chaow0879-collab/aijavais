@@ -1,7 +1,7 @@
 name: AIJAVAIS validation
 on:
   push:
-    branches: [feat/codex-v2-integration, feat/claude-v2-followup]
+    branches: [feat/codex-v2-integration, feat/claude-v2-followup, feat/codex-v2-ai-draft]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -50,6 +50,12 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
           UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
         run: npm run test:workspace
+      - name: Editable AI team draft with local model fixture
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:intake
       - uses: actions/upload-artifact@v4
         if: always()
         with:

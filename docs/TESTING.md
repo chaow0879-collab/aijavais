@@ -35,3 +35,9 @@ npm run test:workspace
 GitHub Actions 在 4f863b6 上：185 项中 184 通过、1 跳过（代码执行隔离测试：Runner 禁止非特权命名空间，工具在该环境按设计拒绝运行）。
 
 仍未执行：真实收费厂商 API、第三方生产 MCP、公网部署与灾备恢复演练。
+
+## Codex工作单元2（基于4560c8a，独立分支）
+
+共同基线在本实例189/189；共享预算A后193/193；集成Claude e74adee修复与动态草案后最终207/207，0失败/0跳过。三个浏览器命令`test:ui`、`test:workspace`、`test:intake`通过，均使用本地Mock模型。12类覆盖、一次请求的费用/取消及不自动执行证据见[AI-DRAFT.md](AI-DRAFT.md)。
+
+指定CI已通过GitHub网页独立核实：06b540f的run42023627459三个job均cancelled；4560c8a的run42023677352三个job均success。API读取403、公开步骤日志404，因此远程子测试计数/跳过原因未独立读取，不能用前开发者报告代替；本地207/207为实际输出。

@@ -4,12 +4,12 @@
 |---|---|
 | 主开发/集成 | Codex（本任务独立云环境 checkout `/workspace/aijavais`） |
 | Codex分支 | `feat/codex-v2-ai-draft`，从精确共同基线 `4560c8a8ddb6fb1deceac753eea6fcb5e2627c71` 创建 |
-| Claude并行修复分支 | `fix/claude-audit-truth`；仅接收确认停写并审核后的完整SHA，冲突停止自动处理 |
-| Claude独占写文件 | `lib/auth.js`、`lib/usage-ledger.js`、`lib/models.js`、`tests/models.test.js`；Codex只读，直到修复提交按授权集成 |
+| Claude并行修复分支 | `fix/claude-audit-truth` @ e74adee；用户已确认停写，四文件diff审核后无冲突集成为 c2cded1 |
+| Claude独占写文件 | `lib/auth.js`、`lib/usage-ledger.js`、`lib/models.js`、`tests/models.test.js`；仅按授权cherry-pick集成，之后未作额外修改 |
 | Codex写范围 | 新共享 `lib/budget.js`、`lib/project-engine.js`、`lib/v2-api.js`、新草案模块/测试、`public/project-intake/`界面、此文件及HANDOFF；必要时最小server适配 |
 | 隔离核查 | 开始时工作区干净，仅一个现有checkout、没有运行中的Node服务；不创建worktree，不在Claude分支开发 |
 | 禁止 | main、S-UI、Caddy、生产服务器、生产代码执行、真实付费API、覆盖他人未集成修改 |
-| 当前步骤 | A完成：共享预算提取，原基线189/189、新总193/193通过，0跳过；B完成：草案API/估算/取消、严格JSON清理、system_usage单行预留结算；相关49/49回归通过。C完成：保留规则模板，新增明确估算/一次授权/可编辑岗位与步骤/人工保存/取消回退；新草案浏览器及原工作台向导浏览器通过。Claude修复e74adee经用户确认停写、四文件审核后无冲突集成为c2cded1，相关43/43回归通过。下一步D完整测试与CI记录。 |
+| 当前步骤 | A完成：共享预算提取，原基线189/189、新总193/193通过，0跳过；B完成：草案API/估算/取消、严格JSON清理、system_usage单行预留结算；相关49/49回归通过。C完成：保留规则模板，新增明确估算/一次授权/可编辑岗位与步骤/人工保存/取消回退；新草案浏览器及原工作台向导浏览器通过。Claude修复e74adee经用户确认停写、四文件审核后无冲突集成为c2cded1，相关43/43回归通过。D本地完成：207/207，0失败/0跳过，管理员/原工作台/新草案三个浏览器流程通过；CI定义新增本分支与test:intake。准备提交交GPT审核，不合main。 |
 
 两位开发者不得在同目录同时切分支或写文件。此处是Codex独立环境，不代表对Claude工作区的控制；若发现共享目录或文件变化立即停写并串行解决。
 
