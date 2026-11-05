@@ -1,0 +1,317 @@
+<!doctype html>
+<!--
+  AI 接入管理界面 — 与 panel.html 配套。
+  视觉沿用 HALOFLUX（Copyright (c) 2026 Ryder191，PolyForm Noncommercial 1.0.0）的配色风格。
+  Based on HALOFLUX by Ryder191 (RYDER CODE / Ms MAIKEBAIs CAT) — https://github.com/Ryder191/haloflux — modified.
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 接入管理 · 龙创星环</title>
+<style>
+:root{--bg:#08090b;--panel:#0e0f12;--line:#25282e;--line2:#3a3e46;--text:#cfd2d8;--dim:#8a8f99;--white:#f4f5f7;--pink:#f0a6c6;--teal:#98e0cf;--red:#ff7b7b;--gold:#d6c46a}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:13px/1.5 "JetBrains Mono",Consolas,"Microsoft YaHei",monospace}
+a{color:var(--teal)}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:14px 22px;border-bottom:1px solid var(--line);background:#0a0b0d;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:18px;color:var(--white);letter-spacing:1px}
+header .sub{font-size:11px;color:var(--dim)}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);padding:3px 10px;font-size:12px;border-radius:3px;color:var(--text)}
+.dot{width:8px;height:8px;border-radius:50%;background:#555}
+.dot.on{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+.dot.work{background:var(--pink);box-shadow:0 0 10px var(--pink);animation:bl 1s steps(1) infinite}
+@keyframes bl{50%{opacity:.35}}
+main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;padding:16px 22px 40px;max-width:1500px;margin:0 auto}
+@media (max-width:1050px){main{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+section{border:1px solid var(--line);background:var(--panel);padding:14px 16px}
+h2{margin:0 0 10px;font-size:12px;letter-spacing:1.4px;color:var(--white);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+h2 small{font-weight:400;color:var(--dim);letter-spacing:0;font-size:11px}
+.note{color:var(--dim);font-size:11px;margin:6px 0}
+.warn{color:var(--gold)}
+button,select,input,textarea{font:inherit;color:var(--text);background:#141519;border:1px solid var(--line2);padding:6px 9px;border-radius:3px;min-height:34px}
+button{cursor:pointer;background:#1a1c21}
+button:hover{border-color:#cfd2d8;color:var(--white)}
+button.pri{background:#cfd2d8;color:#000;border-color:#cfd2d8;font-weight:700}
+button.pri:hover{background:#fff}
+button.danger:hover{border-color:var(--red);color:var(--red)}
+button:disabled{opacity:.5;cursor:default}
+input:focus,select:focus,textarea:focus{outline:1px solid var(--teal);outline-offset:0}
+textarea{width:100%;min-height:96px;resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.prov{border:1px solid var(--line);padding:10px 12px;margin-top:10px;background:#0b0c0f}
+.prov.dis{opacity:.6}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px}
+@media (max-width:620px){.grid2{grid-template-columns:minmax(0,1fr)}}
+label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--dim)}
+label input,label select{width:100%}
+label.chk{flex-direction:row;align-items:center;gap:6px;font-size:12px;color:var(--text)}
+label.chk input{width:auto;min-height:0}
+.res{font-size:12px;margin-left:4px}
+.ok{color:var(--teal)}.bad{color:var(--red)}
+pre{margin:6px 0 0;padding:10px;background:#0b0c0f;border:1px solid var(--line);overflow:auto;font:12px/1.5 "JetBrains Mono",Consolas,monospace;color:var(--text);white-space:pre-wrap;word-break:break-all}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}
+.tabs button.on{background:#cfd2d8;color:#000;border-color:#cfd2d8}
+.step{border:1px solid var(--line);margin-top:8px;background:#0b0c0f}
+.step .hd{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:12px;color:var(--white)}
+.step .bd{padding:8px 10px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto;font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--dim);font-weight:600;font-size:11px}
+td.w{color:var(--pink)}td.e{color:var(--red)}
+.toast{position:fixed;right:18px;bottom:18px;background:#1a1c21;border:1px solid var(--line2);padding:8px 14px;max-width:420px;display:none;z-index:9;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>AI 接入管理</h1>
+    <div class="sub">外部 AI 开始工作 → 大屏立刻转动 · Based on HALOFLUX by Ryder191 (modified)</div>
+  </div>
+  <div class="row">
+    <span class="chip"><i class="dot" id="dot"></i><span id="conn">连接中…</span></span>
+    <a class="chip" href="/panel.html" target="_blank" rel="noopener">打开大屏 ↗</a>
+  </div>
+</header>
+
+<main>
+  <div class="col">
+    <section id="secProviders">
+      <h2>外部 AI 供应商 <small>API Key 只保存在本机 data/config.json</small></h2>
+      <div class="row" id="presetBtns"></div>
+      <p class="note">网页版会员（ChatGPT Plus、Claude Pro 等）与 API 是两套账户，这里需要各平台的 API Key。模型名请按各平台官网填写。</p>
+      <div id="provList"></div>
+    </section>
+
+    <section id="secRun">
+      <h2>双模型协同任务 <small>A 起草 → B 审核 → A 修订，全程驱动大屏</small></h2>
+      <textarea id="task" placeholder="输入要交给两个模型的任务，例如：根据评审九步流程，设计“申诉处理”模块的数据表结构。"></textarea>
+      <div class="row" style="margin-top:8px">
+        <label>模型 A（起草 / 修订）<select id="selA"></select></label>
+        <label>模型 B（审核）<select id="selB"></select></label>
+        <label>流程<select id="mode"><option value="full">起草 → 审核 → 修订</option><option value="review">起草 → 审核</option><option value="single">仅 A 起草</option></select></label>
+        <button class="pri" id="runBtn" style="align-self:flex-end">运行</button>
+      </div>
+      <p class="note warn">任务内容会发送给所选 AI 的服务商。涉及人事、薪酬、干部盘点等敏感信息，请先脱敏，或只选择合规的服务商。</p>
+      <div id="runOut"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section id="secLive">
+      <h2>实时状态 <small id="liveSum"></small></h2>
+      <div style="overflow:auto"><table><thead><tr><th>智能体</th><th>状态</th><th>任务</th><th>调用</th><th>Token</th><th>错误</th></tr></thead><tbody id="liveBody"><tr><td colspan="6" class="note">暂无信号</td></tr></tbody></table></div>
+    </section>
+
+    <section id="secSignal">
+      <h2>接入任意外部 AI <small>推送一条状态，大屏就转</small></h2>
+      <div class="row">
+        <button id="demoBtn">模拟开工 15 秒</button>
+        <button data-sig="start">发送：开工</button>
+        <button data-sig="stream">输出中</button>
+        <button data-sig="done">完成</button>
+        <button data-sig="error">报错</button>
+      </div>
+      <p class="note">上面的按钮不需要任何 API Key，用来先看效果。下面是真实接入的写法：</p>
+      <div class="tabs" id="tabs"></div>
+      <pre id="snippet"></pre>
+      <div class="row" style="margin-top:6px"><button id="copySnip">复制</button><span class="note" id="snipNote"></span></div>
+    </section>
+
+    <section id="secSettings">
+      <h2>显示与安全设置</h2>
+      <label class="chk"><input type="checkbox" id="setText"> 在大屏上显示模型输出的文字片段（默认关闭，只显示状态、耗时、token）</label>
+      <div class="grid2" style="margin-top:10px">
+        <label>无信号自动待机（秒）<input type="number" id="setIdle" min="10" max="3600"></label>
+        <label>Claude 单次最大输出 token<input type="number" id="setMax" min="256" max="64000"></label>
+        <label>单次请求超时（秒）<input type="number" id="setTimeout" min="30" max="1800"></label>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="pri" id="saveSettings">保存设置</button><span class="res" id="setRes"></span></div>
+      <p class="note" id="srvInfo"></p>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let CFG = null, TOKEN = sessionStorage.getItem('aiPanelToken') || '';
+let snipTab = 'node';
+
+function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', ms); }
+
+async function api(path, method = 'GET', body) {
+  const headers = { 'content-type': 'application/json' };
+  if (TOKEN) headers['x-admin-token'] = TOKEN;
+  let r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  if (r.status === 401) {
+    const t = prompt('请输入管理令牌（见服务启动窗口或 data/config.json）');
+    if (!t) throw new Error('需要管理令牌');
+    TOKEN = t.trim(); sessionStorage.setItem('aiPanelToken', TOKEN);
+    headers['x-admin-token'] = TOKEN;
+    r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+/* ---------- 供应商 ---------- */
+const hintFor = p => { const x = Object.values(CFG.presets).find(v => v.baseUrl && v.baseUrl === p.baseUrl); return x ? x.modelHint : '模型名'; };
+function renderPresets() {
+  $('#presetBtns').innerHTML = Object.entries(CFG.presets).map(([k, v]) => `<button data-preset="${esc(k)}">＋ ${esc(v.label)}</button>`).join('');
+}
+function renderProviders() {
+  const list = CFG.providers;
+  $('#provList').innerHTML = list.length ? list.map(p => `
+    <div class="prov ${p.enabled ? '' : 'dis'}" data-id="${esc(p.id)}">
+      <div class="grid2">
+        <label>名称<input data-f="label" value="${esc(p.label)}"></label>
+        <label>类型<select data-f="type"><option value="anthropic" ${p.type === 'anthropic' ? 'selected' : ''}>Anthropic（Claude）</option><option value="openai" ${p.type === 'openai' ? 'selected' : ''}>OpenAI 兼容（ChatGPT / Kimi / DeepSeek…）</option></select></label>
+        <label>Base URL<input data-f="baseUrl" value="${esc(p.baseUrl)}"></label>
+        <label>模型名<input data-f="model" value="${esc(p.model)}" placeholder="${esc(hintFor(p))}"></label>
+        <label>API Key ${p.hasKey ? '<span class="ok">已保存 ' + esc(p.keyHint) + '</span>' : (p.envReady ? '<span class="ok">已读取环境变量</span>' : '<span class="bad">未设置</span>')}
+          <input data-f="apiKey" type="password" autocomplete="off" placeholder="${p.hasKey ? '留空保持不变' : '粘贴 API Key'}"></label>
+        <label>或使用环境变量名<input data-f="envKey" value="${esc(p.envKey)}" placeholder="如 ANTHROPIC_API_KEY"></label>
+        <label>角色说明（给自己看）<input data-f="role" value="${esc(p.role)}" placeholder="如：架构 / 标准库 / 文档"></label>
+        <label class="chk" style="align-self:end"><input data-f="enabled" type="checkbox" ${p.enabled ? 'checked' : ''}> 启用</label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="pri" data-act="save">保存</button>
+        <button data-act="test">测试连接</button>
+        <button class="danger" data-act="del">删除</button>
+        <span class="res" data-res></span>
+      </div>
+    </div>`).join('') : '<p class="note">还没有添加。点上面的按钮添加 Claude / ChatGPT / Kimi 等。</p>';
+  const opts = list.filter(p => p.enabled).map(p => `<option value="${esc(p.id)}">${esc(p.label)}${p.model ? ' · ' + esc(p.model) : ''}</option>`).join('');
+  const a = $('#selA').value, b = $('#selB').value;
+  $('#selA').innerHTML = opts; $('#selB').innerHTML = opts;
+  if (a) $('#selA').value = a;
+  if (b) $('#selB').value = b; else if (list.filter(p => p.enabled).length > 1) $('#selB').selectedIndex = 1;
+}
+function readCard(card) {
+  const o = { id: card.dataset.id };
+  card.querySelectorAll('[data-f]').forEach(el => { o[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value; });
+  return o;
+}
+$('#presetBtns').addEventListener('click', async e => {
+  const k = e.target.dataset.preset; if (!k) return;
+  const v = CFG.presets[k];
+  try {
+    await api('/api/providers', 'POST', { label: v.label, type: v.type, baseUrl: v.baseUrl, envKey: v.envKey, model: '' });
+    await load(); toast('已添加 ' + v.label + '，请填写模型名和 API Key');
+  } catch (err) { toast(err.message); }
+});
+$('#provList').addEventListener('click', async e => {
+  const act = e.target.dataset.act; if (!act) return;
+  const card = e.target.closest('.prov'), res = card.querySelector('[data-res]'), id = card.dataset.id;
+  try {
+    if (act === 'save') { await api('/api/providers', 'POST', readCard(card)); await load(); toast('已保存'); }
+    else if (act === 'del') { if (!confirm('删除这个供应商？')) return; await api('/api/providers/' + id, 'DELETE'); await load(); }
+    else if (act === 'test') {
+      await api('/api/providers', 'POST', readCard(card));
+      res.className = 'res'; res.textContent = '测试中…（大屏会开始转动）';
+      const r = await api('/api/providers/' + id + '/test', 'POST', {});
+      res.className = 'res ' + (r.ok ? 'ok' : 'bad');
+      res.textContent = r.ok ? `连接正常 · ${r.ms} ms · ${r.tokens} token` : '失败：' + r.error;
+      load();
+    }
+  } catch (err) { res.className = 'res bad'; res.textContent = err.message; }
+});
+
+/* ---------- 双模型任务 ---------- */
+let runTimer = null;
+$('#runBtn').addEventListener('click', async () => {
+  const task = $('#task').value.trim();
+  if (!task) return toast('请先输入任务');
+  $('#runBtn').disabled = true;
+  try {
+    const r = await api('/api/run', 'POST', { task, a: $('#selA').value, b: $('#selB').value, mode: $('#mode').value });
+    pollRun(r.runId);
+  } catch (err) { toast(err.message, 5000); $('#runBtn').disabled = false; }
+});
+function pollRun(id) {
+  clearInterval(runTimer);
+  const tick = async () => {
+    try {
+      const r = await api('/api/runs/' + id);
+      $('#runOut').innerHTML = (r.steps || []).map(s => `
+        <div class="step"><div class="hd"><span>${esc(s.label)} · ${esc(s.provider)}</span>
+        <span class="${s.status === 'error' ? 'bad' : s.status === 'done' ? 'ok' : ''}">${s.status === 'running' ? '进行中…' : s.status === 'done' ? (s.ms / 1000).toFixed(1) + 's · ' + s.tokens + ' token' : '失败'}</span></div>
+        <div class="bd">${esc(s.error || s.text || '…')}</div></div>`).join('') + (r.status === 'error' ? `<p class="bad">任务中断：${esc(r.error)}</p>` : '');
+      if (r.status !== 'running') { clearInterval(runTimer); $('#runBtn').disabled = false; }
+    } catch (err) { clearInterval(runTimer); $('#runBtn').disabled = false; toast(err.message); }
+  };
+  tick(); runTimer = setInterval(tick, 1200);
+}
+
+/* ---------- 接入示例 ---------- */
+function snippets() {
+  const origin = location.origin, root = CFG.server.root.replace(/\\/g, '/');
+  const sig = (agent, st) => `node "${root}/tools/signal.js" ${agent} ${st}`;
+  const hooks = { hooks: {
+    UserPromptSubmit: [{ hooks: [{ type: 'command', command: sig('claude-code', 'start') }] }],
+    PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: sig('claude-code', 'stream') }] }],
+    Stop: [{ hooks: [{ type: 'command', command: sig('claude-code', 'done') }] }],
+  } };
+  return {
+    node: { name: '命令行 / 任意脚本', text: `# 开工\n${sig('my-ai', 'start')} "写评审流程"\n# 工作中（可反复发送，每次让大屏跳一下）\n${sig('my-ai', 'stream')}\n# 完成\n${sig('my-ai', 'done')}\n\n# 在别的电脑上发送：加 --url http://本机局域网IP:8787 --token 管理令牌`, note: '需要 Node 18+。agent 名称随便起，每个名称在大屏左侧占一行。' },
+    hooks: { name: 'Claude Code hooks', text: JSON.stringify(hooks, null, 2), note: '放进 ~/.claude/settings.json 的 hooks 字段（或项目的 .claude/settings.json）。Claude Code 开始处理提示词、每次调用工具、结束时，大屏同步转动。只上传工具名，不上传你的提示词。' },
+    curl: { name: 'curl', text: `curl -s -X POST ${origin}/api/event -H "Content-Type: application/json" -d "{\\"agent\\":\\"my-ai\\",\\"status\\":\\"start\\",\\"task\\":\\"写评审流程\\"}"`, note: 'status 可取 start / stream / done / error / info。Windows 命令提示符与 Linux/macOS 的引号写法不同，Windows 建议用 Node 命令行或 Python。' },
+    py: { name: 'Python', text: `import requests\nURL = "${origin}/api/event"\n\ndef signal(agent, status, task=None, tokens=None):\n    try:\n        requests.post(URL, json={"agent": agent, "status": status, "task": task, "tokens": tokens}, timeout=1)\n    except Exception:\n        pass  # 大屏不可用时不影响业务\n\nsignal("gpt", "start", "整理数据字典")\n# ... 调用你的模型 ...\nsignal("gpt", "done", tokens=1234)`, note: '把 signal() 包在你自己的模型调用前后即可。' },
+    js: { name: 'JavaScript', text: `const URL = "${origin}/api/event";\nconst signal = (agent, status, task, tokens) =>\n  fetch(URL, { method: "POST", headers: { "Content-Type": "application/json" },\n    body: JSON.stringify({ agent, status, task, tokens }) }).catch(() => {});\n\nsignal("kimi", "start", "校对制度文本");\n// ... 调用模型 ...\nsignal("kimi", "done", null, 980);`, note: '浏览器页面需与服务同源；Node 脚本直接可用。' },
+  };
+}
+function renderSnippet() {
+  const s = snippets();
+  $('#tabs').innerHTML = Object.entries(s).map(([k, v]) => `<button data-tab="${k}" class="${k === snipTab ? 'on' : ''}">${esc(v.name)}</button>`).join('');
+  $('#snippet').textContent = s[snipTab].text; $('#snipNote').textContent = s[snipTab].note;
+}
+$('#tabs').addEventListener('click', e => { if (e.target.dataset.tab) { snipTab = e.target.dataset.tab; renderSnippet(); } });
+$('#copySnip').addEventListener('click', () => navigator.clipboard.writeText($('#snippet').textContent).then(() => toast('已复制')).catch(() => toast('复制失败，请手动选中')));
+$('#secSignal').addEventListener('click', async e => {
+  const st = e.target.dataset.sig;
+  if (e.target.id === 'demoBtn') { try { await api('/api/demo', 'POST', { seconds: 15 }); toast('模拟开工中，请看大屏'); } catch (err) { toast(err.message); } }
+  if (st) { try { await api('/api/event', 'POST', { agent: 'test', label: 'TEST', status: st, task: '手动测试信号', error: st === 'error' ? '这是一条测试错误' : undefined }); } catch (err) { toast(err.message); } }
+});
+
+/* ---------- 设置 ---------- */
+function renderSettings() {
+  const s = CFG.settings;
+  $('#setText').checked = !!s.showText; $('#setIdle').value = s.idleTimeoutSec; $('#setMax').value = s.maxTokens; $('#setTimeout').value = s.timeoutSec;
+  const lan = CFG.server.lan.length ? ' · 局域网：' + CFG.server.lan.join('、') + '（远程调用管理接口需管理令牌）' : ' · 仅本机可访问（127.0.0.1）';
+  $('#srvInfo').textContent = '服务端口 ' + CFG.server.port + lan + ' · Node ' + CFG.server.node;
+}
+$('#saveSettings').addEventListener('click', async () => {
+  try {
+    await api('/api/settings', 'POST', { showText: $('#setText').checked, idleTimeoutSec: +$('#setIdle').value, maxTokens: +$('#setMax').value, timeoutSec: +$('#setTimeout').value });
+    $('#setRes').className = 'res ok'; $('#setRes').textContent = '已保存'; await load();
+  } catch (err) { $('#setRes').className = 'res bad'; $('#setRes').textContent = err.message; }
+});
+
+/* ---------- 实时状态（SSE） ---------- */
+const fmtN = n => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n || 0);
+function renderLive(s) {
+  const w = s.agents.filter(a => a.status === 'working').length;
+  $('#dot').className = 'dot ' + (w ? 'work' : 'on');
+  $('#conn').textContent = w ? w + ' 个 AI 工作中' : '已连接 · 待机';
+  $('#liveSum').textContent = `调用 ${s.totals.calls} · token ${fmtN(s.totals.tokens)} · 错误 ${s.totals.errors}`;
+  $('#liveBody').innerHTML = s.agents.length ? s.agents.map(a => `<tr><td>${esc(a.label || a.id)}${a.role ? ' <span class="note">· ' + esc(a.role) + '</span>' : ''}</td><td class="${a.status === 'working' ? 'w' : a.status === 'error' ? 'e' : ''}">${a.status === 'working' ? '工作中' : a.status === 'error' ? '出错' : '待机'}</td><td>${esc(a.task || '')}</td><td>${a.calls}</td><td>${fmtN(a.tokens)}</td><td>${a.errors}</td></tr>`).join('') : '<tr><td colspan="6" class="note">暂无信号</td></tr>';
+}
+function connect() {
+  const es = new EventSource('/api/events');
+  es.onmessage = m => { try { const d = JSON.parse(m.data); if (d.type === 'state') renderLive(d); } catch { /* ignore */ } };
+  es.onerror = () => { $('#dot').className = 'dot'; $('#conn').textContent = '服务未连接，重试中…'; };
+}
+
+async function load() {
+  CFG = await api('/api/config');
+  if (CFG.token && !TOKEN) { /* 本机访问无需令牌 */ }
+  renderPresets(); renderProviders(); renderSnippet(); renderSettings();
+}
+load().then(connect).catch(err => { $('#conn').textContent = '加载失败：' + err.message; });
+</script>
+</body>
+</html>
