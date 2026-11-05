@@ -1,0 +1,78 @@
+name: Independent V2 Product Acceptance
+on:
+  push:
+    branches:
+      - test/v2-product-acceptance
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: independent-product-acceptance-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  independent-model-and-files:
+    name: "T2: independent local HTTP Mock / SQLite / Office"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify immutable subject, test-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 58c52f0084997f669eea763edc7b58e11d3ef4f4 HEAD
+          echo "candidate=58c52f0084997f669eea763edc7b58e11d3ef4f4" > "$RUNNER_TEMP/candidate.txt"
+          git diff --name-only 58c52f0084997f669eea763edc7b58e11d3ef4f4 HEAD | tee "$RUNNER_TEMP/test-changes.txt"
+          if git diff --name-only 58c52f0084997f669eea763edc7b58e11d3ef4f4 HEAD | grep -vE '^(tests/product-acceptance-independent.test.js|tests/ui/product-acceptance-independent.e2e.js|.github/workflows/product-acceptance.yml|product-acceptance/.*)$'; then
+             echo 'STOP: business code changed on test branch'; exit 1
+          fi
+          node --version
+      - name: Install real parsers (these are NOT project generators)
+        run: |
+          python3 -m pip install --break-system-packages --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Execute independently authored integration acceptance
+        env:
+          PRODUCT_ACCEPTANCE_OUT: ${{ runner.temp }}/product-acceptance
+        run: |
+          mkdir -p "$PRODUCT_ACCEPTANCE_OUT"
+          node --test --test-reporter=tap tests/product-acceptance-independent.test.js 2>&1 | tee "$PRODUCT_ACCEPTANCE_OUT/node-test.log"
+          test "${PIPESTATUS[0]}" -eq 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-product-files
+          path: |
+            ${{ runner.temp }}/product-acceptance/
+            ${{ runner.temp }}/candidate.txt
+            ${{ runner.temp }}/test-changes.txt
+          if-no-files-found: warn
+  independent-browser:
+    name: "T2: independent Chromium UI acceptance"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated pinned Playwright and Chromium
+        run: |
+          npm install --prefix "$RUNNER_TEMP/acceptance-ui-deps" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/acceptance-ui-deps/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Independent browser test and screenshots
+        env:
+          NODE_PATH: ${{ runner.temp }}/acceptance-ui-deps/node_modules
+          PRODUCT_UI_OUT: ${{ runner.temp }}/independent-ui
+        run: |
+          mkdir -p "$PRODUCT_UI_OUT"
+          node tests/ui/product-acceptance-independent.e2e.js 2>&1 | tee "$PRODUCT_UI_OUT/ui.log"
+          test "${PIPESTATUS[0]}" -eq 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-product-browser
+          path: ${{ runner.temp }}/independent-ui/
+          if-no-files-found: warn
