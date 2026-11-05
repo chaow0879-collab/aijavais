@@ -1,3 +1,22 @@
+# 当前活跃开发：工作单元 2
+
+| 项目 | 内容 |
+|---|---|
+| 主开发/集成 | Codex（本任务独立云环境 checkout `/workspace/aijavais`） |
+| Codex分支 | `feat/codex-v2-ai-draft`，从精确共同基线 `4560c8a8ddb6fb1deceac753eea6fcb5e2627c71` 创建 |
+| Claude并行修复分支 | `fix/claude-audit-truth`；仅接收确认停写并审核后的完整SHA，冲突停止自动处理 |
+| Claude独占写文件 | `lib/auth.js`、`lib/usage-ledger.js`、`lib/models.js`、`tests/models.test.js`；Codex只读，直到修复提交按授权集成 |
+| Codex写范围 | 新共享 `lib/budget.js`、`lib/project-engine.js`、`lib/v2-api.js`、新草案模块/测试、`public/project-intake/`界面、此文件及HANDOFF；必要时最小server适配 |
+| 隔离核查 | 开始时工作区干净，仅一个现有checkout、没有运行中的Node服务；不创建worktree，不在Claude分支开发 |
+| 禁止 | main、S-UI、Caddy、生产服务器、生产代码执行、真实付费API、覆盖他人未集成修改 |
+| 当前步骤 | A：共享预算提取；保留原预算行为并先测回归，再独立提交。随后B后端、C前端、D完整测试与集成 |
+
+两位开发者不得在同目录同时切分支或写文件。此处是Codex独立环境，不代表对Claude工作区的控制；若发现共享目录或文件变化立即停写并串行解决。
+
+以下保留上一阶段历史记录：
+
+---
+
 # 当前活跃开发（单写入者登记）
 
 > 同一时间只有一位开发者写同一分支。开始写入前更新本文件并推送；交接或暂停时同步更新本文件与 `collab/HANDOFF.md`。

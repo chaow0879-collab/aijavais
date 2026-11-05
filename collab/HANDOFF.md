@@ -1,3 +1,13 @@
+# 工作单元2：Codex独立开发登记
+
+- 共同基线：`4560c8a8ddb6fb1deceac753eea6fcb5e2627c71`。
+- 当前分支：`feat/codex-v2-ai-draft`，唯一主开发及集成人Codex；Claude在独立 `fix/claude-audit-truth` 修复其四个保留文件。完整所有权见ACTIVE-DEVELOPMENT。
+- 按GPT正式指令依次完成A共享预算、B动态团队草案API、C保留规则向导的编辑交互、D测试/集成。草案绝不自动保存/执行或授权工具。
+- 不调用真实付费API、不修改main/生产服务器/S-UI/Caddy、不启用生产代码执行。
+- 共同基线189项为前开发者报告，当前实例测试及指定两个SHA远程CI正在独立核查，尚不声称完成。
+
+---
+
 # AIJAVAIS V2.0 · 当前交接（Claude Code 接力开发中）
 
 - 开发分支：`feat/claude-v2-followup`（基于 Codex 交接提交 `29630a2`，代码检查点 `3623247`）。最新提交以 `git log origin/feat/claude-v2-followup -1` 为准。
