@@ -23,7 +23,7 @@ function draft(){
   const payload=JSON.parse(str),isDraft=payload.messages.at(-1).content.startsWith('Design a team');
   if(isDraft)calls++;
   res.writeHead(200,{'content-type':'text/event-stream'});
-  res.end('data: '+JSON.stringify({choices:[{delta:{content:isDraft?JSON.stringify(d):'MOCK result'}]})+
+  res.end('data: '+JSON.stringify({choices:[{delta:{content:isDraft?JSON.stringify(d):'MOCK result'}}]})+
     '\n\ndata: '+JSON.stringify({choices:[],usage:{prompt_tokens:40,completion_tokens:60}})+'\n\ndata: [DONE]\n\n');
  });});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
