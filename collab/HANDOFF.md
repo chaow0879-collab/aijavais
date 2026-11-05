@@ -1,3 +1,11 @@
+# 当前：第十轮 #6 + #8 Codex整改中
+
+分支 `feat/codex-v2-p1-ledger-recovery`；精确起点 `b71faaa65bb66e04ea2a015c9238a3a129bdb68e`（保留Claude已验收#5及#5-F的全部实现）。本轮不延用落后两提交的Codex旧分支。唯一负责人Codex，Claude待命。设计先行，见[LEDGER-RECOVERY](../docs/LEDGER-RECOVERY.md)。以下历史记录不能覆盖最新GitHub第十轮授权。
+
+状态：设计检查点，代码与测试尚未开始；不得将设计当作完成。最终测试、CI、完整SHA和遗留风险将在交付前写入本节。
+
+---
+
 # 工作单元2：Codex完成，待GPT审核
 
 - 共同基线：`4560c8a8ddb6fb1deceac753eea6fcb5e2627c71`。
