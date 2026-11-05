@@ -13,3 +13,5 @@ require('./access.test.js');
 require('./models.test.js');
 require('./teams.test.js');
 require('./acceptance.test.js');
+require('./llm.test.js');
+require('./tools.test.js');
