@@ -113,3 +113,16 @@ test('AuthThrottle / RateLimiter', () => {
   const t0 = Date.now() + 1;
   assert.ok(rl.take(t0) && rl.take(t0)); assert.equal(rl.take(t0), false, '突发用尽后拒绝'); assert.ok(rl.take(t0 + 150), '按速率补充后放行');
 });
+
+test('request URLs may carry a query string; saved Base URLs may not; fragments and credentials never', () => {
+  const p = policy({ localTargets: new Set(['127.0.0.1:9']) });
+  assert.equal(SEC.checkBaseUrlSyntax('https://api.anthropic.com/v1/models?limit=100', p).ok, false, 'saved Base URL rejects query');
+  const req = SEC.checkBaseUrlSyntax('https://api.anthropic.com/v1/models?limit=100', p, { requestUrl: true });
+  assert.equal(req.ok, true); assert.equal(req.url.search, '?limit=100');
+  assert.equal(SEC.checkBaseUrlSyntax('https://api.anthropic.com/v1/models#x', p, { requestUrl: true }).ok, false, 'fragment rejected');
+  assert.equal(SEC.checkBaseUrlSyntax('https://u:p@api.anthropic.com/v1/models?limit=1', p, { requestUrl: true }).ok, false, 'credentials rejected');
+  // A query never relaxes host/protocol/port rules.
+  assert.equal(SEC.checkBaseUrlSyntax('http://api.anthropic.com/v1/models?limit=1', p, { requestUrl: true }).ok, false, 'remote http rejected');
+  assert.equal(SEC.checkBaseUrlSyntax('https://api.anthropic.com:8443/v1/models?limit=1', p, { requestUrl: true }).ok, false, 'port rule kept');
+  assert.equal(SEC.checkBaseUrlSyntax('http://127.0.0.1:9/v1/models?limit=1', p, { requestUrl: true }).ok, true, 'declared local target');
+});

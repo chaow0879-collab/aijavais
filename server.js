@@ -347,6 +347,8 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
     throw new Error('环境变量 ' + p.envKey + ' 只能用于其官方主机；第三方接口请直接填写 API Key，或改用 AIJ_ 开头的环境变量名');
   }
   const base = p.baseUrl.replace(/\/+$/, '');
+  const baseCheck = SEC.checkBaseUrlSyntax(base, POLICY);
+  if (!baseCheck.ok) throw new Error('Base URL 被拒绝：' + baseCheck.error);
   const timeout = AbortSignal.timeout(TEST_TIMEOUT_MS || cfg.settings.timeoutSec * 1000);
   const signal = callerSignal ? AbortSignal.any([timeout, callerSignal]) : timeout;
   let url, headers, body;
@@ -721,6 +723,9 @@ async function discoverModels(b) {
     if (!key && prov.envKey && process.env[prov.envKey] && SEC.envKeyHostOk(prov.envKey, (() => { try { return new URL(base).hostname; } catch { return ''; } })())) key = process.env[prov.envKey];
   }
   if (!base) return { ok: false, error: '缺少 Base URL' };
+  // The Base URL itself stays query/fragment free; only the composed request URL may add ?limit=100.
+  const baseCheck = SEC.checkBaseUrlSyntax(base, POLICY);
+  if (!baseCheck.ok) return { ok: false, error: 'Base URL 被拒绝：' + baseCheck.error, hint: diagnose(baseCheck.error) };
   const url = protocol === 'anthropic' ? (/\/v1$/.test(base) ? base + '/models' : base + '/v1/models') + '?limit=100' : base + '/models';
   const headers = protocol === 'anthropic' ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' } : (key ? { authorization: 'Bearer ' + key } : {});
   try {

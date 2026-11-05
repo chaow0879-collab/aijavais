@@ -197,3 +197,31 @@ test('旧配置迁移：config.json 里的 providers 自动迁移为模型连接
   assert.ok(!fs.readFileSync(path.join(S.dir, 'config.json'), 'utf8').includes('sk-legacy'));
   assert.equal(JSON.parse(fs.readFileSync(path.join(S.dir, 'credentials.json'), 'utf8')).claude.apiKey, 'sk-legacy-12345678');
 });
+
+test('Anthropic-protocol model discovery sends /v1/models?limit=100 with x-api-key (local protocol fixture, no paid API)', async t => {
+  const seen = [];
+  const srv = http.createServer((req, res) => {
+    seen.push({ url: req.url, key: req.headers['x-api-key'], version: req.headers['anthropic-version'] });
+    if (req.method === 'GET' && req.url === '/v1/models?limit=100' && req.headers['x-api-key'] === 'fixture-key') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ data: [{ id: 'fixture-model-b', type: 'model' }, { id: 'fixture-model-a', type: 'model' }, { id: 'bad name!' }], has_more: false }));
+    }
+    res.writeHead(401, { 'content-type': 'application/json' }); res.end('{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}');
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const S = await boot(srv.address().port);
+  t.after(async () => { await S.kill(); srv.close(); fs.rmSync(S.dir, { recursive: true, force: true }); });
+  const baseUrl = 'http://127.0.0.1:' + srv.address().port;
+  const ok = await call(S.port, 'POST', '/api/models/discover', { providerId: 'anthropic', baseUrl, apiKey: 'fixture-key' });
+  assert.equal(ok.json.ok, true, ok.text);
+  assert.deepEqual(ok.json.models, ['fixture-model-a', 'fixture-model-b']);
+  assert.deepEqual(seen[0], { url: '/v1/models?limit=100', key: 'fixture-key', version: '2023-06-01' });
+  const withV1 = await call(S.port, 'POST', '/api/models/discover', { providerId: 'anthropic', baseUrl: baseUrl + '/v1', apiKey: 'fixture-key' });
+  assert.equal(withV1.json.ok, true, 'Base URL ending in /v1 is not doubled');
+  const bad = await call(S.port, 'POST', '/api/models/discover', { providerId: 'anthropic', baseUrl, apiKey: 'wrong-key' });
+  assert.equal(bad.json.ok, false); assert.match(bad.json.error, /HTTP 401/); assert.doesNotMatch(bad.text, /wrong-key/);
+  const query = await call(S.port, 'POST', '/api/models/discover', { providerId: 'anthropic', baseUrl: baseUrl + '?x=1', apiKey: 'fixture-key' });
+  assert.equal(query.json.ok, false, 'a saved/base URL with its own query is still rejected');
+  assert.match(query.json.error, /查询参数/);
+  assert.equal(seen.filter(s => s.url.includes('x=1')).length, 0, 'rejected before any request was sent');
+});
