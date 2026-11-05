@@ -1,0 +1,22 @@
+# Render Blueprint：在 Render 里选 New → Blueprint，指向本仓库即可
+services:
+  - type: web
+    name: longchuang-ai-ring
+    runtime: node
+    plan: free
+    buildCommand: echo "no build"
+    startCommand: node server.js
+    healthCheckPath: /api/state
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CHATGPT_MODEL
+        sync: false

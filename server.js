@@ -54,6 +54,14 @@ function loadConfig() {
   return c;
 }
 const cfg = loadConfig();
+/* 云端部署（配置不持久）：用环境变量固定令牌并自动建立供应商。
+   ADMIN_TOKEN=管理令牌；<KEY 环境变量> + <ID>_MODEL，如 ANTHROPIC_API_KEY + CLAUDE_MODEL。 */
+if (process.env.ADMIN_TOKEN && process.env.ADMIN_TOKEN.length >= 12) cfg.token = process.env.ADMIN_TOKEN;
+for (const id of ['claude', 'chatgpt', 'kimi', 'deepseek']) {
+  const pr = PRESETS[id], model = (process.env[id.toUpperCase() + '_MODEL'] || '').trim();
+  if (!process.env[pr.envKey] || !model || cfg.providers.some(x => x.id === id)) continue;
+  cfg.providers.push({ id, apiKey: '', label: pr.label, type: pr.type, baseUrl: pr.baseUrl, model, role: '', envKey: pr.envKey, enabled: true });
+}
 try { saveConfig(); } catch (e) { console.error('无法写入 data/config.json：', e.message); }
 
 /* ------------------------------------------------------------------ 状态 */
