@@ -28,15 +28,27 @@
 | 工作单元 | 状态 |
 |---|---|
 | 1 外部工具权限与费用保护（P1-01、P1-03） | **完成** `de11c14`：工具风险级别；有副作用工具的手动调用需服务端一次性确认（绑定工具+参数，120 秒，单次）；运行中外部/代码执行工具需 `approveExternalTools`；连接测试记入 schema v3 `system_usage`（未知费用为 null） |
-| 6 部署文档与服务器适配（P1-04、P2-01、P2-02） | **完成**（本提交）：并行部署手册按 Debian 13 / 2GB / S-UI / Caddy / 独立 Node 24 / systemd 修订，含资源限制与升级步骤；文档矛盾已统一 |
+| 修复 A：账本写入失败保护 | **完成** `9577311`：`lib/usage-ledger.js`，写入失败写审计事件 `usage_ledger_write_failed`（不含错误原文/密钥），接口返回 `usageRecorded:false` + `usageWarning`；未知费用仍为 null |
+| CI 核查 | `de11c14` → run 42020725591；`69308c6` → run 42020974113：tests / browser / container 均 success；tests 187 项中 186 通过、0 失败、1 跳过（代码执行隔离测试：GitHub Runner 不允许非特权命名空间，工具按设计拒绝运行） |
+| 6 部署文档与服务器适配（P1-04、P2-01、P2-02） | 已提交 `69308c6`；**负责人指令：部署文档后续移交部署分支，本开发分支不再承担部署**：并行部署手册按 Debian 13 / 2GB / S-UI / Caddy / 独立 Node 24 / systemd 修订，含资源限制与升级步骤；文档矛盾已统一 |
 | P1-02 代码执行 | 保持：生产关闭（D1=a），能力中心已标明“非强安全沙箱” |
-| 2 动态 AI 团队草案生成（D2） | **下一步，未开始**。要求：规则引擎无合适模板时，经用户批准（显示预计费用、独立 Token/金额上限）调用一次模型；输出经结构化校验后作为可编辑草案；模型不能创建任务或扩大权限/预算；记录用量；失败回退手工/通用模板。建议实现：`POST /api/v2/intake/ai-draft` 复用 `_approval/_reserve/_settle` 式预留结算并写入 `system_usage`（kind `intake_draft`），用 `normalizeProject` 校验后返回草案，前端在向导第 2 步“没有合适模板”时提供入口 |
+| 2 动态 AI 团队草案生成（D2） | **下一步，未开始（因上下文不足，未匆忙开工）**。规格见下方「工作单元 2 实施说明」。要求：规则引擎无合适模板时，经用户批准（显示预计费用、独立 Token/金额上限）调用一次模型；输出经结构化校验后作为可编辑草案；模型不能创建任务或扩大权限/预算；记录用量；失败回退手工/通用模板。建议实现：`POST /api/v2/intake/ai-draft` 复用 `_approval/_reserve/_settle` 式预留结算并写入 `system_usage`（kind `intake_draft`），用 `normalizeProject` 校验后返回草案，前端在向导第 2 步“没有合适模板”时提供入口 |
 | 3 备用模型自动切换 | 未开始。仅切换到本次运行已批准（含价表）的备用连接；未批准则暂停提示；不重放有副作用的工具调用 |
 | 4 联网检索 | 未开始。优先复用 MCP（远程 HTTP 或审核目录中的 fetch）；保存来源、标题、链接、时间与执行记录；无配置时明确不可用 |
 | 5 Office 文件编辑 | 未开始。先 DOCX：读取→定位→编辑→另存新版本→保留原件→重新解析验证→下载 |
 | 7 服务器独立部署与联调 | 需负责人批准执行时机与访问方式；按 `docs/DEPLOYMENT-PARALLEL.md` |
 
 真实付费验收（D4）：暂不执行；完成上述保护后准备方案，建议首次总预算 1 美元，需负责人批准。
+
+## 工作单元 2 实施说明（供下一会话直接执行）
+
+1. 接口 `POST /api/v2/intake/ai-draft`：入参 `{ description, connectionId, approvePaid, maxTokens, maxCost, maxOutputTokens, price:{inputPerMillion,outputPerMillion} }`。本机目标免费；远程需 `approvePaid:true`、正数 `maxCost` 和 USD 价格，否则 402 且**不调用模型**（复用 `ProjectEngine._localFree` / `_approval` 的判定逻辑）。
+2. 预留与结算：按 `_reserve` 同样的保守上界（输入字节+256，输出上限）先检查 Token/金额上限，超限 402 不发请求；调用后按 `_settle` 规则结算；用量写入 `system_usage`（kind `intake_draft`，通过 `recordSystemCall`），未知费用为 null，失败也记账。
+3. 调用：`callModel(models.runtime(id), { system, prompt, maxTokens, signal })`；system 提示要求只输出 JSON，字段：`goal, roles[{roleId,name,duty,boundary,standard,requiredCapabilities}], steps[{stepId,roleId,title,prompt,deliverable,quality,handoff}], deliverables[], acceptance[], tools[], humanDecisions[]`。不传工具、不执行任何工具或代码。支持 AbortSignal（用户取消）与超时。
+4. 校验：剥离 ``` 围栏后 `JSON.parse`；失败返回 `{ ok:false, code:'invalid_draft', fallback:'manual' }`（附通用模板，不保存项目）。通过 `normalizeProject` 校验岗位 1–12、步骤 1–30、引用的岗位存在；把 `tools` 用 `CAP.resolveIntakeTools` 映射为真实工具及可用状态；**丢弃**模型给出的任何预算、`allowedTools`、`approvePaid`、`connectionId` 以外的执行字段。推荐模型连接由服务端按 `matcher.recommend` 给出，不信任模型输出。
+5. 返回草案（不保存）；用户在向导/工作台修改后，走现有 `POST /api/v2/projects` 保存；**任何情况下不自动创建或运行项目**。
+6. 前端：向导第 2 步“没有合适模板”时显示“让 AI 提出团队方案”卡片：选择模型、显示预计 Token 与金额上限、勾选批准后调用；结果进入可编辑岗位/步骤界面；失败时提示并保留手工编辑。
+7. 测试（本地 Mock）：未授权不调用；合法草案；非法 JSON；缺岗位/步骤；超 Token/金额上限不发请求；超时/失败（记账且不隐瞒费用）；取消；修改后保存；不自动执行；模型返回的预算/权限字段被丢弃；`system_usage` 记录；原向导与 `intake/plan` 回归。
 
 ## 约束提醒
 
