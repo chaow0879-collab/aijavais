@@ -11,6 +11,7 @@
  */
 'use strict';
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -26,6 +27,7 @@ const PERM = require('./lib/permissions');
 const { ModelRegistry, diagnose } = require('./lib/models');
 const { TeamRegistry } = require('./lib/teams');
 const { recommend } = require('./lib/matcher');
+const { AuthStore } = require('./lib/auth');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -38,12 +40,27 @@ const TASKS_FILE = path.join(DATA, 'tasks.json');
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const HOST = process.env.HOST || '127.0.0.1';
 /* 出站安全策略（见 lib/security.js 顶部说明）：ALLOWED_BASE_HOSTS、ALLOWED_BASE_PORTS、LOCAL_MODEL_TARGETS；
-   访问控制：VIEW_TOKEN（观看令牌）、INGEST_TOKEN + INGEST_AGENTS（外部上报凭证）、ANON_VIEW=0（禁止匿名观看）、TRUST_PROXY=1（反向代理后取真实 IP） */
+   登录与部署（第四阶段 4A）：
+     AIJ_ENV=production   生产模式：强制 HTTPS（TLS_CERT_FILE + TLS_KEY_FILE 直接启用 HTTPS，或 TRUST_PROXY=1 由反向代理终止 HTTPS）
+     TRUST_PROXY=1        位于反向代理之后：按 X-Forwarded-For / X-Forwarded-Proto 识别来源与协议
+     AIJ_ALLOW_INSECURE_LAN=1  非生产模式下仍允许监听非本机地址（仅限可信局域网测试）
+     INGEST_TOKEN + INGEST_AGENTS  外部上报凭证；AIJ_LOCAL_INGEST=1 允许本机回环连接免凭证上报（仅上报，无其它权限）
+     SESSION_IDLE_MIN / SESSION_MAX_DAYS  登录会话空闲超时与绝对有效期 */
 const POLICY = SEC.policyFromEnv(process.env);
-const VIEW_TOKEN = process.env.VIEW_TOKEN && process.env.VIEW_TOKEN.length >= 12 ? process.env.VIEW_TOKEN : '';
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
-const ANON_VIEW = process.env.ANON_VIEW !== '0';
+const PROD = process.env.AIJ_ENV === 'production';
+const TLS = process.env.TLS_CERT_FILE && process.env.TLS_KEY_FILE ? { cert: process.env.TLS_CERT_FILE, key: process.env.TLS_KEY_FILE } : null;
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 const authThrottle = new SEC.AuthThrottle(); // 每个来源 IP：1 分钟内 8 次无效凭证后锁定 5 分钟
+const loginThrottle = new SEC.AuthThrottle({ max: 5, windowMs: 15 * 60e3, lockMs: 15 * 60e3 }); // 登录 / 设置：每 IP 15 分钟 5 次失败锁 15 分钟
+const loginGlobal = { fails: [], lockUntil: 0 }; // 全局：1 小时内失败 50 次 → 所有登录暂停 15 分钟（防分布式猜测；本机可用恢复工具解除）
+/* 启动前检查：生产模式必须能提供 HTTPS；非生产模式默认只允许监听本机 */
+if (PROD && !TLS && !TRUST_PROXY) { console.error('生产模式（AIJ_ENV=production）必须启用 HTTPS：设置 TLS_CERT_FILE 与 TLS_KEY_FILE，或在 HTTPS 反向代理之后运行并设置 TRUST_PROXY=1。'); process.exit(1); }
+if (!PROD && !LOOPBACK_HOSTS.has(HOST) && process.env.AIJ_ALLOW_INSECURE_LAN !== '1') {
+  console.error(`拒绝在非本机地址（HOST=${HOST}）上以未加密方式运行。公网 / 局域网访问请使用生产模式（AIJ_ENV=production + HTTPS）；仅在可信局域网测试时可设置 AIJ_ALLOW_INSECURE_LAN=1。`);
+  process.exit(1);
+}
+const isHttps = req => !!(req.socket.encrypted || (TRUST_PROXY && String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https'));
 /* 限流：按主体分别计数（外部上报每秒 100 条、突发 200；远程新建任务每秒 2 个、突发 10，本机不限） */
 const limiters = new Map();
 function rateOk(kind, key, perSec, burst) {
@@ -61,7 +78,7 @@ const TEMPLATES = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalog', 'team-te
 const DEFAULT_SETTINGS = { showText: false, idleTimeoutSec: 120, maxTokens: 4096, timeoutSec: 300, defaultConnectionId: '' };
 
 function defaultConfig() {
-  return { token: crypto.randomBytes(12).toString('hex'), settings: { ...DEFAULT_SETTINGS }, providers: [], ingestTokens: [] };
+  return { settings: { ...DEFAULT_SETTINGS }, providers: [], ingestTokens: [] };
 }
 function saveConfig() {
   fs.mkdirSync(DATA, { recursive: true });
@@ -83,8 +100,15 @@ const cfg = loadConfig();
 /* 环境变量提供的上报凭证（云端部署用），不写入配置文件 */
 const ENV_INGEST = process.env.INGEST_TOKEN && process.env.INGEST_TOKEN.length >= 16
   ? { name: 'env', hash: ACC.sha256(process.env.INGEST_TOKEN), agents: String(process.env.INGEST_AGENTS || '').split(',').map(s => s.trim()).filter(Boolean) } : null;
+/* 登录与会话（lib/auth.js）；旧版管理令牌不再用于登录，启动时从配置中移除 */
+const auth = new AuthStore({ dir: DATA, options: {
+  ...(Number(process.env.SESSION_IDLE_MIN) > 0 ? { idleMs: Number(process.env.SESSION_IDLE_MIN) * 60e3 } : {}),
+  ...(Number(process.env.SESSION_MAX_DAYS) > 0 ? { absoluteMs: Number(process.env.SESSION_MAX_DAYS) * 86400e3 } : {}),
+} });
+if (cfg.token) { delete cfg.token; console.log('  旧版管理令牌已停用（第四阶段起统一使用密码登录）'); }
+if (process.env.ADMIN_TOKEN) console.log('  注意：ADMIN_TOKEN 已不再生效，请改用密码登录；外部程序上报请用上报凭证');
 const access = ACC.createAccess({
-  adminToken: () => cfg.token, viewToken: VIEW_TOKEN, trustProxy: TRUST_PROXY,
+  auth, trustProxy: TRUST_PROXY, localIngest: process.env.AIJ_LOCAL_INGEST === '1',
   ingestTokens: () => (ENV_INGEST ? [ENV_INGEST, ...cfg.ingestTokens] : cfg.ingestTokens),
 });
 /* ------------------------------------------------------------------ 模型注册中心（lib/models.js） */
@@ -105,8 +129,7 @@ if (Array.isArray(cfg.providers) && cfg.providers.length) {
   catch (e) { console.error('模型配置迁移失败，保留旧配置：', e.message); }
 } else delete cfg.providers;
 /* 云端部署（配置不持久）：用环境变量固定令牌并自动建立模型连接。
-   ADMIN_TOKEN=管理令牌；<KEY 环境变量> + <ID>_MODEL，如 ANTHROPIC_API_KEY + CLAUDE_MODEL。 */
-if (process.env.ADMIN_TOKEN && process.env.ADMIN_TOKEN.length >= 12) cfg.token = process.env.ADMIN_TOKEN;
+   <KEY 环境变量> + <ID>_MODEL，如 ANTHROPIC_API_KEY + CLAUDE_MODEL。 */
 for (const [id, providerId] of [['claude', 'anthropic'], ['chatgpt', 'openai'], ['kimi', 'moonshot'], ['deepseek', 'deepseek']]) {
   const prov = CATALOG.providers.find(x => x.providerId === providerId), model = (process.env[id.toUpperCase() + '_MODEL'] || '').trim();
   if (!prov || !process.env[prov.envKey] || !model || models.has(id)) continue;
@@ -266,6 +289,12 @@ function snapshot(level = 2) {
     totals: { ...RT.totals, agents: RT.agents.size }, showText: level >= 2 && !!cfg.settings.showText,
   };
 }
+/* 会话被撤销 / 过期后，断开它的事件流 */
+function dropRevokedStreams() {
+  const live = new Set(auth.list().map(x => x.sid));
+  for (const res of clients) if (res._sid && !live.has(res._sid)) { clients.delete(res); try { res.end(); } catch { /* 已断开 */ } }
+}
+setInterval(dropRevokedStreams, 30e3).unref?.();
 function sseSend(res, line) { try { res.write(line); } catch { clients.delete(res); } }
 function broadcast(obj) {
   const cache = {};
@@ -692,30 +721,58 @@ function lanUrls() {
   return out;
 }
 
+/* 会话 Cookie：HttpOnly + SameSite=Strict；HTTPS 下加 Secure */
+function sessionCookie(req, token, maxAgeSec) {
+  return `aij_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSec}${isHttps(req) ? '; Secure' : ''}`;
+}
+function loginLocked(ip) {
+  const now = Date.now();
+  loginGlobal.fails = loginGlobal.fails.filter(t => now - t < 3600e3);
+  return loginThrottle.locked(ip) || now < loginGlobal.lockUntil;
+}
+function loginFailed(ip) {
+  loginThrottle.fail(ip);
+  loginGlobal.fails.push(Date.now());
+  if (loginGlobal.fails.length >= 50) { loginGlobal.lockUntil = Date.now() + 15 * 60e3; auth.audit('login_global_lock', { count: loginGlobal.fails.length }); }
+}
+
 async function api(req, res, url) {
   const p = url.pathname, m = req.method;
-  if (m !== 'GET' && !sameOrigin(req)) return json(res, 403, { error: '跨站请求被拒绝' });
-  const ip = access.clientIp(req);
-  /* 凭证防爆破：无效凭证累计到阈值后，该 IP 携带凭证的请求一律 429 */
-  if (authThrottle.locked(ip)) {
-    const pre = access.identify(req);
-    if (pre.presented && pre.kind !== 'local') return json(res, 429, { error: '无效凭证尝试过多，请 5 分钟后再试' });
+  /* 写操作的跨站防护：Origin 必须同源；有请求体时必须是 JSON（表单 / text/plain 无法跨站伪造 JSON 请求） */
+  if (m !== 'GET' && m !== 'HEAD') {
+    if (!sameOrigin(req)) return json(res, 403, { error: '跨站请求被拒绝' });
+    const len = Number(req.headers['content-length'] || 0);
+    if ((len > 0 || req.headers['transfer-encoding']) && !/^application\/json\b/i.test(req.headers['content-type'] || '')) return json(res, 415, { error: '请求体必须是 JSON' });
   }
+  const ip = access.clientIp(req);
+  const meta = { ip, ua: String(req.headers['user-agent'] || '').slice(0, 120) };
+
+  /* ---------------- 公开接口：只有登录状态、首次设置、登录 ---------------- */
+  if (p === '/api/auth/status' && m === 'GET') {
+    const w = access.identify(req);
+    return json(res, 200, { setup: auth.isSetup(), loggedIn: w.kind === 'admin' || w.kind === 'display', kind: w.kind === 'admin' || w.kind === 'display' ? w.kind : null, https: isHttps(req), production: PROD });
+  }
+  if ((p === '/api/auth/setup' || p === '/api/auth/login') && m === 'POST') {
+    if (loginLocked(ip)) return json(res, 429, { error: '尝试次数过多，请 15 分钟后再试' });
+    const b = await readBody(req, 4096);
+    if (p === '/api/auth/setup') {
+      const r = await auth.setup(b.code, b.password, meta);
+      if (!r.ok) { if (r.code === 401) loginFailed(ip); return json(res, r.code, { error: r.error }); }
+    } else {
+      if (!auth.isSetup()) return json(res, 409, { error: '尚未设置密码，请先用服务器上的设置码完成首次设置', needSetup: true });
+      if (!(await auth.verifyPassword(b.password))) { loginFailed(ip); auth.audit('login_failed', meta); return json(res, 401, { error: '密码不正确' }); }
+    }
+    const { token, session } = auth.createSession('admin', meta);
+    res.setHeader('set-cookie', sessionCookie(req, token, Math.floor((session.expiresAt - Date.now()) / 1000)));
+    return json(res, 200, { ok: true, session });
+  }
+
   const who = access.identify(req);
+  /* 锁定期间，该 IP 携带上报凭证的请求一律拒绝（无论对错），否则锁定挡不住猜测；有效登录会话不受影响 */
+  if (authThrottle.locked(ip) && (who.invalid || who.kind === 'ingest')) return json(res, 429, { error: '无效凭证尝试过多，请 5 分钟后再试' });
   if (who.invalid) { authThrottle.fail(ip); return json(res, 401, { error: '凭证无效' }); }
 
-  if ((p === '/api/events' || p === '/api/state') && m === 'GET') {
-    if (who.kind === 'ingest') return json(res, 403, { error: '上报凭证不能订阅事件流' });
-    if (who.level === ACC.LEVEL.ANON && !ANON_VIEW) return json(res, 401, { error: '需要观看令牌（通过 ?view=令牌 访问大屏）' });
-    if (p === '/api/state') return json(res, 200, snapshot(who.level));
-    res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no' });
-    res._lvl = who.level; // 2 管理员/本机：完整；1 观看者；0 匿名：只含驱动动画的字段（见 lib/access.js 允许列表）
-    res.write('retry: 2000\n\n');
-    res.write('data: ' + JSON.stringify(snapshot(who.level)) + '\n\n');
-    clients.add(res);
-    req.on('close', () => clients.delete(res));
-    return;
-  }
+  /* ---------------- 外部上报：上报凭证（与登录会话严格分离），或已登录管理员 ---------------- */
   if (p === '/api/event' && m === 'POST') {
     if (!['local', 'admin', 'ingest'].includes(who.kind)) return json(res, 401, { error: '需要上报凭证（x-ingest-token）' });
     if (!rateOk('ingest', who.id, 100, 200)) return json(res, 429, { error: '上报过于频繁' });
@@ -725,10 +782,57 @@ async function api(req, res, url) {
     if (r.error) return json(res, r.code || 400, { error: r.error });
     return json(res, 200, { ok: true, eventId: r.eventId, ...(r.duplicate ? { duplicate: true } : {}) });
   }
+  if (who.kind === 'ingest' || who.kind === 'local') return json(res, 403, { error: '上报凭证只能用于 POST /api/event' });
+  if (who.kind !== 'admin' && who.kind !== 'display') return json(res, 401, { error: '请先登录', login: '/login.html' });
 
-  /* 其余接口：仅管理员 / 本机 */
-  if (who.level < ACC.LEVEL.ADMIN) return json(res, 401, { error: '需要管理令牌（x-admin-token）。令牌保存在 data/config.json' });
+  /* ---------------- 已登录：大屏观看会话只能看事件流与状态 ---------------- */
+  if (p === '/api/auth/logout' && m === 'POST') {
+    auth.revoke(who.sid, 'logout');
+    res.setHeader('set-cookie', sessionCookie(req, '', 0));
+    return json(res, 200, { ok: true });
+  }
+  if ((p === '/api/events' || p === '/api/state') && m === 'GET') {
+    if (p === '/api/state') return json(res, 200, snapshot(who.level));
+    res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no' });
+    res._lvl = who.level; // 2 管理员：完整；1 大屏观看会话：不含模型原文、路径、元数据（见 lib/access.js 允许列表）
+    res._sid = who.sid;
+    res.write('retry: 2000\n\n');
+    res.write('data: ' + JSON.stringify(snapshot(who.level)) + '\n\n');
+    clients.add(res);
+    req.on('close', () => clients.delete(res));
+    return;
+  }
+  if (who.kind !== 'admin') return json(res, 403, { error: '大屏观看会话不能访问工作台数据' });
   const user = PERM.userFromPrincipal(who);
+
+  /* ---------------- 账户与会话管理 ---------------- */
+  if (p === '/api/auth/password' && m === 'POST') {
+    if (loginLocked(ip)) return json(res, 429, { error: '尝试次数过多，请 15 分钟后再试' });
+    const b = await readBody(req, 4096);
+    const r = await auth.changePassword(b.current, b.next, who.sid, meta);
+    if (!r.ok) { if (r.code === 401) loginFailed(ip); return json(res, r.code, { error: r.error }); }
+    dropRevokedStreams();
+    return json(res, 200, { ok: true, revoked: r.revoked });
+  }
+  if (p === '/api/auth/sessions' && m === 'GET') return json(res, 200, { current: who.sid, sessions: auth.list() });
+  let ms;
+  if ((ms = p.match(/^\/api\/auth\/sessions\/([a-f0-9]{16})$/)) && m === 'DELETE') {
+    if (!auth.revoke(ms[1], 'revoked_by_admin')) return json(res, 404, { error: '会话不存在' });
+    dropRevokedStreams();
+    if (ms[1] === who.sid) res.setHeader('set-cookie', sessionCookie(req, '', 0));
+    return json(res, 200, { ok: true });
+  }
+  if (p === '/api/auth/logout-all' && m === 'POST') {
+    const n = auth.revokeAll(null, 'logout_all');
+    dropRevokedStreams();
+    res.setHeader('set-cookie', sessionCookie(req, '', 0));
+    return json(res, 200, { ok: true, revoked: n });
+  }
+  if (p === '/api/auth/display-link' && m === 'POST') {
+    const b = await readBody(req, 4096);
+    const l = auth.createDisplayLink({ label: b.label, hours: b.hours });
+    return json(res, 200, { path: '/?display=' + l.token, linkExpiresAt: l.linkExpiresAt, sessionHours: l.sessionHours, note: '链接 10 分钟内有效，只能打开一次；打开后的大屏只读，可在“会话”里随时撤销' });
+  }
 
   if (p === '/api/ingest-tokens' && m === 'GET') {
     return json(res, 200, { tokens: [...(ENV_INGEST ? [{ name: 'env', agents: ENV_INGEST.agents, fromEnv: true }] : []), ...cfg.ingestTokens.map(t => ({ name: t.name, agents: t.agents, hint: t.hint, createdAt: t.createdAt }))] });
@@ -966,27 +1070,38 @@ async function api(req, res, url) {
   return json(res, 404, { error: '未知接口' });
 }
 
+const PUBLIC_PAGES = new Set(['/login.html']);
 function serveStatic(req, res, url) {
-  /* 观看令牌换 Cookie：访问 /?view=令牌 后写入 HttpOnly Cookie 并去掉地址栏里的令牌；大屏的 EventSource 自动带上 Cookie */
-  const vt = url.searchParams.get('view');
-  if (vt !== null) {
-    const ip = access.clientIp(req);
+  const ip = access.clientIp(req);
+  /* 大屏观看链接：一次性令牌换只读会话 Cookie，并去掉地址栏里的令牌 */
+  const dt = url.searchParams.get('display');
+  if (dt !== null) {
     if (authThrottle.locked(ip)) { res.writeHead(429, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('尝试过多，请稍后再试'); }
-    const clean = url.pathname + (() => { const q = new URLSearchParams(url.search); q.delete('view'); const s = q.toString(); return s ? '?' + s : ''; })();
-    if (!access.viewTokenOk(vt)) { authThrottle.fail(ip); res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('观看令牌无效'); }
-    const secure = req.socket.encrypted || (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https');
-    res.writeHead(303, { location: clean, 'set-cookie': `aij_view=${encodeURIComponent(vt)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${secure ? '; Secure' : ''}`, 'cache-control': 'no-store' });
+    const r = auth.redeemDisplayLink(dt, { ip, ua: req.headers['user-agent'] });
+    if (!r) { authThrottle.fail(ip); res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('观看链接无效、已使用或已过期，请在管理中心重新生成'); }
+    res.writeHead(303, { location: '/', 'set-cookie': sessionCookie(req, r.token, Math.floor((r.session.expiresAt - Date.now()) / 1000)), 'cache-control': 'no-store' });
     return res.end();
   }
-  let rel = decodeURIComponent(url.pathname);
-  if (rel === '/') rel = '/panel.html';
-  if (rel === '/admin') rel = '/admin.html';
+  /* 除登录页外，所有页面与资源都需要登录；管理中心只对管理员开放 */
+  let pth = url.pathname;
+  if (pth === '/') pth = '/panel.html';
+  if (pth === '/admin') pth = '/admin.html';
+  if (!PUBLIC_PAGES.has(pth)) {
+    const who = access.identify(req);
+    const ok = pth === '/admin.html' ? who.kind === 'admin' : (who.kind === 'admin' || who.kind === 'display');
+    if (!ok) {
+      if (/\.html$/.test(pth)) { res.writeHead(302, { location: '/login.html?next=' + encodeURIComponent(pth === '/panel.html' ? '/' : pth), 'cache-control': 'no-store' }); return res.end(); }
+      res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('请先登录');
+    }
+  }
+  let rel;
+  try { rel = decodeURIComponent(pth); } catch { res.writeHead(400); return res.end('bad request'); }
   const file = path.normalize(path.join(PUBLIC, rel));
   if (file !== PUBLIC && !file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end('forbidden'); }
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('not found'); }
     const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
-    const headers = { 'content-type': type, 'cache-control': type.startsWith('text/html') ? 'no-store' : 'public, max-age=3600', 'accept-ranges': 'bytes' };
+    const headers = { 'content-type': type, 'cache-control': type.startsWith('text/html') ? 'no-store' : 'private, max-age=3600', 'accept-ranges': 'bytes' };
     const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
     if (range && (range[1] || range[2])) {
       let start = range[1] ? parseInt(range[1], 10) : st.size - parseInt(range[2], 10);
@@ -1001,8 +1116,18 @@ function serveStatic(req, res, url) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
+/* 通用安全响应头；生产模式下拒绝非 HTTPS 请求 */
+function securityHeaders(req, res) {
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('x-frame-options', 'DENY');
+  res.setHeader('referrer-policy', 'no-referrer');
+  res.setHeader('content-security-policy', "frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  if (isHttps(req)) res.setHeader('strict-transport-security', 'max-age=31536000');
+}
+const handler = async (req, res) => {
   try {
+    securityHeaders(req, res);
+    if (PROD && !isHttps(req)) { res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('生产环境必须通过 HTTPS 访问'); }
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname.startsWith('/api/')) await api(req, res, url);
     else if (req.method === 'GET' || req.method === 'HEAD') serveStatic(req, res, url);
@@ -1011,7 +1136,8 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) json(res, 500, { error: e.message || '服务内部错误' });
     else try { res.end(); } catch { /* ignore */ }
   }
-});
+};
+const server = TLS ? https.createServer({ cert: fs.readFileSync(TLS.cert), key: fs.readFileSync(TLS.key) }, handler) : http.createServer(handler);
 server.on('error', e => {
   if (e.code === 'EADDRINUSE') console.error(`端口 ${PORT} 已被占用。可换端口启动：PORT=8800 node server.js（Windows：set PORT=8800 后再运行）`);
   else console.error(e);
@@ -1024,11 +1150,18 @@ function shutdown() {
 }
 process.on('SIGINT', () => { shutdown(); process.exit(0); });
 process.on('SIGTERM', () => { shutdown(); process.exit(0); });
+const SETUP_CODE = auth.ensureSetupCode(); // 先生成设置码，再开始接受请求
 server.listen(PORT, HOST, () => {
-  console.log('\n  AI 星环 已启动');
-  console.log(`  大屏      http://localhost:${PORT}/`);
-  console.log(`  管理界面  http://localhost:${PORT}/admin.html`);
-  for (const u of lanUrls()) console.log(`  局域网    ${u}/   （远程访问管理接口需令牌）`);
-  if (lanUrls().length) console.log('  远程管理需要令牌：保存在 data/config.json（不在日志中打印）');
+  const scheme = TLS ? 'https' : 'http';
+  console.log('\n  AIJAVAIS 已启动' + (PROD ? '（生产模式）' : ''));
+  console.log(`  大屏      ${scheme}://localhost:${PORT}/`);
+  console.log(`  管理中心  ${scheme}://localhost:${PORT}/admin.html`);
+  for (const u of lanUrls()) console.log(`  局域网    ${u.replace('http:', scheme + ':')}/`);
+  const code = SETUP_CODE;
+  if (!auth.isSetup()) {
+    console.log('  ┌─ 首次使用：请在网页上设置管理员密码');
+    if (code) console.log('  │  一次性设置码：' + code);
+    console.log('  └─ 设置码也保存在 ' + path.join(DATA, 'setup-code.txt') + '（只有服务器本机能读取）');
+  }
   console.log('  按 Ctrl+C 停止\n');
 });

@@ -1,6 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const H = require('./helpers');
 const http = require('http');
 const net = require('net');
 const fs = require('fs');
@@ -120,15 +121,7 @@ test('能力匹配推荐：说明理由 / 适合岗位 / 不足 / 搭配 / 是�
 /* ---------------- 集成 ---------------- */
 const freePort = () => new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-function call(port, method, url, body) {
-  return new Promise((resolve, reject) => {
-    const data = body === undefined ? null : JSON.stringify(body);
-    const req = http.request({ host: '127.0.0.1', port, method, path: url, headers: data ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) } : {} }, res => {
-      let b = ''; res.setEncoding('utf8'); res.on('data', c => b += c); res.on('end', () => { let j = null; try { j = JSON.parse(b); } catch { /* 非 JSON */ } resolve({ status: res.statusCode, json: j, text: b }); });
-    });
-    req.on('error', reject); if (data) req.write(data); req.end();
-  });
-}
+const call = H.call;
 function mockProvider() {
   const seen = [];
   const srv = http.createServer((req, res) => {
@@ -143,13 +136,7 @@ function mockProvider() {
   return new Promise(r => srv.listen(0, '127.0.0.1', () => r({ srv, port: srv.address().port, seen })));
 }
 async function boot(mockPort) {
-  const port = await freePort();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aij-team-'));
-  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', AIJ_DATA_DIR: dir, LOCAL_MODEL_TARGETS: '127.0.0.1:' + mockPort };
-  for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'ADMIN_TOKEN']) delete env[k];
-  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], { env, stdio: 'ignore' });
-  for (let i = 0; i < 50; i++) { try { if ((await call(port, 'GET', '/api/state')).status === 200) break; } catch { /* 等待 */ } await sleep(100); }
-  return { port, dir, kill: () => new Promise(r => { child.once('exit', r); child.kill('SIGTERM'); }) };
+  return H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mockPort } });
 }
 async function waitRun(S, id) {
   for (let t = 0; t < 6000; t += 100) { const r = (await call(S.port, 'GET', '/api/runs/' + id)).json; if (r.status !== 'running') return r; await sleep(100); }

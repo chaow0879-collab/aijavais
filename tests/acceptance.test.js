@@ -5,6 +5,7 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const H = require('./helpers');
 const http = require('http');
 const net = require('net');
 const fs = require('fs');
@@ -16,15 +17,7 @@ const { ModelRegistry } = require('../lib/models');
 
 const freePort = () => new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-function call(port, method, url, body) {
-  return new Promise((resolve, reject) => {
-    const data = body === undefined ? null : JSON.stringify(body);
-    const req = http.request({ host: '127.0.0.1', port, method, path: url, headers: data ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) } : {} }, res => {
-      let b = ''; res.setEncoding('utf8'); res.on('data', c => b += c); res.on('end', () => { let j = null; try { j = JSON.parse(b); } catch { /* 非 JSON */ } resolve({ status: res.statusCode, json: j, text: b }); });
-    });
-    req.on('error', reject); if (data) req.write(data); req.end();
-  });
-}
+const call = H.call;
 /* 两个模拟服务商：good 正常（prompt 含“慢”时延迟），bad 一律 401 */
 function mock(kind) {
   const srv = http.createServer((req, res) => {
@@ -40,12 +33,7 @@ function mock(kind) {
   return new Promise(r => srv.listen(0, '127.0.0.1', () => r({ srv, port: srv.address().port })));
 }
 async function boot(ports, dir) {
-  const port = await freePort();
-  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', AIJ_DATA_DIR: dir, LOCAL_MODEL_TARGETS: ports.map(p => '127.0.0.1:' + p).join(',') };
-  for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'ADMIN_TOKEN']) delete env[k];
-  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], { env, stdio: 'ignore' });
-  for (let i = 0; i < 50; i++) { try { if ((await call(port, 'GET', '/api/state')).status === 200) break; } catch { /* 等待 */ } await sleep(100); }
-  return { port, kill: () => new Promise(r => { child.once('exit', r); child.kill('SIGTERM'); }) };
+  return H.boot({ dir, env: { LOCAL_MODEL_TARGETS: ports.map(p => '127.0.0.1:' + p).join(',') } });
 }
 
 test('验收 A–J：模型自由接入、动态替换、团队自由组合，删除任意模型不导致平台故障', async t => {

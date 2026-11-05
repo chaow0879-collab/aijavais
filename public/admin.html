@@ -107,7 +107,8 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
   </div>
   <div class="row">
     <span class="chip"><i class="dot" id="dot"></i><span id="conn">连接中…</span></span>
-    <a class="chip" href="/panel.html" target="_blank" rel="noopener">打开大屏 ↗</a>
+    <a class="chip" href="/" target="_blank" rel="noopener">打开大屏 ↗</a>
+    <button class="sm" id="logoutBtn">退出登录</button>
   </div>
 </header>
 <nav id="nav">
@@ -261,7 +262,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
         </div>
         <pre id="igNew" class="hidden"></pre>
         <div id="igList"></div>
-        <p class="note">本机发送无需凭证。凭证明文只显示一次，服务器只保存它的哈希值；不需要时请吊销。</p>
+        <p class="note">所有外部上报都需要凭证（服务器管理员可用 AIJ_LOCAL_INGEST=1 允许本机免凭证上报）。凭证明文只显示一次，服务器只保存它的哈希值；凭证只能上报事件，不能登录或查看数据。</p>
       </section>
     </div>
   </div>
@@ -279,7 +280,26 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
       </div>
       <div class="row" style="margin-top:10px"><button class="pri" id="saveSettings">保存设置</button><span class="note" id="setRes"></span></div>
       <p class="note" id="srvInfo"></p>
-      <p class="note warn">本平台目前只有一个管理令牌，尚不支持公网多人安全使用。对外开放请放在 HTTPS 反向代理之后，并设置观看令牌（VIEW_TOKEN）。</p>
+    </section>
+    <section style="margin-top:16px">
+      <h2>账户与安全 <small>个人部署：一个管理员密码</small></h2>
+      <div class="grid2">
+        <label>当前密码<input type="password" id="pwCur" autocomplete="current-password"></label>
+        <label>新密码（至少 10 个字符）<input type="password" id="pwNew" autocomplete="new-password"></label>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="pri" id="pwSave">修改密码</button><span class="note" id="pwRes"></span></div>
+      <p class="note">修改密码后，其它设备上的登录会全部失效。忘记密码：在服务器本机运行 <code>node tools/reset-password.js --yes</code>。</p>
+      <h3>登录会话</h3>
+      <div style="overflow:auto"><table><thead><tr><th>类型</th><th>来源</th><th>最近活动</th><th>到期</th><th></th></tr></thead><tbody id="sessBody"></tbody></table></div>
+      <div class="row" style="margin-top:8px"><button class="danger" id="logoutAll">退出所有设备</button></div>
+      <h3>大屏观看链接</h3>
+      <div class="row end">
+        <label>名称<input id="dlLabel" placeholder="如：会议室大屏"></label>
+        <label>有效小时<input type="number" id="dlHours" value="24" min="1" max="720"></label>
+        <button id="dlCreate">生成链接</button>
+      </div>
+      <pre id="dlOut" class="hidden"></pre>
+      <p class="note">链接 10 分钟内有效、只能打开一次；打开后的大屏只读，看不到模型原文，可在上面的会话列表中随时撤销。</p>
     </section>
   </div>
 </main>
@@ -291,7 +311,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let CFG = null, MODELS = [], TEAMS = [], TPL = null, TOKEN = sessionStorage.getItem('aiPanelToken') || '';
+let CFG = null, MODELS = [], TEAMS = [], TPL = null;
 const STATUS = { available: '可用', untested: '未测试', error: '出错', disabled: '已停用', not_ready: '未就绪' };
 const PRICE = { paid_api: '付费', free_tier: '免费额度', local: '本地', unknown: '费用未知' };
 
@@ -301,16 +321,9 @@ function closeModal() { $('#modal').classList.remove('on'); }
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.dataset.close !== undefined) closeModal(); });
 
 async function api(path, method = 'GET', body, { raw = false } = {}) {
-  const headers = { 'content-type': 'application/json' };
-  if (TOKEN) headers['x-admin-token'] = TOKEN;
-  let r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  if (r.status === 401) {
-    const t = prompt('请输入管理令牌（保存在服务器的 data/config.json）');
-    if (!t) throw new Error('需要管理令牌');
-    TOKEN = t.trim(); sessionStorage.setItem('aiPanelToken', TOKEN);
-    headers['x-admin-token'] = TOKEN;
-    r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  }
+  const headers = body === undefined ? {} : { 'content-type': 'application/json' };
+  const r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
+  if (r.status === 401) { location.href = '/login.html?next=/admin.html'; throw new Error('登录已失效，请重新登录'); }
   const j = await r.json().catch(() => ({}));
   if (raw) return { status: r.status, json: j };
   if (!r.ok) { const e = new Error(j.error || ('HTTP ' + r.status)); e.data = j; e.status = r.status; throw e; }
@@ -324,6 +337,7 @@ $('#nav').addEventListener('click', e => {
   $$('.pane').forEach(x => x.classList.toggle('on', x.id === 'pane-' + p));
   if (p === 'run') loadRuns();
   if (p === 'ingest') loadIngest();
+  if (p === 'settings') loadSessions();
 });
 
 /* ======================= 模型：添加向导 ======================= */
@@ -630,10 +644,10 @@ function snippets() {
     Stop: [{ hooks: [{ type: 'command', command: sig('claude-code', 'done') }] }],
   } };
   return {
-    node: { name: '命令行 / 任意脚本', text: `# 在 AIJAVAIS 程序目录下执行（或把 tools/signal.js 换成它的完整路径）\n${sig('my-ai', 'start')} "写评审流程"\n${sig('my-ai', 'stream')}\n${sig('my-ai', 'done')}\n\n# 在别的电脑上发送：加 --url ${origin} --token 上报凭证`, note: '需要 Node 18+。agent 名称自己起，每个名称在大屏上占一行；不能与模型连接 ID 重名，也不能以 demo- 开头。' },
+    node: { name: '命令行 / 任意脚本', text: `# 在 AIJAVAIS 程序目录下执行（或把 tools/signal.js 换成它的完整路径）\n${sig('my-ai', 'start')} "写评审流程"\n${sig('my-ai', 'stream')}\n${sig('my-ai', 'done')}\n\n# 需要上报凭证：加 --token 上报凭证（在右侧“上报凭证”里创建）；别的电脑再加 --url ${origin}`, note: '需要 Node 18+。agent 名称自己起，每个名称在大屏上占一行；不能与模型连接 ID 重名，也不能以 demo- 开头。' },
     hooks: { name: 'Claude Code hooks', text: JSON.stringify(hooks, null, 2), note: '放进 ~/.claude/settings.json 的 hooks 字段，命令里的 tools/signal.js 请换成完整路径。只上传工具名，不上传提示词。' },
     curl: { name: 'curl', text: `curl -s -X POST ${origin}/api/event -H "Content-Type: application/json" -H "x-ingest-token: 上报凭证" -d "{\\"agent\\":\\"my-ai\\",\\"status\\":\\"start\\",\\"task\\":\\"写评审流程\\"}"`, note: 'status 可取 start / stream / done / error / info；也可用新协议字段 eventType。本机发送可省略凭证。' },
-    py: { name: 'Python', text: `import requests\nURL = "${origin}/api/event"\nHEADERS = {"x-ingest-token": "上报凭证"}  # 本机可省略\n\ndef signal(agent, status, task=None, tokens=None):\n    try:\n        requests.post(URL, json={"agent": agent, "status": status, "task": task, "tokens": tokens}, headers=HEADERS, timeout=1)\n    except Exception:\n        pass  # 大屏不可用时不影响业务\n\nsignal("my-gpt", "start", "整理数据字典")\nsignal("my-gpt", "done", tokens=1234)`, note: '外部上报的数据在大屏和统计里标记为“外部上报”，不计入平台真实调用统计。' },
+    py: { name: 'Python', text: `import requests\nURL = "${origin}/api/event"\nHEADERS = {"x-ingest-token": "上报凭证"}\n\ndef signal(agent, status, task=None, tokens=None):\n    try:\n        requests.post(URL, json={"agent": agent, "status": status, "task": task, "tokens": tokens}, headers=HEADERS, timeout=1)\n    except Exception:\n        pass  # 大屏不可用时不影响业务\n\nsignal("my-gpt", "start", "整理数据字典")\nsignal("my-gpt", "done", tokens=1234)`, note: '外部上报的数据在大屏和统计里标记为“外部上报”，不计入平台真实调用统计。' },
   };
 }
 function renderSnippet() {
@@ -674,6 +688,24 @@ $('#saveSettings').addEventListener('click', async () => {
     await api('/api/settings', 'POST', { showText: $('#setText').checked, idleTimeoutSec: +$('#setIdle').value, maxTokens: +$('#setMax').value, timeoutSec: +$('#setTimeout').value, defaultConnectionId: $('#setDefault').value });
     $('#setRes').className = 'ok'; $('#setRes').textContent = '已保存'; await load(false);
   } catch (err) { $('#setRes').className = 'bad'; $('#setRes').textContent = err.message; }
+});
+
+/* ======================= 账户与安全 ======================= */
+async function loadSessions() {
+  const r = await api('/api/auth/sessions');
+  $('#sessBody').innerHTML = r.sessions.map(x => `<tr><td>${x.kind === 'admin' ? '管理员' : '大屏观看'}${x.label ? ' · ' + esc(x.label) : ''}${x.sid === r.current ? ' <span class="badge available">当前</span>' : ''}</td><td>${esc(x.ip || '')}</td><td>${new Date(x.lastSeen).toLocaleString()}</td><td>${new Date(x.expiresAt).toLocaleString()}</td><td>${x.sid === r.current ? '' : `<button class="sm danger" data-revoke-s="${esc(x.sid)}">撤销</button>`}</td></tr>`).join('');
+}
+$('#sessBody').addEventListener('click', async e => { const sid = e.target.dataset.revokeS; if (sid) { await api('/api/auth/sessions/' + sid, 'DELETE'); loadSessions(); } });
+$('#pwSave').addEventListener('click', async () => {
+  try { const r = await api('/api/auth/password', 'POST', { current: $('#pwCur').value, next: $('#pwNew').value }); $('#pwRes').className = 'ok'; $('#pwRes').textContent = '已修改，其它设备的登录已失效（' + r.revoked + ' 个）'; $('#pwCur').value = ''; $('#pwNew').value = ''; loadSessions(); }
+  catch (e) { $('#pwRes').className = 'bad'; $('#pwRes').textContent = e.message; }
+});
+$('#logoutAll').addEventListener('click', async () => { if (confirm('退出所有设备（包括本机和大屏）？')) { await api('/api/auth/logout-all', 'POST'); location.href = '/login.html'; } });
+$('#logoutBtn').addEventListener('click', async () => { await api('/api/auth/logout', 'POST').catch(() => {}); location.href = '/login.html'; });
+$('#dlCreate').addEventListener('click', async () => {
+  const r = await api('/api/auth/display-link', 'POST', { label: $('#dlLabel').value.trim() || '大屏', hours: +$('#dlHours').value || 24 });
+  $('#dlOut').classList.remove('hidden'); $('#dlOut').textContent = location.origin + r.path + '\n' + r.note;
+  loadSessions();
 });
 
 /* ======================= 实时状态（SSE） ======================= */

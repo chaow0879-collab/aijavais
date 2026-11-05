@@ -30,7 +30,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('dialog', d => d.accept());
   const base = `http://localhost:${port}`;
+  // 登录：未登录访问管理中心会跳到登录页；首次使用用服务器写出的设置码设置密码
   await page.goto(base + '/admin.html');
+  await page.waitForURL(/login\.html/);
+  await page.waitForSelector('#setupForm:not(.hidden)');
+  await page.screenshot({ path: path.join(OUT, '0-login-setup.png') });
+  const setupCode = /([A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4})/.exec(fs.readFileSync(path.join(dir, 'setup-code.txt'), 'utf8'))[1];
+  await page.fill('#code', setupCode); await page.fill('#np', 'ui-test-password-1'); await page.fill('#np2', 'ui-test-password-1');
+  await page.click('#setupBtn');
+  await page.waitForURL(/admin\.html/);
   await page.waitForSelector('#wProv option', { state: 'attached' });
   await page.screenshot({ path: path.join(OUT, '1-models-empty.png'), fullPage: true });
 
@@ -100,7 +108,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await page.click('#nav [data-pane=models]');
   await page.screenshot({ path: path.join(OUT, '9-mobile.png'), fullPage: false });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  const team = (await (await fetch(base + '/api/teams')).json()).teams[0];
+  const team = await page.evaluate(async () => (await (await fetch('/api/teams')).json()).teams[0]);
   const result = { t1, t2, errors: errors.filter(e => !/402/.test(e)), overflow, editorAfterDelete: team.roles.find(r => r.roleId === 'editor').primaryConnectionId === ids[0] };
   console.log(JSON.stringify(result, null, 1));
   const ok = /连接正常/.test(t1) && /连接正常/.test(t2) && !result.errors.length && !overflow && result.editorAfterDelete;

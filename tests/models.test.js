@@ -1,6 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const H = require('./helpers');
 const http = require('http');
 const net = require('net');
 const fs = require('fs');
@@ -82,15 +83,7 @@ test('目录数据：服务商定义完整，价格未核实的不得标为免�
 /* ---------------- 集成 ---------------- */
 const freePort = () => new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-function call(port, method, url, body) {
-  return new Promise((resolve, reject) => {
-    const data = body === undefined ? null : JSON.stringify(body);
-    const req = http.request({ host: '127.0.0.1', port, method, path: url, headers: data ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) } : {} }, res => {
-      let b = ''; res.setEncoding('utf8'); res.on('data', c => b += c); res.on('end', () => { let j = null; try { j = JSON.parse(b); } catch { /* 非 JSON */ } resolve({ status: res.statusCode, json: j, text: b }); });
-    });
-    req.on('error', reject); if (data) req.write(data); req.end();
-  });
-}
+const call = H.call;
 /* 模拟 OpenAI 兼容服务商：/models 返回模型列表；Bearer bad-key 返回 401；prompt 含“慢”则延迟 */
 function mockProvider() {
   const srv = http.createServer((req, res) => {
@@ -109,14 +102,7 @@ function mockProvider() {
   return new Promise(r => srv.listen(0, '127.0.0.1', () => r({ srv, port: srv.address().port })));
 }
 async function boot(mockPort, dir, preConfig) {
-  const port = await freePort();
-  dir = dir || fs.mkdtempSync(path.join(os.tmpdir(), 'aij-mdl-'));
-  if (preConfig) fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(preConfig));
-  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', AIJ_DATA_DIR: dir, LOCAL_MODEL_TARGETS: mockPort ? '127.0.0.1:' + mockPort : '' };
-  for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'ADMIN_TOKEN', 'CLAUDE_MODEL']) delete env[k];
-  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], { env, stdio: 'ignore' });
-  for (let i = 0; i < 50; i++) { try { if ((await call(port, 'GET', '/api/state')).status === 200) break; } catch { /* 等待 */ } await sleep(100); }
-  return { port, dir, kill: () => new Promise(r => { child.once('exit', r); child.kill('SIGTERM'); }) };
+  return H.boot({ dir, preConfig, env: { LOCAL_MODEL_TARGETS: mockPort ? '127.0.0.1:' + mockPort : '' } });
 }
 async function waitRun(S, id, ms = 6000) {
   for (let t = 0; t < ms; t += 100) { const r = (await call(S.port, 'GET', '/api/runs/' + id)).json; if (r.status !== 'running') return r; await sleep(100); }
@@ -207,7 +193,7 @@ test('旧配置迁移：config.json 里的 providers 自动迁移为模型连接
   const list = (await call(S.port, 'GET', '/api/models')).json.models;
   assert.deepEqual(list.map(c => [c.connectionId, c.providerId, c.hasKey]), [['claude', 'anthropic', true]]);
   const conf = JSON.parse(fs.readFileSync(path.join(S.dir, 'config.json'), 'utf8'));
-  assert.ok(!('providers' in conf), '旧字段已移除'); assert.equal(conf.token, 'tok-abcdef123456', '令牌保留');
+  assert.ok(!('providers' in conf), '旧字段已移除'); assert.ok(!('token' in conf), '旧版管理令牌已停用并从配置中移除（统一密码登录）');
   assert.ok(!fs.readFileSync(path.join(S.dir, 'config.json'), 'utf8').includes('sk-legacy'));
   assert.equal(JSON.parse(fs.readFileSync(path.join(S.dir, 'credentials.json'), 'utf8')).claude.apiKey, 'sk-legacy-12345678');
 });

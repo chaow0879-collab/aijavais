@@ -32,23 +32,26 @@
 - 外部上报不能使用模型连接 ID 或 `demo-` 前缀的 `agentId`，也不能与已存在的不同来源 agent 同名；支持 `clientEventId` 去重。
 - 只有 `source=server` 的真实模型调用计入 `totals.calls / tokens / errors`；外部与演示事件只计事件数；厂商返回的用量与估算值（`estimatedTokens`）分开统计。
 
-## 访问控制（第三阶段 A）
-| 主体 | 怎么获得 | 能做什么 |
-|---|---|---|
-| 本机 | 在服务器本机用 `http://localhost` 访问 | 等同管理员 |
-| 管理员 | `x-admin-token` 或 `Authorization: Bearer`（令牌在 `data/config.json`，或环境变量 `ADMIN_TOKEN`） | 全部接口；完整事件流 |
-| 上报凭证 | 管理员在 `/api/ingest-tokens` 创建（明文只显示一次，配置只存哈希），或环境变量 `INGEST_TOKEN`（+`INGEST_AGENTS` 限定可用的 agentId） | 只能 `POST /api/event`；不能看事件流、不能调管理接口 |
-| 观看者 | 环境变量 `VIEW_TOKEN`；浏览器打开 `/?view=令牌`，服务端写入 HttpOnly Cookie 后去掉地址栏里的令牌 | 事件流第 1 级：含任务标题与错误摘要，不含模型原文、文件路径、元数据 |
-| 匿名 | 不带凭证 | 事件流第 0 级：只含驱动大屏动画的字段；`ANON_VIEW=0` 可完全禁止 |
+## 登录与访问控制（V2.0 起）
+| 项目 | 做法 |
+|---|---|
+| 首次设置 | 服务端生成一次性设置码，只打印在服务器控制台、写入 `data/setup-code.txt`（0600）。拿不到服务器本机的人无法抢先设置密码 |
+| 密码存储 | scrypt（N=2^15, r=8, p=1，64 字节）+ 16 字节随机盐，只存哈希；常量时间比较；不存在账号时同样耗时 |
+| 会话 | 32 字节随机令牌，Cookie `aij_session`：HttpOnly、SameSite=Strict、HTTPS 下 Secure；服务端只存 SHA-256。空闲 8 小时 / 最长 7 天过期（`SESSION_IDLE_MIN`、`SESSION_MAX_DAYS` 可调）；支持退出、撤销单个会话、退出所有设备；改密码撤销其它全部会话；会话撤销后其事件流立即断开 |
+| 受保护范围 | 除 `login.html`、`/api/auth/status|setup|login` 外，**所有页面（含 HALOFLUX 大屏）、静态资源、API、SSE 都需要登录**。不再有 localhost Host 头特权、管理令牌登录、匿名观看 |
+| 大屏观看 | 管理员生成一次性观看链接（10 分钟内有效、只能用一次），换得只读的“观看会话”：只能看大屏与第 1 级事件流，不能访问任何工作台数据，可随时撤销 |
+| 外部上报 | 上报凭证（`x-ingest-token`）与登录会话严格分离：只能 `POST /api/event`，不能登录、看大屏或读数据；会话令牌也不能当上报凭证用。本机免凭证上报需显式设置 `AIJ_LOCAL_INGEST=1`（设置了 `TRUST_PROXY` 时无效） |
+| 限流 | 登录 / 设置 / 改密码：每 IP 15 分钟 5 次失败锁 15 分钟；全局 1 小时 50 次失败暂停全部登录 15 分钟。无效上报凭证：每 IP 1 分钟 8 次后锁 5 分钟，锁定期间该 IP 的上报一律拒绝 |
+| 跨站 | 写操作要求同源 Origin，且请求体必须是 JSON；会话 Cookie SameSite=Strict |
+| 响应头 | `X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer`、CSP `frame-ancestors 'none'`；HTTPS 下加 HSTS |
+| HTTPS | `AIJ_ENV=production` 时必须 HTTPS（`TLS_CERT_FILE`+`TLS_KEY_FILE` 直接启用，或在 HTTPS 反向代理后设 `TRUST_PROXY=1`），否则拒绝启动；生产模式下明文 HTTP 请求一律 403。非生产模式默认只允许监听本机地址 |
+| 恢复 | 服务器本机运行 `node tools/reset-password.js --yes`：清除密码与全部会话、生成新设置码；运行中的服务自动感知 |
+| 审计 | 设置、登录、失败、退出、改密码、撤销、观看链接等写入 `data/audit.log`（JSON 行，1MB 轮转） |
 
-- 脱敏采用**字段允许列表**（`lib/access.js`）：新增字段默认不会外泄给观看者 / 匿名。
-- 外部上报：内部任务一律拒绝写入（403）；外部任务归属第一次创建它的上报主体；agentId 绑定来源与主体；凭证可限定 agentId。
-- 防爆破：同一 IP 1 分钟内 8 次无效凭证后锁定 5 分钟（本机访问不受影响）。限流：上报每主体每秒 100 条（突发 200），远程新建任务每秒 2 个（突发 10，本机不限）。
-- 反向代理后部署需设 `TRUST_PROXY=1` 才按 `X-Forwarded-For` 识别 IP；否则不要设置（防伪造）。
-- 人工团队角色（系统管理员、团队管理员、项目负责人、普通员工、审核人员、访客）的权限矩阵已在 `lib/permissions.js` 定义；目前只有单管理员部署，多用户登录尚未实现。
+字段级脱敏仍采用允许列表（`lib/access.js`）：观看会话看不到模型原文、文件路径、元数据。
 
 ## 当前已知缺口
-- **尚不支持公网多人安全使用**：没有多用户账号与登录，所有管理操作共用一个管理令牌；未做 HTTPS 终止（请放在反向代理后）。
+- 平台定位为**单人独立部署**：一个管理员密码，不提供多人账户。公网部署必须使用生产模式 + HTTPS。
 - 任务记录（`data/tasks.json`）包含模型输出全文，尚无按保留期清理与加密；部署在共享服务器上时注意文件权限（已设 0600）。
 - 消息与成果只在内存中，服务重启后无法查看历史消息正文（任务记录与步骤输出仍在）。
 

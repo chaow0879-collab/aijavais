@@ -2,6 +2,7 @@
 /* 运行时集成测试：并发计数、外部事件真实性、token 隔离、失败与重启持久化。使用本地模拟供应商，不需要任何 API Key。 */
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const H = require('./helpers');
 const http = require('http');
 const net = require('net');
 const fs = require('fs');
@@ -11,15 +12,7 @@ const { spawn } = require('child_process');
 
 const freePort = () => new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-function call(port, method, url, body) {
-  return new Promise((resolve, reject) => {
-    const data = body === undefined ? null : JSON.stringify(body);
-    const req = http.request({ host: '127.0.0.1', port, method, path: url, headers: data ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) } : {} }, res => {
-      let b = ''; res.setEncoding('utf8'); res.on('data', c => b += c); res.on('end', () => { let j = null; try { j = JSON.parse(b); } catch { /* 非 JSON */ } resolve({ status: res.statusCode, json: j, text: b }); });
-    });
-    req.on('error', reject); if (data) req.write(data); req.end();
-  });
-}
+const call = H.call;
 /* 模拟 OpenAI 兼容供应商。behavior(prompt) → { delay, usage:boolean, status, hang } */
 function mockProvider(behavior = () => ({})) {
   const srv = http.createServer((req, res) => {
@@ -47,13 +40,7 @@ function mockProvider(behavior = () => ({})) {
   return new Promise(r => srv.listen(0, '127.0.0.1', () => r({ srv, port: srv.address().port })));
 }
 async function boot(localPorts, dir, extraEnv = {}) {
-  const port = await freePort();
-  dir = dir || fs.mkdtempSync(path.join(os.tmpdir(), 'aij-rt-'));
-  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', AIJ_DATA_DIR: dir, LOCAL_MODEL_TARGETS: localPorts.map(p => '127.0.0.1:' + p).join(','), ...extraEnv };
-  for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'ADMIN_TOKEN']) delete env[k];
-  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], { env, stdio: 'ignore' });
-  for (let i = 0; i < 50; i++) { try { if ((await call(port, 'GET', '/api/state')).status === 200) break; } catch { /* 等待 */ } await sleep(100); }
-  return { port, dir, child, kill: () => new Promise(r => { child.once('exit', r); child.kill('SIGTERM'); }) };
+  return H.boot({ dir, env: { LOCAL_MODEL_TARGETS: localPorts.map(p => '127.0.0.1:' + p).join(','), ...extraEnv } });
 }
 const addProvider = async (S, label, mockPort) => (await call(S.port, 'POST', '/api/providers', { label, type: 'openai', baseUrl: `http://127.0.0.1:${mockPort}/v1`, apiKey: 'sk-test-' + label + '-abcdefgh', model: 'm' })).json.provider.id;
 const state = async S => (await call(S.port, 'GET', '/api/state')).json;
@@ -319,7 +306,7 @@ test('超时 / 流量上限 / 多行 SSE / 客户端断开：失败路径不泄�
   assert.equal(st.totals.errors, 2);
 
   // 客户端中途断开 SSE 不影响服务
-  await new Promise(r => { const rq = http.get({ host: '127.0.0.1', port: S.port, path: '/api/events' }, res => { res.once('data', () => { rq.destroy(); r(); }); }); });
+  await new Promise(r => { const rq = http.get({ host: '127.0.0.1', port: S.port, path: '/api/events', headers: H.authHeaders(S.port) }, res => { res.once('data', () => { rq.destroy(); r(); }); }); });
   assert.equal((await call(S.port, 'POST', '/api/event', { agent: 'after-disconnect', status: 'info' })).status, 200);
   assert.equal((await call(S.port, 'GET', '/api/state')).status, 200);
 });
@@ -345,7 +332,7 @@ test('流式取消与费用：响应体挂起时超时真正断开连接；SSE �
 
   // 2) SSE 客户端中途断开，不影响后台模型调用
   const id = (await call(S.port, 'POST', '/api/run', { task: '后台慢任务', a: pid, mode: 'single' })).json.runId;
-  await new Promise(r => { const rq = http.get({ host: '127.0.0.1', port: S.port, path: '/api/events' }, res => res.once('data', () => { rq.destroy(); r(); })); });
+  await new Promise(r => { const rq = http.get({ host: '127.0.0.1', port: S.port, path: '/api/events', headers: H.authHeaders(S.port) }, res => res.once('data', () => { rq.destroy(); r(); })); });
   const bg = await waitRun(S, id);
   assert.equal(bg.status, 'done'); assert.equal(bg.steps[0].estimated, false);
 

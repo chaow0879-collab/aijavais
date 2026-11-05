@@ -1,6 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const H = require('./helpers');
 const http = require('http');
 const net = require('net');
 const fs = require('fs');
@@ -9,34 +10,11 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const freePort = () => new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
-function call(port, method, url, body) {
-  return new Promise((resolve, reject) => {
-    const data = body === undefined ? null : JSON.stringify(body);
-    const req = http.request({ host: '127.0.0.1', port, method, path: url, headers: data ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) } : {} }, res => {
-      let b = ''; res.setEncoding('utf8'); res.on('data', c => b += c); res.on('end', () => { let j = null; try { j = JSON.parse(b); } catch { /* 非 JSON */ } resolve({ status: res.statusCode, json: j, text: b }); });
-    });
-    req.on('error', reject); if (data) req.write(data); req.end();
-  });
-}
+const call = H.call;
 /* 收集 SSE 事件 ms 毫秒 */
-function collectSSE(port, ms) {
-  return new Promise(resolve => {
-    const evs = [];
-    const req = http.get({ host: '127.0.0.1', port, path: '/api/events' }, res => {
-      let buf = '';
-      res.on('data', c => { buf += c; let i; while ((i = buf.indexOf('\n\n')) >= 0) { const blk = buf.slice(0, i); buf = buf.slice(i + 2); const m = blk.match(/^data: (.*)$/m); if (m) { try { evs.push(JSON.parse(m[1])); } catch { /* 忽略 */ } } } });
-    });
-    setTimeout(() => { req.destroy(); resolve(evs); }, ms);
-  });
-}
+const collectSSE = async (port, ms) => (await H.sse(port, ms)).evs;
 async function startServer(extraEnv = {}) {
-  const port = await freePort();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aij-'));
-  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', AIJ_DATA_DIR: dir, ...extraEnv };
-  for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'MOONSHOT_API_KEY', 'DEEPSEEK_API_KEY', 'ADMIN_TOKEN']) if (!(k in extraEnv)) delete env[k];
-  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], { env, stdio: 'ignore' });
-  for (let i = 0; i < 50; i++) { try { if ((await call(port, 'GET', '/api/state')).status === 200) break; } catch { /* 等待启动 */ } await new Promise(r => setTimeout(r, 100)); }
-  return { port, dir, stop: () => new Promise(r => { child.once('exit', () => { fs.rmSync(dir, { recursive: true, force: true }); r(); }); child.kill('SIGTERM'); }) };
+  return H.boot({ env: extraEnv });
 }
 
 test('服务接口：供应商校验、密钥绑定、配置不回传令牌、事件来源标记', async t => {
