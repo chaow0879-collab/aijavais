@@ -20,7 +20,7 @@
 - C向导检查点：`e41f5d3b811c81dbb5e42e4ad6d28a5f779900f0`（新草案E2E及原向导工作台E2E通过）。
 - Claude最终修复源：`e74adee5c3d6c5b95b7b568385f278983adcf8a1`；用户明确确认停写，审核只改约定四文件，无冲突cherry-pick。四文件内容与修复源一致，无额外覆盖。
 - D最终本地`npm test`：**207测试、207通过、0失败、0跳过**。`test:ui` / `test:workspace` / `test:intake`三个真实Chromium流程通过。新测试覆盖正式要求12类，矩阵和接口详见`docs/AI-DRAFT.md`。
-- 当前最终代码/文档完整SHA以本节所在提交和最终交付消息为准。新增CI定义覆盖本分支和新E2E，远程最终run仍须实际核查，不把本地通过当CI通过。
+- D最终代码完整SHA：`3463c9ebcadd43d1cfdf3244d73e199983613274`。实际GitHub Actions [run 42030235161](https://github.com/chaow0879-collab/aijavais/actions/runs/42030235161) 的 tests/browser/container 三项全部success（通过GitHub页面核查）。此后仅补文档记录，最新完整文档提交SHA以最终交付消息为准；代码不变。远程子测试数量/跳过计数未读取到，不把本地207项当远程日志计数。
 - 无付费真实API、无生产工具执行、无服务器/S-UI/Caddy操作、无main修改或合并。Mock只代表模型响应模拟；SQLite、HTTP、Office既有回归、浏览器和账本是真实执行。
 - 数据库仍schema v3，无新迁移；system_usage预留/结算为原表JSON元数据更新。回滚先停实例并保存完整DATA，用匹配代码和SQLite/JSON完整备份恢复；不要复制活跃主库遗漏WAL。
 - 仍未验证真实厂商的草案输出可靠性或收费账单；请求ID去重限当前进程，进程中断后未结算预留需人工核对，不自动重试。专业能力仍未因模型声明而实测。
