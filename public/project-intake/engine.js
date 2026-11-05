@@ -213,7 +213,7 @@
       const costOk = !freeOnly || (c.pricingMode === 'local' && c.localityVerified === true) ||
         (c.pricingMode === 'free_tier' && c.freeEligibilityVerified === true);
       const eligible = available && costOk && !missing.length;
-      const score = Math.max(0, Math.min(100, Math.round(verifiedHits.length * 22 + claimedHits.length * 9 + (available ? 20 : 0) + (c.lastTest && c.lastTest.ok ? 15 : 0) + (FREE.has(c.pricingMode) ? 5 : 0) - missing.length * 20)));
+      const score = Math.max(0, Math.min(100, Math.round(verifiedHits.length * 22 + claimedHits.length * 9 + (available ? 20 : 0) + (available && caps.has('chat') ? 15 : 0) + (FREE.has(c.pricingMode) ? 5 : 0) - missing.length * 20)));
       return { connectionId: c.connectionId, displayName: c.displayName || c.connectionId, eligible, score,
         verifiedHits, claimedHits, missing, pricingMode: c.pricingMode || 'unknown',
         notes: [!available ? '当前未就绪或已停用' : '', !costOk ? '免费模式不允许未验证的免费资格或收费连接' : '',

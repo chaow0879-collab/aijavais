@@ -129,8 +129,10 @@
     d.planning??={goal:d.name,humanDecisions:[],requestedSkills:[]};
     field(parent,'需要的Skills（每行一项，尚未授权执行）','ai-required-skills',d.planning.requestedSkills.join('\n'),v=>{d.planning.requestedSkills=lines(v);changed();},{area:true});
     field(parent,'必须由人决定或审批的事项','ai-human-decisions',d.planning.humanDecisions.join('\n'),v=>{d.planning.humanDecisions=lines(v);changed();},{area:true});
-    const checks=state.result?.toolCheck||[];
+    const checks=state.result?.toolCheck||[], recs=state.result?.toolRecommendations||[];
     parent.append(el('p',{id:'ai-tool-check',className:'hint',text:'生成时工具检查（编辑后请在工作台重新核实）：'+checks.map(x=>x.intakeId+'：'+x.status).join('；')}));
+    // AI suggestions vs. permissions: nothing here is granted; each run asks separately.
+    parent.append(el('p',{id:'ai-tool-permissions',className:'note',text:'AI建议的工具（未授予任何权限）：'+(recs.length?recs.map(x=>x.intakeId+'［'+(x.verification==='registered_available'?'已注册可用':'未验证')+'·需逐次运行批准'+(x.highRisk?'·高风险/外部或未知':'')+'］').join('；'):'无')+'。保存草案不会授权工具、不会开始执行。'}));
     parent.append(el('p',{id:'ai-skill-check',className:'hint',text:'生成时Skills检查：'+(state.result?.skillCheck||[]).map(x=>x.skillId+'：'+(x.available?'已注册（仍需配置执行步骤）':'尚未注册')).join('；')}));
     parent.append(el('label',{className:'label'},[el('input',{id:'ai-save-confirm',type:'checkbox',checked:state.saveConsent,onchange:e=>{state.saveConsent=e.target.checked;$('ai-save').disabled=!state.saveConsent||state.busy;}}),'我已人工检查草案；仅保存项目，不开始执行或授权工具。']),
       el('button',{id:'ai-save',type:'button',className:'btn primary',text:'确认后保存草案并进入工作台',disabled:!state.saveConsent||state.busy,onclick:save}));

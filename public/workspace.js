@@ -52,7 +52,7 @@
   function modelSelect(role) {
     const select = node('select', { 'aria-label':role.name + '使用的模型', onchange:e => {role.connectionId=e.target.value; state.dirty=true;} });
     select.append(node('option',{value:'',text:'请选择模型连接'}));
-    for (const model of state.models) select.append(node('option',{value:model.connectionId,text:(model.displayName || model.modelId || model.connectionId)+' · '+(model.enabled===false?'已停用':model.lastTest?.ok?'连接已测试':model.ready?'已配置，未通过测试':'未就绪')+' · '+(model.pricingMode || '费用未知')}));
+    for (const model of state.models) select.append(node('option',{value:model.connectionId,text:(model.displayName || model.modelId || model.connectionId)+' · '+modelState(model)+' · '+(model.pricingMode || '费用未知')}));
     const current = role.connectionId || role.primaryConnectionId || role.modelConnectionId || '';
     if (current && !state.models.some(m => m.connectionId === current)) select.append(node('option',{value:current,text:current+'（连接已移除）'}));
     select.value = current; role.connectionId = current;
@@ -108,6 +108,16 @@
       field(advanced,'质量检查 JSON，例如 [{"type":"minLength","value":100}]','textarea',step._checksJSON ?? JSON.stringify(step.checks || [],null,2),v=>step._checksJSON=v,{spellcheck:false,rows:3});
       row.append(advanced);target.append(row);
     });
+  }
+  // #9 P2-04: show the CURRENT state; a historical successful probe on a disabled,
+  // not-ready or unrecorded connection is never shown as tested/usable.
+  function modelState(model) {
+    if(model.enabled===false)return '已停用（历史测试不代表可用）';
+    if(model.status==='available')return '连接已测试且当前可用';
+    if(model.status==='not_ready')return '未就绪（缺少密钥或配置）';
+    if(model.status==='error')return '最近一次测试失败';
+    if(model.lastTest?.ok&&model.lastTest.usageRecorded===false)return '历史测试未完整记账，需重新测试';
+    return model.ready?'已配置，未通过测试':'未就绪';
   }
   function resourceCheckboxes(id, resources, selected, key) {
     const target=$(id);target.replaceChildren();

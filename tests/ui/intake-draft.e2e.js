@@ -70,6 +70,9 @@ async function realLifecycleBodies(){
     assert.equal(calls,1);assert.equal(await page.isChecked('#ai-consent'),false,'one-time consent is cleared');
     assert.equal((await app.call('GET','/api/v2/projects')).json.projects.length,0,'no automatic save');
     assert.equal(await page.locator('#ai-roles img').count(),0);assert.equal(await page.evaluate(()=>window.__draftUnsafe),undefined);
+    // #9 P2-02: AI tool suggestions are shown as unverified/not granted, never as permissions.
+    const perms=await page.textContent('#ai-tool-permissions');
+    assert.match(perms,/未授予任何权限/);assert.match(perms,/builtin:text-stats［已注册可用·需逐次运行批准］/);assert.match(perms,/不会授权工具、不会开始执行/);
     await page.locator('.ai-role-name').first().fill('人工修订的方案负责人');
     await page.click('#ai-add-role');assert.equal(await page.locator('.ai-role-name').count(),3);
     await page.getByRole('button',{name:'删除岗位及关联步骤',exact:true}).last().click();assert.equal(await page.locator('.ai-role-name').count(),2);
@@ -86,6 +89,15 @@ async function realLifecycleBodies(){
     const projects=(await app.call('GET','/api/v2/projects')).json.projects;assert.equal(projects.length,1);
     const saved=(await app.call('GET','/api/v2/projects/'+projects[0].projectId)).json;
     assert.equal(saved.project.name,'人工确认后的通用项目');assert.equal(saved.project.roles[0].name,'人工修订的方案负责人');assert.equal(saved.project.steps.length,3);
+    // #9 P2-04: workspace model labels follow the CURRENT state, not the historical probe.
+    const label=async()=>page.locator('select option[value="'+id+'"]').first().textContent();
+    await page.waitForSelector('select option[value="'+id+'"]',{state:'attached'});
+    assert.match(await label(),/连接已测试且当前可用/);
+    assert.equal((await app.call('POST','/api/models/'+id+'/disable',{})).status,200);
+    await page.reload();await page.waitForSelector('select option[value="'+id+'"]',{state:'attached'});
+    assert.match(await label(),/已停用（历史测试不代表可用）/);assert.doesNotMatch(await label(),/连接已测试/);
+    assert.equal((await app.call('POST','/api/models/'+id+'/enable',{})).status,200);
+    assert.equal((await app.call('POST','/api/models/'+id+'/test',{})).json.ok,true);
     assert.deepEqual(saved.runs,[]);assert.equal(calls,1);assert.deepEqual(saved.project.planning.humanDecisions,['用户确认项目范围','用户最终验收']);
     mode='hang';await open();await quote();await page.check('#ai-consent');await page.click('#ai-generate');
     for(let i=0;i<100&&calls<2;i++)await H.sleep(5);assert.equal(calls,2);

@@ -29,6 +29,7 @@ require('./auth-concurrency.test.js');
 require('./product-neutrality.test.js');
 require('./project-files.test.js');
 require('./capabilities.test.js');
+require('./capability-truth.test.js');
 require('./data-analysis.test.js');
 require('./office-render.test.js');
 require('./mcp-management.test.js');

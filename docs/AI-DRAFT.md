@@ -54,6 +54,13 @@
 
 非法JSON/无效引用返回422、超时504、取消409、模型错误502，并提供`fallback:manual`；手工基础草案或原规则模板始终可用。错误先脱敏再截断，账本不保存用户需求或完整模型原文。已发出的请求不保证能撤销厂商费用。
 
+## 能力标签与工具权限的真实性（#9 P2-01/02/04）
+
+- **当前验证≠历史测试**：`ModelRegistry.getCapabilities()`只有在连接当前`status==='available'`（启用、就绪、最近测试成功且已记账）时返回`verified:['chat']`；停用、缺Key/配置、测试失败、`usageRecorded:false`或更换目标后均为`[]`。历史结果单独放在`historicalProbe`并注明“不代表当前可用”。
+- **`planFrom()`**：`verifiedCapabilities`与`localityVerified`来自上述当前快照与连接状态，不再仅凭`lastTest.ok`。基线代码下“已试连但未记账”的本地模型在免费模式被当作已验证本地目标（测试已复现并回归）。客户端提交的`availableModels/availableTools`仍被服务器视图覆盖。“chat”只证明可对话，不证明编程/财务等专业能力。
+- **工具建议≠权限**：草案响应新增`toolRecommendations[]`（`source:'ai_suggestion'`、`verification: registered_available|unverified`、`risk/highRisk`、`permission:'not_granted'`、`approval:'needs_approval_per_run'`）与`toolPermissions:{granted:[]}`。`requiredToolIds`仍是“执行前必须满足的需求”：保存时不授予任何工具；运行时`ProjectEngine._approval`要求每个必需工具出现在本次运行人工勾选的`allowedTools`中，外部/代码执行另需`approveExternalTools`。工作台工具复选框默认全部不勾选。恶意模型JSON中的`allowedTools/toolPermissions/toolRecommendations/approve*`被白名单丢弃，保存时附加的伪造权限字段也不会持久化（`tests/capability-truth.test.js`）。
+- **界面**：草案编辑器显示“AI建议的工具（未授予任何权限）……需逐次运行批准”；工作台模型下拉按当前状态显示“连接已测试且当前可用/已停用（历史测试不代表可用）/历史测试未完整记账，需重新测试”等（Chromium回归）。
+
 ## 取消、超时、断连与真实底层容量（#7 / AUD-AB-003）
 
 **区分两个生命周期**：用户请求（HTTP/前端等待）与底层模型调用（适配器自己的Promise）。在基线`17ec74c`上已动态复现：适配器忽略AbortSignal时，取消3个外层请求后第4个被派发，`peakUnderlyingInFlight=4`，且前3个账本被提前结为failed（见`tests/intake-draft-cancel-lifecycle.test.js` TC7-01及#7评论）。整改后：
