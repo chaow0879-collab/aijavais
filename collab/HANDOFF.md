@@ -19,7 +19,7 @@
 
 ## 测试
 
-`npm test` 187/187（本地 0 跳过）；`test:ui`、`test:workspace` 通过。全部为本地 Mock 模型、本地 MCP fixture、真实文件与系统程序；真实厂商 API 与第三方生产 MCP 未测。
+`npm test` 189/189（本地 0 跳过）；`test:ui`、`test:workspace` 通过。全部为本地 Mock 模型、本地 MCP fixture、真实文件与系统程序；真实厂商 API 与第三方生产 MCP 未测。
 
 ## GPT 审核（2026-11-05）后的状态
 
@@ -30,9 +30,10 @@
 | 1 外部工具权限与费用保护（P1-01、P1-03） | **完成** `de11c14`：工具风险级别；有副作用工具的手动调用需服务端一次性确认（绑定工具+参数，120 秒，单次）；运行中外部/代码执行工具需 `approveExternalTools`；连接测试记入 schema v3 `system_usage`（未知费用为 null） |
 | 修复 A：账本写入失败保护 | **完成** `9577311`：`lib/usage-ledger.js`，写入失败写审计事件 `usage_ledger_write_failed`（不含错误原文/密钥），接口返回 `usageRecorded:false` + `usageWarning`；未知费用仍为 null |
 | CI 核查 | `de11c14` → run 42020725591；`69308c6` → run 42020974113：tests / browser / container 均 success；tests 187 项中 186 通过、0 失败、1 跳过（代码执行隔离测试：GitHub Runner 不允许非特权命名空间，工具按设计拒绝运行） |
+| 修复 A 后续（GPT 第三轮） | **完成** `06b540f`：审计成功与否如实表达（`audited`）；账本写入失败的试连标为 `usageRecorded:false`、连接状态为 `untested`（V2 执行校验仍拦截），保存前试连不缓存为通过；接口级回归测试。CI：`9577311` run 42022572783 因新推送被取消（cancelled，非失败）；`6381aac` run 42022674886 tests/browser/container 均 success，188 项中 187 通过、0 失败、1 跳过（代码执行隔离，Runner 限制） |
 | 6 部署文档与服务器适配（P1-04、P2-01、P2-02） | 已提交 `69308c6`；**负责人指令：部署文档后续移交部署分支，本开发分支不再承担部署**：并行部署手册按 Debian 13 / 2GB / S-UI / Caddy / 独立 Node 24 / systemd 修订，含资源限制与升级步骤；文档矛盾已统一 |
 | P1-02 代码执行 | 保持：生产关闭（D1=a），能力中心已标明“非强安全沙箱” |
-| 2 动态 AI 团队草案生成（D2） | **下一步，未开始（因上下文不足，未匆忙开工）**。规格见下方「工作单元 2 实施说明」。要求：规则引擎无合适模板时，经用户批准（显示预计费用、独立 Token/金额上限）调用一次模型；输出经结构化校验后作为可编辑草案；模型不能创建任务或扩大权限/预算；记录用量；失败回退手工/通用模板。建议实现：`POST /api/v2/intake/ai-draft` 复用 `_approval/_reserve/_settle` 式预留结算并写入 `system_usage`（kind `intake_draft`），用 `normalizeProject` 校验后返回草案，前端在向导第 2 步“没有合适模板”时提供入口 |
+| 2 动态 AI 团队草案生成（D2） | **GPT 已批准，移交 Codex 执行（Claude 本会话上下文不足，未开工）**。另按 GPT 要求：不要复制 ProjectEngine 私有方法，先把预算校验/预留/结算提取为共享模块（如 `lib/budget.js`）并加回归测试，ProjectEngine 改用该模块且原有测试全部通过。规格见下方「工作单元 2 实施说明」。要求：规则引擎无合适模板时，经用户批准（显示预计费用、独立 Token/金额上限）调用一次模型；输出经结构化校验后作为可编辑草案；模型不能创建任务或扩大权限/预算；记录用量；失败回退手工/通用模板。建议实现：`POST /api/v2/intake/ai-draft` 复用 `_approval/_reserve/_settle` 式预留结算并写入 `system_usage`（kind `intake_draft`），用 `normalizeProject` 校验后返回草案，前端在向导第 2 步“没有合适模板”时提供入口 |
 | 3 备用模型自动切换 | 未开始。仅切换到本次运行已批准（含价表）的备用连接；未批准则暂停提示；不重放有副作用的工具调用 |
 | 4 联网检索 | 未开始。优先复用 MCP（远程 HTTP 或审核目录中的 fetch）；保存来源、标题、链接、时间与执行记录；无配置时明确不可用 |
 | 5 Office 文件编辑 | 未开始。先 DOCX：读取→定位→编辑→另存新版本→保留原件→重新解析验证→下载 |

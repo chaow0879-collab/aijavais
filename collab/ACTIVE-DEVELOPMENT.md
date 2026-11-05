@@ -4,7 +4,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 当前开发者 | Claude Code（云端会话） |
+| 当前开发者 | Claude Code（云端会话）→ **工作单元 2 起移交 Codex**（从最新提交继续；Claude 恢复后再接 Codex 的工作，同一时间只有一方写本分支） |
 | 开发分支 | `feat/claude-v2-followup` |
 | 基线提交 | `29630a28bad51e6adabec83abdef46821e4ebe79`（Codex 最终交接文档提交；完整代码检查点 `3623247266c29284ce86828c9da8b586ac7b22ae`） |
 | 已停止写入 | `feat/codex-v2-integration`（Codex，2026-11-05 核实最新提交仍为 `29630a2`） |
