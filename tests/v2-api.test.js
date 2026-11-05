@@ -92,10 +92,14 @@ test('V2 guards: tool grants, Skill persistence, conservative intake and legacy 
   const tool = await S.call('POST', '/api/v2/tools/call', { toolId, args: { text: 'real builtin' }, allowedTools: [toolId] }); assert.equal(tool.status, 200, tool.text); assert.equal(tool.json.result.executionMode, 'builtin');
   const skill = { skillId: 'api-check', name: 'API check', version: '1.0.0', steps: [{ type: 'check', check: 'nonempty' }] };
   assert.equal((await S.call('POST', '/api/v2/skills', skill)).status, 200);
-  const request = { templateId: 'ppt-production', description: '请创建一份项目计划演示文稿并注明验收标准。', availableTools: [{ id: 'pptx_generation', available: true, verified: true }, { id: 'chart_generation', available: true, verified: true }], availableModels: [{ connectionId: 'fake', ready: true }] };
+  const request = { templateId: 'ppt-production', description: '请创建一份项目计划演示文稿并注明验收标准。', availableTools: [{ id: 'pptx_generation', available: true, verified: true }, { id: 'slide_render', available: true, verified: true }], availableModels: [{ connectionId: 'fake', ready: true }] };
   const planned = await S.call('POST', '/api/v2/intake/plan', request); assert.equal(planned.status, 200, planned.text); assert.equal(planned.json.plan.readyForAutomatedExecution, false);
   assert.ok(!planned.json.plan.missingTools.includes('pptx_generation'), 'server actually registers the document tool');
-  assert.ok(planned.json.plan.missingTools.includes('chart_generation'), 'client claims never register a missing chart generator');
+  // chart_generation is now a real built-in tool; slide_render is still unimplemented, so a client claim must not register it.
+  assert.ok(!planned.json.plan.missingTools.includes('chart_generation'), 'server actually registers the chart tool');
+  const spoof = await S.call('POST', '/api/v2/intake/plan', { templateId: 'deep-research', description: '请研究行业趋势并给出带来源的结论。', availableTools: [{ id: 'web_search', available: true, verified: true }] });
+  assert.ok(spoof.json.plan.missingTools.includes('web_search'), 'client claims never register a missing search tool');
+  assert.equal(spoof.json.toolCheck.find(x => x.intakeId === 'web_search').status, 'not_implemented');
   const malformed = await S.call('POST', '/api/v2/intake/plan', { ...request, selectedRoleIds: 'not-an-array' }); assert.equal(malformed.status, 400);
   const draft = await S.call('POST', '/api/v2/intake/projects', request); assert.equal(draft.status, 201, draft.text);
   const unavailable = await S.call('POST', '/api/v2/projects/' + draft.json.project.projectId + '/runs', {}); assert.ok(unavailable.status >= 400);

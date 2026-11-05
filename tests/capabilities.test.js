@@ -17,7 +17,8 @@ test('capabilities: kinds are distinct and nothing is "available" without a regi
   const by = id => capabilities.find(c => c.id === id);
   assert.equal(by('docx-generate').status, 'available');
   assert.equal(by('xlsx-generate').status, 'needs_setup', 'xlsx tool not registered in this fixture');
-  for (const id of ['code-execution', 'charts', 'office-render', 'calculation', 'image-read']) assert.equal(by(id).status, 'not_implemented', id);
+  for (const id of ['code-execution', 'office-render', 'diagrams', 'image-read']) assert.equal(by(id).status, 'not_implemented', id);
+  for (const id of ['charts', 'calculation']) { assert.equal(by(id).kind, 'builtin'); assert.equal(by(id).status, 'needs_setup', id + ' tool not registered in this fixture'); }
   assert.equal(by('web-search').kind, 'external'); assert.equal(by('web-search').status, 'not_implemented');
   assert.equal(by('mcp:fx:echo').kind, 'mcp');
   const skill = by('skill:review');
@@ -60,7 +61,7 @@ test('V2 HTTP: capability center and readiness are admin-only and reflect the li
   assert.equal((await S.call('GET', '/api/v2/readiness', undefined, { cookie: false })).status, 401);
   const caps = await S.call('GET', '/api/v2/capabilities');
   assert.equal(caps.status, 200);
-  for (const id of ['file-upload-read', 'docx-generate', 'xlsx-generate', 'pptx-generate']) assert.equal(caps.json.capabilities.find(c => c.id === id).status, 'available', id);
+  for (const id of ['file-upload-read', 'docx-generate', 'xlsx-generate', 'pptx-generate', 'calculation', 'charts']) assert.equal(caps.json.capabilities.find(c => c.id === id).status, 'available', id);
   assert.ok(caps.json.capabilities.some(c => c.kind === 'skill'));
   const r = await S.call('GET', '/api/v2/readiness?scenarios=basic,files');
   assert.equal(r.json.items.find(i => i.id === 'admin').status, 'ok');
