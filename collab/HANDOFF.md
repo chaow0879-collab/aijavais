@@ -1,3 +1,21 @@
+# 最新：AUD-68-SEC-01 最小权限返工，待人工复审
+
+本轮分支 `feat/codex-v2-p1-ledger-recovery`，唯一写入者Codex，精确返工基线 `c4d0a8c53a54453535125b3ade5cef91a4801a11`。原候选独立审计REJECT，未ACCEPT；本轮仅修备份创建权限P1。最新40位候选SHA和匹配SHA的Actions链接以Issue #6/#8同一份最终AGENT_REPORT_V1为准。
+
+实际代码：`lib/project-store.js`增加小型迁移备份函数。VACUUM前用mkdtemp创建并验证0700私有目录，文件在其中生成，chmod及lstat确认普通文件0600后，同文件系统hardlink原子、无覆盖地发布到原备份名，再清理临时副本与空目录。不修改既有0755 DATA权限，不改变进程全局umask；权限/安全发布不支持时停止迁移。失败保留私有暂存目录及/或正式600备份；已有正式备份不覆盖。schema仍v4，无状态机/ProjectEngine/费用规则变化。
+
+新增10项临时SQLite与子进程安全测试：既有DATA0755+umask022；VACUUM前目标不存在且私有目录700；真实VACUUM完成后、chmod前观察到初始644且目录700；发布前/后文件600；chmod抛错/无效chmod、发布失败、发布后清理失败、目标EEXIST、迁移SQL失败与不安全暂存目录拒绝。两次SIGKILL分别发生在真实同步VACUUM完成后chmod前，以及chmod后发布前，不冒称在SQLite内部执行中强杀。原v3及完整备份经只读quick_check和schema/项目/系统账单/设置/迁移记录快照核对保留。
+
+本地实际验证：新安全测试10通过/0失败/0跳过；原迁移/恢复/ProjectEngine相关40通过；完整`npm test` **248通过/0失败/0跳过/0取消**（Node v24.22.1）。`npm run test:intake`真实Chromium回归通过，4次本地Mock草案调用、409重试/只读查询增量0。GitHub Actions最终结果见上述双Issue报告，不能用本地248冒充远程计数。上轮238/237通过/1跳过是原c4d0a8c CI由独立审计读取的历史结果，不是本轮CI计数。
+
+回滚与失败处置：原迁移事务/备份名和v3→v4数据保留机制不变。只对临时DB验证，未迁移生产。失败后先停唯一实例，归档原DATA与`.migration-backup-*`/正式备份，临时文件可能不完整，必须只读quick_check并核验版本/数据再决定恢复；不自动删除或公开暂存文件。文件系统不支持hardlink时失败关闭，不回退覆盖式rename；DATA写权限须由可信应用/管理员控制。已有v4新调用时仍不能丢失幂等墓碑恢复旧库上线。详情见docs/LEDGER-RECOVERY.md。
+
+限制/门禁：真实收费API、真实账单、生产迁移/重启、main合并、服务器部署、Caddy/S-UI全部NOT_RUN；#7/#9未改。最终报告后停止写入；只有项目负责人在GPT会话明确说“开始审计”后，GPT才复审新增差异，不自动审计/ACCEPT/关闭Issue/唤醒Claude。
+
+---
+
+以下为原联合整改历史交接；当前状态以上述最小返工为准。
+
 # 当前：第十轮 #6 + #8 Codex整改中
 
 分支 `feat/codex-v2-p1-ledger-recovery`；精确起点 `b71faaa65bb66e04ea2a015c9238a3a129bdb68e`（保留Claude已验收#5及#5-F的全部实现）。本轮不延用落后两提交的Codex旧分支。唯一负责人Codex，Claude待命。设计先行，见[LEDGER-RECOVERY](../docs/LEDGER-RECOVERY.md)。以下历史记录不能覆盖最新GitHub第十轮授权。

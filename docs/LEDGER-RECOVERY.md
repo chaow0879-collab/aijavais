@@ -1,6 +1,6 @@
 # #6 + #8 持久请求与异常账本设计
 
-状态：已实施，待独立审计；最终验证结果另见 HANDOFF。授权：Issue #6 第十轮评论 6660869089；唯一开发者 Codex。分支 feat/codex-v2-p1-ledger-recovery，精确基线 b71faaa65bb66e04ea2a015c9238a3a129bdb68e。仅测试临时 SQLite，无生产迁移授权。
+状态：原候选c4d0a8c经独立审计REJECT；本轮仅返工AUD-68-SEC-01，等待人工触发新增差异复审；验证结果见HANDOFF与Issue #6/#8。授权：Issue #6 第十轮评论 6660869089；唯一开发者 Codex。分支 feat/codex-v2-p1-ledger-recovery，精确基线 b71faaa65bb66e04ea2a015c9238a3a129bdb68e。仅测试临时 SQLite，无生产迁移授权。
 
 ## Schema v4
 
@@ -18,7 +18,7 @@
 
 ## 迁移与历史
 
-沿用VACUUM INTO一致备份、0600、schema_migrations、PRAGMA user_version、事务和schema_newer失败关闭。建表与历史转换在同一迁移事务内。v3 intake_draft reserved没有派发证据，一律保守恢复为未知待核对，绝不归零。
+VACUUM写入前先通过mkdtemp创建并校验0700私有暂存目录（兼容既有0755 DATA与umask022）；私有目录中的备份chmod并校验为普通0600文件后，使用同文件系统原子hardlink无覆盖发布到原`projects.sqlite.pre-vN-时间.bak`，最后删除暂存副本/空目录。进程umask保持不变；文件系统不支持安全发布或权限校验失败则停止迁移，不退回到覆盖式rename。保留schema_migrations、PRAGMA user_version、事务和schema_newer失败关闭。建表与历史转换在同一迁移事务内。v3 intake_draft reserved没有派发证据，一律保守恢复为未知待核对，绝不归零。
 
 所有可识别历史intake请求（含成功/失败）建立永久墓碑：若旧记录无owner，以保留主体*匹配任意真实管理员，拒绝旧ID再次收费；旧摘要不可重建，任何参数都拒绝。历史重复ID的所有账行完整保留，仅一个墓碑关联其中一行，其他行仍可单独查询核对；不删除或覆盖账单。无requestId的历史行仍恢复异常账本，但无法重建丢失的键，列为历史限制。新请求主体禁止使用保留*。
 
@@ -44,3 +44,12 @@ Mock模型+临时SQLite断言底层派发次数：并发同ID、异参、跨owne
 设计提交：36e2c7a96cd107e9b88ed74eae1abaee758a75f1。事务/恢复实现提交：84dfd8ddd8cf06aaeb4bcf78857b79bf1e946191，相关54项回归通过（本地Mock、临时SQLite）。新增服务测试实际派发1002次后最早ID重启重试增量0；强杀窗口Mock计数为claimed=0/dispatching=0/called=1，恢复后增量0；HTTP服务强杀后底层Mock请求总数仍1。最终完整测试、只读UI和CI见HANDOFF及Issue #6/#8交付报告。
 
 运行中已验证本地免费调用保留费用0（#5）；启动对dispatching一律按未知恢复，包括本地目标，以显式状态机的保守规则处理崩溃证据，不将legacy cost0当作未派发证明。恢复仅处理非终态/遗留预留，不改变已完成的本地0费用账单。
+
+
+## AUD-68-SEC-01 权限返工边界
+
+原实现先VACUUM到可遍历DATA目录、后chmod，存在初始0644窗口；本轮将整个写入和权限设置放进创建时即私有的0700目录。所有备份发布前必须通过0600验证，旧备份不可覆盖。成功才清理暂存副本；chmod、发布/清理失败或进程异常退出时保留私有暂存目录及/或正式0600备份，迁移未开始时原v3保持原样，迁移SQL失败仍按原事务回滚。
+
+失败后先停止唯一实例，保留`.migration-backup-*`及正式备份，使用只读SQLite `quick_check`、schema版本及关键数据核验完整性。中断期间暂存文件可能不完整，不能直接把它作为有效备份回滚；不要自动删除，也不要未经核验移到公开目录。DATA必须由应用/可信管理员控制写入，0755可读遍历旧目录有本补丁保护；不支持不受信用户可写父目录的路径替换攻击。本轮仅在临时目录测试，不修改生产DATA。
+
+第十四轮人工门禁：双Issue交付新完整SHA及CI后Codex停止；只有负责人在GPT会话明确说“开始审计”，GPT才复核。不得自动触发审计、ACCEPT、关闭Issue、唤醒Claude或开始#7/#9。
