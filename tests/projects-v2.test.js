@@ -8,7 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { spawnSync } = require('node:child_process');
-const { ProjectStore } = require('../lib/project-store');
+const { ProjectStore, SCHEMA_VERSION } = require('../lib/project-store');
 const { ProjectEngine } = require('../lib/project-engine');
 
 function fixture(t, { callModel, pricing = 'local', tools, skills } = {}) {
@@ -245,7 +245,7 @@ test('V2 dead-PID lock can be recovered; future database schema fails closed and
   const child = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' });
   fs.writeFileSync(path.join(f.dir, 'projects.sqlite.lock'), JSON.stringify({ pid: Number(child.stdout), token: 'dead-owner' }), { mode: 0o600 });
   const recovered = new ProjectStore({ dir: f.dir });
-  assert.equal(recovered.schemaVersion, 1);
+  assert.equal(recovered.schemaVersion, SCHEMA_VERSION);
   recovered.close();
   const future = new DatabaseSync(path.join(f.dir, 'projects.sqlite'));
   future.exec('PRAGMA user_version=999'); future.close();

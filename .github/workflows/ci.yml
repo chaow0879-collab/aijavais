@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      - name: Install pdftotext so PDF reading is tested for real
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
       - name: Unit and HTTP integration tests (local protocol fixtures; no paid APIs)
         run: npm test
   browser:
@@ -57,6 +59,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build independent production image
         run: docker build --tag aijavais:ci .
+      - name: Verify pdftotext is present in the image
+        run: docker run --rm --entrypoint pdftotext aijavais:ci -v
       - name: Start isolated backend and verify health (no public host port)
         run: |
           docker run --detach --name aij-ci aijavais:ci
