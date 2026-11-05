@@ -1,3 +1,14 @@
+# 最新：第十七轮 #14 五包交付（Claude Code → 集中独立审计 #2）
+
+- **M1 #7 P1**：基线动态复现非合作取消后第4个请求被派发（`peakUnderlyingInFlight=4`）。整改：容量按底层真实结束释放；取消/超时/断连在短宽限后返回`dispatch_outstanding`（cost null、上界、ledgerId），底层结束时同一ledgerId迟到结算一次；引用型超时计时器；有界`close()`不释放仍在途名额、关闭后不写库；只读`GET /api/v2/intake/ai-draft/status`。见docs/AI-DRAFT.md。
+- **M2 #9 P2-01/02/04**：`getCapabilities()`只认当前可用；`planFrom()`不再凭`lastTest.ok`（基线可复现未记账试连被当作已验证本地免费目标）；草案`toolRecommendations`/`toolPermissions.granted=[]`；工作台模型标签按当前状态。
+- **M3 #9 P2-03**：`billingFact`/`vendorInvoiceReconciled:false`贯穿HTTP/SQLite/UI；工作台缺失费用不再显示0.000000；真实server.js端到端费用矩阵。
+- **M4 #2 P2**：发现`npm run db:backup`与未用`backup(target)`同样“先写后chmod”（复现0644窗口）及覆盖竞态；改为0700暂存+0600+quick_check+link无覆盖发布；只读遗留物盘点`npm run db:backup-inventory`。见docs/BACKUP-OPERATIONS.md。
+- **M5**：三行业夹具+真实server/HTTP/SQLite/导出/独立解析E2E、Chromium三行业、20种子故障注入、回归护栏；#4重跑手册docs/INDUSTRY-MOCK-RUNBOOK.md（开发者自测，不是#4独立验收）。
+- 本地（Node v24.22.1）：`npm test` 276/276、test:ui/workspace/intake/industry全部通过。远程CI以#14最终报告链接为准。
+
+---
+
 # 最新：AUD-68-SEC-01 最小权限返工，待人工复审
 
 本轮分支 `feat/codex-v2-p1-ledger-recovery`，唯一写入者Codex，精确返工基线 `c4d0a8c53a54453535125b3ade5cef91a4801a11`。原候选独立审计REJECT，未ACCEPT；本轮仅修备份创建权限P1。最新40位候选SHA和匹配SHA的Actions链接以Issue #6/#8同一份最终AGENT_REPORT_V1为准。
