@@ -154,6 +154,23 @@
     if (missingTools.length) warnings.push('尚未验证所需工具：' + missingTools.join('、') + '。工具未就绪时不能宣称已真实完成文件或工程交付');
     if (t.disclaimer) warnings.push(t.disclaimer);
     const assignments = roles.filter(r => r.modelConnectionId);
+    const connectionMap = new Map((Array.isArray(input.availableModels) ? input.availableModels : []).map(c => [c.connectionId,c]));
+    const freeOnly = input.budgetMode === 'free_only';
+    const modelIssues = [];
+    for (const role of roles) {
+      if (!role.modelConnectionId) { modelIssues.push(role.name + '：未分配模型'); continue; }
+      const c = connectionMap.get(role.modelConnectionId);
+      if (!c) { modelIssues.push(role.name + '：未检测到所选模型连接的可信配置'); continue; }
+      if (!c.enabled || !c.ready) modelIssues.push(role.name + '：模型已停用或尚未就绪');
+      const verified = new Set(c.verifiedCapabilities || []);
+      const notVerified = (role.capabilities || []).filter(x => !verified.has(x));
+      if (notVerified.length) modelIssues.push(role.name + '：必要能力尚未实测 ' + notVerified.join('、'));
+      if (freeOnly && !((c.pricingMode === 'local' && c.localityVerified === true) ||
+        (c.pricingMode === 'free_tier' && c.freeEligibilityVerified === true))) {
+        modelIssues.push(role.name + '：尚未确认免费资格，零额外费用模式下不得自动执行');
+      }
+    }
+    if (modelIssues.length) warnings.push(...modelIssues);
     const plan = {
       schemaVersion: 1,
       projectType: t.id,
@@ -171,10 +188,12 @@
       steps,
       requiredTools,
       missingTools,
+      budgetMode: freeOnly ? 'free_only' : 'user_review',
+      modelIssues,
       standards: roles.map(r => ({ roleId: r.id, roleName: r.name, duty: r.duty, acceptanceStandard: r.standard })),
       customizedRoles: customRoles,
       warnings,
-      readyForAutomatedExecution: !!steps.length && !!roles.length && !missingTools.length && assignments.length === roles.length,
+      readyForAutomatedExecution: !!steps.length && !!roles.length && !missingTools.length && !modelIssues.length && assignments.length === roles.length,
       state: 'draft',
       note: '此计划是立项指导，不代表已执行模型调用或工具调用。'
     };
@@ -191,7 +210,8 @@
       const claimedHits = [...required].filter(x => !caps.has(x) && claimed.has(x));
       const missing = [...required].filter(x => !caps.has(x) && !claimed.has(x));
       const available = c.enabled !== false && c.ready === true;
-      const costOk = !freeOnly || (FREE.has(c.pricingMode) && c.freeEligibilityVerified === true);
+      const costOk = !freeOnly || (c.pricingMode === 'local' && c.localityVerified === true) ||
+        (c.pricingMode === 'free_tier' && c.freeEligibilityVerified === true);
       const eligible = available && costOk && !missing.length;
       const score = Math.max(0, Math.min(100, Math.round(verifiedHits.length * 22 + claimedHits.length * 9 + (available ? 20 : 0) + (c.lastTest && c.lastTest.ok ? 15 : 0) + (FREE.has(c.pricingMode) ? 5 : 0) - missing.length * 20)));
       return { connectionId: c.connectionId, displayName: c.displayName || c.connectionId, eligible, score,
