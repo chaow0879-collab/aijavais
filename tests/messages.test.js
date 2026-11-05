@@ -177,3 +177,14 @@ test('返回值是副本：外部修改不影响总线内部状态', () => {
   assert.equal(real.status, 'created'); assert.equal(real.content.text, 'x'); assert.equal(real.from, 'claude');
   bus.list('t1')[0].status = 'failed'; assert.equal(bus.get('t1', m.messageId).status, 'created');
 });
+
+test('collab/protocol/message-schema-v1.json 与实现保持一致', () => {
+  const fs = require('fs'), path = require('path');
+  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'collab', 'protocol', 'message-schema-v1.json'), 'utf8'));
+  assert.deepEqual(schema.properties.type.enum, MESSAGE_TYPES);
+  assert.deepEqual(schema.properties.status.enum, MESSAGE_STATUSES);
+  assert.deepEqual([...schema.required].sort(), ['v', 'messageId', 'threadId', 'taskId', 'runId', 'from', 'to', 'type', 'round', 'createdAt', 'content', 'status'].sort());
+  assert.ok(validateEnvelope(schema.example).ok, '文档示例必须是合法信封');
+  const real = mk().send({ taskId: 't1', from: 'claude', to: 'chatgpt', type: 'request', content: txt('x') }).message;
+  for (const k of schema.required) assert.ok(k in real, k);
+});

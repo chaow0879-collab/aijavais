@@ -12,6 +12,31 @@
 
 局限：固定 IP 只保证“连到的就是校验过的地址”，不能防范被允许的公网主机本身被攻陷；高安全场景请再配合网络出口策略（防火墙 / 出口代理）。
 
+### 默认模式 vs 严格模式（请区分）
+- **默认（未设置任何白名单）**：允许任意**公网 https:443** 主机，前提是 DNS 解析出的所有地址都是公网地址。适合开箱即用，但不限定“能连哪些公网主机”。
+- **严格模式**：设置 `ALLOWED_BASE_HOSTS` 后，只允许官方主机 + 列表内主机；其余一律拒绝。公开部署 / 多人共用请使用严格模式。
+- 无论哪种模式，私网 / 回环 / 元数据地址都不会被访问，除非用 `LOCAL_MODEL_TARGETS` 逐条显式声明。
+
+## 流式响应与超时
+| 规则 | 说明 |
+|---|---|
+| DNS 超时 | 解析超过 5 秒失败，不无限等待 |
+| 响应体上限 | pinnedFetch 对单次响应总量有上限（默认 16MB）；错误响应体只读前 4KB |
+| SSE 解析 | 按规范合并多行 `data:`；单事件 ≤ 1MB，单次调用 ≤ 8MB，单任务累计 ≤ 32MB，超限即中断并记为 `model_error` |
+| 总超时 | 单次调用受 `timeoutSec` 限制，超时同样记为 `model_error` |
+| 启动日志 | 局域网模式不再在日志里打印管理令牌（令牌见 `data/config.json`） |
+| 测试专用 | `AIJ_TEST_TIMEOUT_MS`、`AIJ_TEST_MAX_CALL_BYTES` 仅供自动化测试缩短限制，生产不要设置 |
+
+## 事件真实性
+- 事件的 `source`（server / external / demo）与 `verification`（observed / reported / simulated）只由服务端按来源赋值，不读取客户端传来的值。
+- 外部上报不能使用供应商 ID 或 `demo-` 前缀的 `agentId`，也不能与已存在的不同来源 agent 同名；支持 `clientEventId` 去重。
+- 只有 `source=server` 的真实模型调用计入 `totals.calls / tokens / errors`；外部与演示事件只计事件数；厂商返回的用量与估算值（`estimatedTokens`）分开统计。
+
+## 当前已知缺口（后续批次）
+- SSE 分级权限（匿名 / 观看者 / 管理员）与 `INGEST_TOKEN` 尚未实现：目前 `/api/events`、`/api/event` 沿用原有访问方式，**勿将服务直接暴露到公网**。
+- `AuthThrottle` / `RateLimiter` 已实现并有单元测试，但尚未接入 HTTP 入口。
+- 任务与事件的落盘大小 / 隐私策略尚未收紧（第三批）。
+
 ## 密钥
 | 规则 | 说明 |
 |---|---|
