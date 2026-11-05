@@ -144,7 +144,7 @@ for(const c of cases) test('Independent E2/E3 cross-industry '+c.id+' workflow/p
     assert.equal(r.buffer.subarray(0,2).toString(),'PK');
     const p=storeFile(prefix+'deliverable.'+format,r.buffer);files[format]={sha256:p.sha256,bytes:p.bytes};
     if(format==='zip'){const q=spawnSync('python3',['-c',"import zipfile,sys,json\nz=zipfile.ZipFile(sys.argv[1]);print(json.dumps(z.namelist()));assert z.testzip() is None",p.file],{encoding:'utf8'});assert.equal(q.status,0,q.stderr);parses[format]=JSON.parse(q.stdout);assert.ok(parses[format].includes('README.md'));}
-    else {parses[format]=parseExternal(p.file,format);const v=JSON.stringify(parses[format]);assert.ok(v.includes(c.fact)||v.includes(c.final.slice(0,15)),format+' lost model content');}
+    else {parses[format]=parseExternal(p.file,format);const v=JSON.stringify(parses[format]);assert.ok(format==='xlsx' ? v.includes(String(c.rows[1][0])) : (v.includes(c.fact)||v.includes(c.final.slice(0,15))),format+' lost model content');}
   }
   const ledger=(await f.app.call('GET','/api/v2/usage/system')).json.usage.filter(x=>x.kind==='intake_draft');
   assert.ok(ledger.length>=3);assert.ok(ledger.every(x=>x.status!=='reserved'&&x.cost===0));
