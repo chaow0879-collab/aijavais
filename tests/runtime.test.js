@@ -120,7 +120,7 @@ test('失败路径：供应商报错 → model_error + 任务 error + 立即落�
   const st = await state(S);
   assert.equal(st.totals.errors, 1); assert.equal(agentOf(st, pid).status, 'error');
   // 任务结束后立即落盘，无需等待防抖定时器
-  const disk = JSON.parse(fs.readFileSync(path.join(S.dir, 'tasks.json'), 'utf8'));
+  const disk = H.dbDocs(S.dir, 'tasks');
   assert.equal(disk.find(x => x.id === id).status, 'error');
 });
 
@@ -133,7 +133,7 @@ test('重启：运行中的任务在停止时标记为 interrupted 并落盘，�
   await sleep(400);
   assert.equal((await call(S.port, 'GET', '/api/runs/' + id)).json.status, 'running');
   await S.kill();
-  const disk = JSON.parse(fs.readFileSync(path.join(S.dir, 'tasks.json'), 'utf8'));
+  const disk = H.dbDocs(S.dir, 'tasks');
   assert.equal(disk.find(x => x.id === id).status, 'interrupted');
   S = await boot([m.port], S.dir);
   const r = (await call(S.port, 'GET', '/api/runs/' + id)).json;
@@ -178,7 +178,7 @@ test('A→B→A 经消息总线：岗位实例、线程、回复关系、投递�
   assert.deepEqual(handoffs.map(h => [h.agentId, h.to, h.roleId, h.metadata.toRoleId]), [[a, b, 'drafter', 'reviewer'], [b, a, 'reviewer', 'drafter']]);
   assert.ok(run.events.filter(e => e.eventType === 'model_start').every(e => e.agentInstanceId && e.roleId));
   assert.equal(run.messageStats.total, 4);
-  assert.ok(!fs.readFileSync(path.join(S.dir, 'tasks.json'), 'utf8').includes('threadId'), '消息信封不落盘（只保存统计）');
+  assert.ok(!JSON.stringify(H.dbDocs(S.dir, 'tasks')).includes('threadId'), '快速模式的消息信封不写入任务记录（只保存统计）');
 });
 
 test('同一个模型连接承担起草与审核两个岗位：照样走消息总线；失败时在途消息标记 failed', async t => {

@@ -141,8 +141,12 @@ test('零模型启动；简易接入（获取模型列表 → 测试 → 保存�
   assert.equal(tf.json.ok, false); assert.match(tf.json.hint, /API Key 无效/); assert.equal(tf.json.connection.status, 'error');
   // 任何接口都不返回密钥明文
   for (const u of ['/api/models', '/api/config', `/api/models/${id}`]) assert.ok(!(await call(S.port, 'GET', u)).text.includes('bad-key'), u);
-  assert.equal(fs.statSync(path.join(S.dir, 'credentials.json')).mode & 0o777, 0o600);
-  assert.ok(!fs.readFileSync(path.join(S.dir, 'models.json'), 'utf8').includes('bad-key'));
+  assert.equal(fs.statSync(path.join(S.dir, 'aijavais.db')).mode & 0o777, 0o600);
+  assert.equal(fs.statSync(path.join(S.dir, 'master.key')).mode & 0o777, 0o600);
+  assert.ok(!JSON.stringify(H.dbAll(S.dir, 'SELECT * FROM model_connections')).includes('bad-key'), '注册信息不含密钥');
+  const enc = H.dbAll(S.dir, 'SELECT enc FROM credentials');
+  assert.equal(enc.length, 1); assert.match(enc[0].enc, /^v1:[a-f0-9]{8}:/); assert.ok(!enc[0].enc.includes('bad-key'), '凭证以 AES-256-GCM 密文保存');
+  assert.ok(!fs.readFileSync(path.join(S.dir, 'aijavais.db')).includes('bad-key'), '数据库文件里没有明文 Key');
 });
 
 test('停用 / 启用 / 删除：影响预览；删除默认模型改用替代；删除活跃模型需确认且不影响其它模型；系统可重启', async t => {
@@ -187,13 +191,27 @@ test('停用 / 启用 / 删除：影响预览；删除默认模型改用替代�
   assert.equal((await call(S.port, 'POST', '/api/run', { task: 'z', mode: 'single' })).json.code, 'connection_missing');
 });
 
-test('旧配置迁移：config.json 里的 providers 自动迁移为模型连接，密钥移入 credentials.json', async t => {
-  const S = await boot(0, null, { token: 'tok-abcdef123456', settings: {}, providers: [{ id: 'claude', label: 'Claude', type: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'm', apiKey: 'sk-legacy-12345678', envKey: '', enabled: true }] });
-  t.after(async () => { await S.kill(); fs.rmSync(S.dir, { recursive: true, force: true }); });
+test('旧版数据迁移：JSON 文件自动导入数据库（凭证加密），原文件移入备份目录', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aij-mig-'));
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ token: 'tok-abcdef123456', settings: { maxTokens: 2048 }, ingestTokens: [], providers: [{ id: 'claude', label: 'Claude', type: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'm', apiKey: 'sk-legacy-12345678', envKey: '', enabled: true }] }));
+  fs.writeFileSync(path.join(dir, 'models.json'), JSON.stringify({ version: 1, connections: [{ connectionId: 'mc_aaaaaa', providerId: 'custom', protocol: 'openai', baseUrl: 'https://gw.example.com/v1', modelId: 'x', displayName: '网关模型', enabled: true, capabilities: [], pricingMode: 'unknown', createdAt: 1, updatedAt: 1 }] }));
+  fs.writeFileSync(path.join(dir, 'credentials.json'), JSON.stringify({ mc_aaaaaa: { apiKey: 'sk-gw-legacy-999999', envKey: '' } }));
+  fs.writeFileSync(path.join(dir, 'tasks.json'), JSON.stringify([{ id: 'abc123', kind: 'internal', title: '旧任务', status: 'running', steps: [], createdAt: 5 }]));
+  const S = await boot(0, dir);
+  t.after(async () => { await S.kill(); fs.rmSync(dir, { recursive: true, force: true }); });
   const list = (await call(S.port, 'GET', '/api/models')).json.models;
-  assert.deepEqual(list.map(c => [c.connectionId, c.providerId, c.hasKey]), [['claude', 'anthropic', true]]);
-  const conf = JSON.parse(fs.readFileSync(path.join(S.dir, 'config.json'), 'utf8'));
-  assert.ok(!('providers' in conf), '旧字段已移除'); assert.ok(!('token' in conf), '旧版管理令牌已停用并从配置中移除（统一密码登录）');
-  assert.ok(!fs.readFileSync(path.join(S.dir, 'config.json'), 'utf8').includes('sk-legacy'));
-  assert.equal(JSON.parse(fs.readFileSync(path.join(S.dir, 'credentials.json'), 'utf8')).claude.apiKey, 'sk-legacy-12345678');
+  assert.deepEqual(list.map(c => [c.connectionId, c.hasKey]).sort(), [['claude', true], ['mc_aaaaaa', true]]);
+  assert.equal((await call(S.port, 'GET', '/api/config')).json.settings.maxTokens, 2048, '设置已导入');
+  const old = (await call(S.port, 'GET', '/api/runs/abc123')).json;
+  assert.equal(old.status, 'interrupted', '升级时未完成的任务标记为中断');
+  for (const f of ['config.json', 'models.json', 'credentials.json', 'tasks.json']) assert.ok(!fs.existsSync(path.join(dir, f)), f + ' 已移走');
+  const bdir = path.join(dir, 'backups', fs.readdirSync(path.join(dir, 'backups'))[0]);
+  assert.deepEqual(fs.readdirSync(bdir).sort(), ['config.json', 'credentials.json.enc', 'models.json', 'tasks.json']);
+  assert.ok(!fs.readFileSync(path.join(bdir, 'credentials.json.enc'), 'utf8').includes('sk-gw-legacy'), '凭证备份也是密文');
+  assert.ok(!fs.readFileSync(path.join(dir, 'aijavais.db')).includes('sk-legacy'), '数据库里没有明文 Key');
+  // 再次启动不重复导入
+  await S.kill();
+  const S2 = await boot(0, dir);
+  t.after(async () => { await S2.kill(); });
+  assert.equal((await call(S2.port, 'GET', '/api/models')).json.models.length, 2);
 });

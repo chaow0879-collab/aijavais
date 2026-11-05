@@ -253,7 +253,7 @@ test('上报凭证与登录会话严格分离；凭证可创建 / 吊销；上�
   assert.equal((await H.call(S.port, 'GET', '/', undefined, { cookie: false, headers: ING })).status, 302, '上报凭证不能看大屏');
   const c = await S.call('POST', '/api/ingest-tokens', { name: 'office-pc', agents: ['office-ai'] });
   assert.equal(c.status, 200);
-  assert.ok(!fs.readFileSync(path.join(S.dir, 'config.json'), 'utf8').includes(c.json.token));
+  assert.ok(!fs.readFileSync(path.join(S.dir, 'aijavais.db')).includes(c.json.token), '数据库只存凭证哈希');
   const T2 = { 'x-ingest-token': c.json.token };
   const rs = await Promise.all(Array.from({ length: 240 }, (_, i) => H.call(S.port, 'POST', '/api/event', { agent: 'office-ai', status: 'stream', clientEventId: 'e' + i }, { cookie: false, headers: T2 })));
   assert.ok(rs.some(r => r.status === 429), '超过突发上限后限流');

@@ -28,15 +28,14 @@ const { ModelRegistry, diagnose } = require('./lib/models');
 const { TeamRegistry } = require('./lib/teams');
 const { recommend } = require('./lib/matcher');
 const { AuthStore } = require('./lib/auth');
+const { openDb, backupDb } = require('./lib/db');
+const { Vault } = require('./lib/vault');
+const { importLegacy } = require('./lib/legacy-import');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
 const DATA = process.env.AIJ_DATA_DIR ? path.resolve(process.env.AIJ_DATA_DIR) : path.join(ROOT, 'data');
-const CONFIG_FILE = path.join(DATA, 'config.json');
-const MODELS_FILE = path.join(DATA, 'models.json');       // 模型注册信息（不含密钥）
-const CREDS_FILE = path.join(DATA, 'credentials.json');   // 模型凭证（0600，接口永不返回明文）
-const TEAMS_FILE = path.join(DATA, 'teams.json');         // AI 团队（岗位 → 模型连接）
-const TASKS_FILE = path.join(DATA, 'tasks.json');
+const DB_FILE = path.join(DATA, 'aijavais.db');           // SQLite：设置、模型、加密凭证、团队、任务、消息、事件、文件索引、用量……
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const HOST = process.env.HOST || '127.0.0.1';
 /* 出站安全策略（见 lib/security.js 顶部说明）：ALLOWED_BASE_HOSTS、ALLOWED_BASE_PORTS、LOCAL_MODEL_TARGETS；
@@ -77,24 +76,21 @@ const TEMPLATES = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalog', 'team-te
 
 const DEFAULT_SETTINGS = { showText: false, idleTimeoutSec: 120, maxTokens: 4096, timeoutSec: 300, defaultConnectionId: '' };
 
-function defaultConfig() {
-  return { settings: { ...DEFAULT_SETTINGS }, providers: [], ingestTokens: [] };
-}
-function saveConfig() {
-  fs.mkdirSync(DATA, { recursive: true });
-  const tmp = CONFIG_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, CONFIG_FILE);
-}
+/* ------------------------------------------------------------------ 数据库（lib/db.js）与凭证加密（lib/vault.js） */
+fs.mkdirSync(DATA, { recursive: true });
+const db = openDb(DB_FILE);
+const vault = new Vault({ dir: DATA });
+let LEGACY;
+try { LEGACY = importLegacy({ dir: DATA, db, vault }); }
+catch (e) { console.error('旧版数据导入失败（旧文件未改动）：', e.message); process.exit(1); }
+if (LEGACY.imported) console.log(`  已将旧版数据导入数据库（模型 ${LEGACY.imported.connections}、团队 ${LEGACY.imported.teams}、任务 ${LEGACY.imported.tasks}），原文件备份在 ${path.relative(DATA, LEGACY.backup)}`);
+function saveConfig() { db.tx(() => { db.setSetting('settings', cfg.settings); db.setSetting('ingestTokens', cfg.ingestTokens); }); }
 function loadConfig() {
-  let c;
-  try { c = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { c = null; }
-  const d = defaultConfig();
-  if (!c || typeof c !== 'object') { c = d; }
-  c.token = c.token || d.token;
-  c.settings = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
-  c.ingestTokens = Array.isArray(c.ingestTokens) ? c.ingestTokens.filter(t => t && /^[\w-]{1,32}$/.test(t.name) && /^[a-f0-9]{64}$/.test(t.hash)) : [];
-  return c;
+  const ing = db.setting('ingestTokens', []);
+  return {
+    settings: { ...DEFAULT_SETTINGS, ...db.setting('settings', {}) },
+    ingestTokens: Array.isArray(ing) ? ing.filter(t => t && /^[\w-]{1,32}$/.test(t.name) && /^[a-f0-9]{64}$/.test(t.hash)) : [],
+  };
 }
 const cfg = loadConfig();
 /* 环境变量提供的上报凭证（云端部署用），不写入配置文件 */
@@ -105,29 +101,36 @@ const auth = new AuthStore({ dir: DATA, options: {
   ...(Number(process.env.SESSION_IDLE_MIN) > 0 ? { idleMs: Number(process.env.SESSION_IDLE_MIN) * 60e3 } : {}),
   ...(Number(process.env.SESSION_MAX_DAYS) > 0 ? { absoluteMs: Number(process.env.SESSION_MAX_DAYS) * 86400e3 } : {}),
 } });
-if (cfg.token) { delete cfg.token; console.log('  旧版管理令牌已停用（第四阶段起统一使用密码登录）'); }
 if (process.env.ADMIN_TOKEN) console.log('  注意：ADMIN_TOKEN 已不再生效，请改用密码登录；外部程序上报请用上报凭证');
 const access = ACC.createAccess({
   auth, trustProxy: TRUST_PROXY, localIngest: process.env.AIJ_LOCAL_INGEST === '1',
   ingestTokens: () => (ENV_INGEST ? [ENV_INGEST, ...cfg.ingestTokens] : cfg.ingestTokens),
 });
 /* ------------------------------------------------------------------ 模型注册中心（lib/models.js） */
-const readJson = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
-function writeJsonAtomic(file, obj) {
-  fs.mkdirSync(DATA, { recursive: true });
-  const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, file);
-}
 const models = new ModelRegistry({ catalog: CATALOG, policy: POLICY });
-models.load({ models: readJson(MODELS_FILE), credentials: readJson(CREDS_FILE) });
-function saveModels() { const d = models.serialize(); writeJsonAtomic(MODELS_FILE, d.models); writeJsonAtomic(CREDS_FILE, d.credentials); }
-/* 旧版 config.json 里的 providers → 模型连接（先写新文件，成功后才从旧配置里移除） */
-if (Array.isArray(cfg.providers) && cfg.providers.length) {
-  const n = models.migrateLegacy(cfg.providers);
-  try { saveModels(); delete cfg.providers; if (n) console.log(`  已将 ${n} 个旧版供应商迁移为模型连接（data/models.json）`); }
-  catch (e) { console.error('模型配置迁移失败，保留旧配置：', e.message); }
-} else delete cfg.providers;
+{
+  const creds = {};
+  for (const r of db.all('SELECT connection_id, enc FROM credentials')) {
+    try { creds[r.connection_id] = vault.decrypt(r.enc); } catch (e) { console.error(`模型连接 ${r.connection_id} 的凭证无法解密（${e.message}），需要重新填写 API Key`); }
+  }
+  models.load({ models: { connections: db.listDocs('model_connections') }, credentials: creds });
+}
+/* 模型注册信息与加密凭证写入数据库（同一事务；已删除的连接同步删除） */
+function saveModels() {
+  const d = models.serialize();
+  db.tx(() => {
+    const ids = new Set(d.models.connections.map(c => c.connectionId));
+    for (const c of d.models.connections) db.putDoc('model_connections', 'connection_id', c.connectionId, c);
+    for (const r of db.all('SELECT connection_id FROM model_connections')) if (!ids.has(r.connection_id)) db.delDoc('model_connections', 'connection_id', r.connection_id);
+    for (const [id, k] of Object.entries(d.credentials)) db.run('INSERT INTO credentials (connection_id, enc, updated_at) VALUES (?, ?, ?) ON CONFLICT(connection_id) DO UPDATE SET enc = excluded.enc, updated_at = excluded.updated_at', id, vault.encrypt(k), Date.now());
+    for (const r of db.all('SELECT connection_id FROM credentials')) if (!d.credentials[r.connection_id]) db.run('DELETE FROM credentials WHERE connection_id = ?', r.connection_id);
+  });
+}
+/* 更早版本 config.providers → 模型连接 */
+if (Array.isArray(LEGACY.legacyProviders) && LEGACY.legacyProviders.length) {
+  const n = models.migrateLegacy(LEGACY.legacyProviders);
+  if (n) console.log(`  已将 ${n} 个旧版供应商迁移为模型连接`);
+}
 /* 云端部署（配置不持久）：用环境变量固定令牌并自动建立模型连接。
    <KEY 环境变量> + <ID>_MODEL，如 ANTHROPIC_API_KEY + CLAUDE_MODEL。 */
 for (const [id, providerId] of [['claude', 'anthropic'], ['chatgpt', 'openai'], ['kimi', 'moonshot'], ['deepseek', 'deepseek']]) {
@@ -137,12 +140,19 @@ for (const [id, providerId] of [['claude', 'anthropic'], ['chatgpt', 'openai'], 
   if (!r.ok) console.error('环境变量模型连接 ' + id + ' 未建立：', r.error);
 }
 if (cfg.settings.defaultConnectionId && !models.has(cfg.settings.defaultConnectionId)) cfg.settings.defaultConnectionId = '';
-try { saveModels(); } catch (e) { console.error('无法写入 data/models.json：', e.message); }
+saveModels();
 /* ------------------------------------------------------------------ 团队注册中心（lib/teams.js） */
 const teams = new TeamRegistry({ templates: TEMPLATES, capTags: Object.keys(CATALOG.capabilities), hasConnection: id => models.has(id) });
-teams.load(readJson(TEAMS_FILE));
-function saveTeams() { writeJsonAtomic(TEAMS_FILE, teams.serialize()); }
-try { saveConfig(); } catch (e) { console.error('无法写入 data/config.json：', e.message); }
+teams.load({ teams: db.listDocs('teams') });
+function saveTeams() {
+  const list = teams.serialize().teams;
+  db.tx(() => {
+    const ids = new Set(list.map(t => t.teamId));
+    for (const t of list) db.putDoc('teams', 'team_id', t.teamId, t);
+    for (const r of db.all('SELECT team_id FROM teams')) if (!ids.has(r.team_id)) db.delDoc('teams', 'team_id', r.team_id);
+  });
+}
+saveConfig();
 
 /* ------------------------------------------------------------------ 状态 */
 /* 运行时计数见 lib/runtime.js：totals 只统计 source=server 的真实调用；tokens（厂商用量）与 estimatedTokens（估算）分开 */
@@ -151,34 +161,39 @@ const clients = new Set(); // 每个 res 带 res._lvl：2 管理员/本机，1 �
 const str = (s, n) => String(s == null ? '' : s).slice(0, n);
 
 /* ------------------------------------------------------------------ 任务模型（事件与任务通过 taskId 关联，落盘保存） */
-const MAX_TASKS = 100, MAX_TASK_EVENTS = 300;
-const tasks = new Map();
-let tasksDirty = false, tasksTimer = null;
+const MAX_TASKS = 1000, MAX_TASK_EVENTS = 300;
+const tasks = new Map(); // 快速协作模式（A→B→A）与外部上报任务；团队任务由执行引擎管理（同一张 tasks 表，kind=team）
+const dirtyTasks = new Set();
+let tasksTimer = null, allDirty = false;
 function loadTasks() {
-  let arr; try { arr = JSON.parse(fs.readFileSync(TASKS_FILE, 'utf8')); } catch { arr = []; }
-  for (const t of Array.isArray(arr) ? arr : []) {
+  for (const t of db.listDocs('tasks', "kind IN ('internal', 'external')")) {
     if (!t || !EV.TASK_ID_RE.test(String(t.id))) continue;
-    if (t.status === 'running') { t.status = 'interrupted'; t.error = '服务重启，任务中断'; }
+    if (t.status === 'running') { t.status = 'interrupted'; t.error = '服务重启，任务中断'; dirtyTasks.add(t.id); }
     tasks.set(t.id, t);
   }
 }
 function writeTasksNow() {
-  tasksDirty = false;
+  const ids = allDirty ? [...tasks.keys()] : [...dirtyTasks];
+  allDirty = false; dirtyTasks.clear();
   try {
-    fs.mkdirSync(DATA, { recursive: true });
-    const tmp = TASKS_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify([...tasks.values()]), { mode: 0o600 });
-    fs.renameSync(tmp, TASKS_FILE);
-  } catch (e) { console.error('无法写入 data/tasks.json：', e.message); }
+    db.tx(() => {
+      for (const id of ids) {
+        const t = tasks.get(id);
+        if (t) db.putDoc('tasks', 'task_id', t.id, t, { kind: t.kind || 'internal', status: t.status || 'unknown', title: String(t.title || '') });
+      }
+    });
+  } catch (e) { console.error('无法写入任务记录：', e.message); }
 }
-function persistTasks() {
-  tasksDirty = true;
+/* 标记任务需要落盘（800ms 防抖）；不带 id 表示全部 */
+function persistTasks(id) {
+  if (id) dirtyTasks.add(id); else allDirty = true;
   if (tasksTimer) return;
-  tasksTimer = setTimeout(() => { tasksTimer = null; if (tasksDirty) writeTasksNow(); }, 800);
+  tasksTimer = setTimeout(() => { tasksTimer = null; writeTasksNow(); }, 800);
   tasksTimer.unref?.();
 }
 /* 立即落盘（任务结束、服务关闭时使用） */
-function flushTasks() {
+function flushTasks(id) {
+  if (id) dirtyTasks.add(id); else allDirty = true;
   if (tasksTimer) { clearTimeout(tasksTimer); tasksTimer = null; }
   writeTasksNow();
 }
@@ -188,6 +203,7 @@ function trimTasks() {
     const key = [...tasks.entries()].find(([, t]) => t.status !== 'running')?.[0];
     if (key === undefined) return;
     tasks.delete(key);
+    db.delDoc('tasks', 'task_id', key);
   }
 }
 function taskSummary(t) {
@@ -202,7 +218,7 @@ function recordTaskEvent(ev) {
   if (ev.eventType === 'model_stream') { t.streamEvents = (t.streamEvents || 0) + 1; return; }
   (t.events || (t.events = [])).push(ev);
   if (t.events.length > MAX_TASK_EVENTS) t.events.splice(1, 1); // 保留首条 task_start，丢弃最旧的中间事件
-  persistTasks();
+  persistTasks(t.id);
 }
 
 /* 外部上报去重：同一主体、同一 agent 的同一 clientEventId 只处理一次（重试 / 网络重发不会重复计数） */
@@ -223,7 +239,7 @@ function claimExternalTask(taskId, owner, input) {
   for (const x of tasks.values()) if (x.kind === 'external' && x.owner === owner) n++;
   if (n >= MAX_EXTERNAL_TASKS_PER_OWNER) return { ok: false, code: 429, error: '该上报主体的外部任务数量已达上限（' + MAX_EXTERNAL_TASKS_PER_OWNER + '）' };
   tasks.set(taskId, { id: taskId, kind: 'external', owner, title: str(input.task || taskId, 30), status: 'reported', verification: 'reported', createdAt: Date.now(), steps: [], events: [] });
-  trimTasks(); persistTasks();
+  trimTasks(); persistTasks(taskId);
   return { ok: true };
 }
 
@@ -565,7 +581,7 @@ async function runPipeline(run, A, B, roleMeta = {}) {
   }
   if (registered) { run.messageStats = bus.stats(run.id); run.artifacts = artifacts.list(run.id); } // 只保存统计与成果元数据，正文只在内存中
   run.endedAt = Date.now();
-  flushTasks(); // 任务结束（成功 / 失败）立即落盘，不等防抖定时器
+  flushTasks(run.id); // 任务结束（成功 / 失败）立即落盘，不等防抖定时器
 }
 
 /* ------------------------------------------------------------------ 演示（无需任何 API Key） */
@@ -989,7 +1005,7 @@ async function api(req, res, url) {
     const run = { id, kind: 'internal', ownerId: user.userId, runId: EV.newRunId(), title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now(), ...(teamInfo ? { team: teamInfo } : {}) };
     tasks.set(id, run);
     trimTasks();
-    persistTasks();
+    persistTasks(id);
     runPipeline(run, sa.p, sb && sb.p, roleMeta).catch(e => console.error('任务执行异常：', e && e.message)); // 兜底：任何异常都不影响服务进程
     return json(res, 200, { runId: id, team: teamInfo || undefined });
   }
@@ -1145,8 +1161,9 @@ server.on('error', e => {
 });
 /* 关闭时：仍在运行的任务标记为中断并立即落盘，避免重启后状态与实际不一致 */
 function shutdown() {
-  for (const t of tasks.values()) if (t.status === 'running') { t.status = 'interrupted'; t.error = '服务停止，任务中断'; t.endedAt = Date.now(); }
+  for (const t of tasks.values()) if (t.status === 'running') { t.status = 'interrupted'; t.error = '服务停止，任务中断'; t.endedAt = Date.now(); dirtyTasks.add(t.id); }
   flushTasks();
+  db.close();
 }
 process.on('SIGINT', () => { shutdown(); process.exit(0); });
 process.on('SIGTERM', () => { shutdown(); process.exit(0); });

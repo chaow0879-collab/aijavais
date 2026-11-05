@@ -93,4 +93,13 @@ function sse(port, ms, { cookie, headers = {}, host = 'localhost' } = {}) {
   });
 }
 
-module.exports = { TEST_PASSWORD, call, boot, sse, ensureLogin, authHeaders, cookieFrom, freePort, sleep, cookies };
+/* 只读打开某个实例的数据库（WAL 模式下可与运行中的服务并发读取） */
+function dbAll(dir, sql, ...params) {
+  require('../lib/db'); // 屏蔽 node:sqlite 实验特性提示
+  const { DatabaseSync } = require('node:sqlite');
+  const d = new DatabaseSync(path.join(dir, 'aijavais.db'), { readOnly: true });
+  try { return d.prepare(sql).all(...params); } finally { d.close(); }
+}
+const dbDocs = (dir, table, where = '1=1', ...params) => dbAll(dir, `SELECT data FROM ${table} WHERE ${where}`, ...params).map(r => JSON.parse(r.data));
+
+module.exports = { dbAll, dbDocs, TEST_PASSWORD, call, boot, sse, ensureLogin, authHeaders, cookieFrom, freePort, sleep, cookies };
