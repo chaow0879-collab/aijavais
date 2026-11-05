@@ -9,6 +9,10 @@
 
 - B检查点：`POST /api/v2/intake/ai-draft` + `/estimate`（不发送模型请求）+ `/cancel`；`lib/intake-draft.js`只调用一次模型，严格白名单JSON、服务器模型推荐、草案不自动保存或执行。system_usage在调用前持久预留、调用后同一行结算，未知远程费用为null，另保留budgetCost；先写失败则不调用，后写失败明确usageRecorded:false。无schema升级（仍v3）。相关49项回归通过。
 
+- C检查点：向导第二步新增“让AI帮我设计团队”，模板入口保留；先估算、不自动调用、一次授权、可增删编辑岗位/步骤、工具/Skills和人工事项展示、独立确认后保存。新`test:intake`真实Chromium E2E与原`test:workspace`均通过，包含取消、未知费用、非法JSON回退与文本XSS检查。
+- Claude修复：用户已确认`e74adee5c3d6c5b95b7b568385f278983adcf8a1`为最终提交且停写，审核仅四个指定文件，无冲突cherry-pick为`c2cded1`；43项相关回归通过。
+- CI独立核查：API通道403后改读允许的GitHub页面；06b540f对应run 42023627459，三任务均cancelled，不能算失败或通过；4560c8a对应run 42023677352，tests/browser/container均success。具体测试日志公开链接404，因此该远程run子测试计数未独立核实，不将旧文档计数冒称为本次核查。
+
 ---
 
 # AIJAVAIS V2.0 · 当前交接（Claude Code 接力开发中）

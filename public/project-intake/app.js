@@ -56,7 +56,7 @@
     return '<div class="note">'+(suggested.length?'已根据你的描述找到相关项目类型。':'描述中尚无明确匹配词，先展示一些项目类型；也可以展开全部目录。')+
       ' 点击一个类型，下一步将生成相应岗位与专业标准。</div>'+
       '<div class="grid" style="margin-top:18px">'+list.map(x=>'<button type="button" class="card choice '+(state.templateId===x.templateId?'selected':'')+'" data-template="'+html(x.templateId)+'"><h3>'+html(x.name)+'</h3><p>'+html(x.summary)+'</p><span class="pill">'+(state.templateId===x.templateId?'✓ 当前选择':x.score>0?'智能推荐':'可选模板')+'</span></button>').join('')+'</div>'+
-      '<button type="button" class="btn" id="toggle-all" style="margin-top:20px">'+(state.showAll?'仅显示推荐':'查看全部 '+state.catalog.templates.length+' 类专业项目')+'</button>';
+      '<button type="button" class="btn" id="toggle-all" style="margin-top:20px">'+(state.showAll?'仅显示推荐':'查看全部 '+state.catalog.templates.length+' 类专业项目')+'</button><div id="ai-draft-root" style="margin-top:20px"></div>';
   }
   function renderQuant() {
     const tpl=t();if(!tpl)return '<p>请先选择项目类型</p>';
@@ -143,12 +143,14 @@
       '<p class="hint">保存草案不会调用模型或消耗 Token。工作台会重新检查模型、工具与预算；需要你明确开始执行后才运行任务。</p>';
   }
   function render() {
+    if(state.step!==1)window.AIJIntakeDraft?.unmount();
     showError('');
     $('step-title').textContent=STEPS[state.step][0];
     $('step-intro').textContent=STEPS[state.step][1];
     $('step-badge').textContent='STEP '+String(state.step+1).padStart(2,'0')+' / 06';
     document.querySelectorAll('#steps-nav li').forEach((li,i)=>li.className=i===state.step?'active':i<state.step?'done':'');
     $('step-content').innerHTML=[renderTask,renderTypes,renderQuant,renderRoles,renderWorkflow,renderResult][state.step]();
+    if(state.step===1)window.AIJIntakeDraft?.mount($('ai-draft-root'),{description:state.description,models:state.models});
     if(state.step===5)loadToolCheck();
     $('back').disabled=state.step===0;
     $('next').textContent=state.step===5?'重新检查方案 ↻':state.step===4?'生成项目方案 →':'下一步 →';
@@ -215,6 +217,7 @@
   $('back').addEventListener('click',()=>go(-1));
   $('next').addEventListener('click',()=>{if(state.step===5){render();return;}go(1);});
   $('reset').addEventListener('click',()=>{if(!window.confirm('确定清空当前未导出的立项草案吗？'))return;
+    window.AIJIntakeDraft?.reset();
     Object.assign(state,{step:0,description:'',context:'',audience:'',deliveryExpectation:'',referenceNotes:'',templateId:null,answers:{},selectedRoleIds:null,selectedStepIds:null,assignments:{},customRoles:[],customDeliverables:{},showAll:false,result:null});render();
   });
   $('step-content').addEventListener('click',async event=>{
