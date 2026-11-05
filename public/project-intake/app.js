@@ -134,8 +134,9 @@
       (p.readyForAutomatedExecution?'配置初步具备执行条件，仍需调度器确认。':'已生成方案；尚不具备直接自动执行的完整条件。')+'</div></div></div>'+
       '<div class="grid"><div class="card"><h3>团队岗位</h3><p>'+p.roles.length+' 个岗位：'+html(p.roles.map(x=>x.name).join('、'))+'</p></div>'+
       '<div class="card"><h3>工作流程</h3><p>'+p.steps.length+' 个步骤：'+html(p.steps.map(x=>x.title).join(' → '))+'</p></div>'+
-      '<div class="card"><h3>工具检查</h3><p>需要 '+p.requiredTools.length+' 种；当前未验证 '+p.missingTools.length+' 种。'+html(unresolved)+'</p></div>'+
+      '<div class="card"><h3>工具检查</h3><p>需要 '+p.requiredTools.length+' 种能力。'+html(unresolved)+'</p></div>'+
       '<div class="card"><h3>项目标准</h3><p>风险：'+html((p.quantification.find(q=>q.id==='risk')||{}).selectedText||p.risk)+'；审核：'+html((p.quantification.find(q=>q.id==='rigor')||{}).selectedText||p.rigor)+'</p></div></div>'+
+      '<div class="card" id="tool-check" style="margin-top:14px"><h3>平台工具实时检查</h3><p class="hint">正在向服务器核实所需工具……</p></div>'+
       (r.warnings.length?'<div class="warnbox"><strong>实施前需要注意：</strong><br>'+r.warnings.map(x=>'· '+html(x)).join('<br>')+'</div>':'')+
       '<h3 class="label" style="font-size:17px">可直接复用的项目提示词</h3><pre class="result" id="prompt-output">'+html(E.formatPrompt(p))+'</pre>'+
       '<div class="actions" style="margin-top:15px"><button class="btn primary" data-action="save-project">保存草案并进入工作台</button><button class="btn" data-action="copy">复制提示词</button><button class="btn" data-action="prompt">导出提示词 TXT</button><button class="btn" data-action="json">导出结构化方案 JSON</button></div>'+
@@ -148,6 +149,7 @@
     $('step-badge').textContent='STEP '+String(state.step+1).padStart(2,'0')+' / 06';
     document.querySelectorAll('#steps-nav li').forEach((li,i)=>li.className=i===state.step?'active':i<state.step?'done':'');
     $('step-content').innerHTML=[renderTask,renderTypes,renderQuant,renderRoles,renderWorkflow,renderResult][state.step]();
+    if(state.step===5)loadToolCheck();
     $('back').disabled=state.step===0;
     $('next').textContent=state.step===5?'重新检查方案 ↻':state.step===4?'生成项目方案 →':'下一步 →';
   }
@@ -176,6 +178,20 @@
   }
   async function copyText(value) {
     try { await navigator.clipboard.writeText(value); return true; } catch { return false; }
+  }
+  const TOOL_STATUS={available:['可用','ok'],needs_setup:['需要配置','warn'],not_implemented:['平台尚未实现','bad'],unknown:['目录中没有','bad']};
+  async function loadToolCheck() {
+    const box=$('tool-check');if(!box)return;
+    try{
+      const r=await fetch('/api/v2/intake/plan',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(opts())});
+      const data=await r.json().catch(()=>({}));
+      if(!r.ok)throw Error(data.error||'HTTP '+r.status);
+      const rows=(data.toolCheck||[]).map(t=>{const st=TOOL_STATUS[t.status]||['未知','warn'];
+        return '<tr><td>'+html(t.capability||t.intakeId)+'</td><td><span class="pill '+st[1]+'">'+st[0]+'</span>'+(t.free===false?' <span class="pill warn">可能收费</span>':'')+(t.needsApiKey?' <span class="pill warn">需要 API Key</span>':'')+'</td><td>'+html(t.status==='available'?'已有真实实现，执行时需在工作台勾选授权。':(t.howTo||''))+(t.status!=='available'&&t.alternative?'<br><span class="hint">替代方案：'+html(t.alternative)+'</span>':'')+'</td></tr>';}).join('');
+      const missing=(data.toolCheck||[]).filter(t=>t.status!=='available').length;
+      box.innerHTML='<h3>平台工具实时检查</h3><p>'+(missing?'有 '+missing+' 项能力暂不可用。可以先保存草案；缺少的工具不会被假装完成，执行前需要配置或移除该要求。':'所需工具均已具备真实实现。')+' 详见<a href="/capabilities.html">能力中心</a>。</p>'+
+        (rows?'<table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left">能力</th><th style="text-align:left">状态</th><th style="text-align:left">说明</th></tr></thead><tbody>'+rows+'</tbody></table>':'<p class="hint">本方案不需要专用工具。</p>');
+    }catch(e){box.innerHTML='<h3>平台工具实时检查</h3><p class="hint">暂时无法向服务器核实（'+html(e.message)+'）。保存草案后可在工作台「检查执行条件」。</p>';}
   }
   async function refreshModels() {
     try{
