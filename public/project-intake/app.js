@@ -15,7 +15,8 @@
   const state = {
     catalog:null, step:0, description:'',context:'',audience:'',deliveryExpectation:'',referenceNotes:'',
     templateId:null, answers:{}, selectedRoleIds:null, selectedStepIds:null, assignments:{},
-    models:[], freeOnly:true, showAll:false, result:null, availableTools:[], modelLoadNote:''
+    models:[], freeOnly:true, showAll:false, result:null, availableTools:[], modelLoadNote:'',
+    customRoles:[], customDeliverables:{}
   };
   function showError(msg) { $('error').textContent = msg || ''; $('error').classList.toggle('show',!!msg); }
   function t() { return state.catalog.templates.find(x => x.id === state.templateId) || null; }
@@ -24,7 +25,8 @@
       templateId:state.templateId,description:state.description,context:state.context,audience:state.audience,
       deliveryExpectation:state.deliveryExpectation,referenceNotes:state.referenceNotes,
       answers:state.answers,selectedRoleIds:state.selectedRoleIds,selectedStepIds:state.selectedStepIds,
-      assignments:state.assignments,availableTools:state.availableTools
+      assignments:state.assignments,availableTools:state.availableTools,customRoles:state.customRoles,
+      customDeliverables:state.customDeliverables
     };
   }
   function templatePreview() {
@@ -69,6 +71,11 @@
       }).join('')+'</div>'+
       '<div class="note" style="margin-top:18px">量化选项只是项目输入参数，不代表已完成专业计算或质量测试。高风险项目仍需要适用规范、真实验证和必要的专业人员复核。</div>';
   }
+  function allRoles(tpl) { return [...tpl.roles,...state.customRoles]; }
+  function allSteps(tpl) { return [...tpl.steps,...state.customRoles.map(r=>({
+    id:'step-'+r.id,title:'执行：'+r.name,roleId:r.id,
+    deliverable:state.customDeliverables[r.id] || '形成可审核的工作成果',quality:r.standard,tools:[]
+  }))]; }
   function selectedRoles(tpl) {
     if(state.selectedRoleIds===null)state.selectedRoleIds=E.recommendRoles(tpl,state.answers).selectedRoleIds;
     return state.selectedRoleIds;
@@ -88,23 +95,30 @@
     return '<div class="note">岗位可以增删，系统不会强制每个项目都设置项目经理、审核员和质量负责人。移除负责某个流程的岗位时，相关步骤也会被标记为需要重新安排。</div>'+
       '<label class="label" style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="free-only" '+(state.freeOnly?'checked':'')+' style="accent-color:#55e7ff"> 只显示经过验证的免费候选优先（其他模型仍可选，但不能视为免费）</label>'+
       '<p class="hint">'+html(state.modelLoadNote)+'</p>'+
-      '<div class="grid" style="margin-top:18px">'+tpl.roles.map(role=>{
-        const rec=rank.get(role.id);
+      '<div class="grid" style="margin-top:18px">'+allRoles(tpl).map(role=>{
+        const rec=rank.get(role.id) || { recommended:true };
         const checked=selected.includes(role.id);
         return '<div class="card '+(checked?'':'muted')+'"><div class="roleTop"><input type="checkbox" aria-label="启用 '+html(role.name)+'" data-role="'+html(role.id)+'" '+(checked?'checked':'')+'><div class="roleMeta"><strong>'+html(role.name)+'</strong><p>'+html(role.duty)+'</p><span class="pill '+(role.required?'good':'')+'">'+(role.required?'核心岗位（可删减）':rec.recommended?'建议增加':'可选岗位')+'</span></div></div><div class="roleStand">岗位验收标准：'+html(role.standard)+'</div>'+roleModels(role)+'</div>';
       }).join('')+'</div>'+
       '<button type="button" class="btn" id="restore-roles" style="margin-top:18px">恢复系统建议的岗位组合</button>'+
-      '<p class="detail">更多自定义岗位可在团队中心创建；本独立向导已支持对现有专业岗位自由增删，后续由 Claude 集成岗位编辑和保存接口。</p>';
+      '<div class="card" style="margin-top:18px"><h3>＋ 新增自定义岗位</h3><p>不确定职责时，可以先写“负责完成什么”，再写“怎样判断合格”。</p>'+
+      '<div class="grid">'+
+      '<div>'+field("new-role-name","岗位名称","例如：质量检查员","",false)+'</div>'+
+      '<div>'+field("new-role-deliverable","本岗位交付成果","例如：可编辑审查清单","",false)+'</div>'+
+      '<div>'+field("new-role-duty","岗位职责","例如：核对方案是否符合公司制度","",true)+'</div>'+
+      '<div>'+field("new-role-standard","岗位验收标准","例如：每一项审核意见必须给出处或案例","",true)+'</div>'+
+      '</div><button type="button" class="btn" data-action="addcustom">添加到当前项目</button></div>'+
+      '<p class="detail">自定义岗位会自动新增对应工作步骤；可通过复选框临时停用该岗位。团队与执行引擎集成后可进一步配置工具权限。</p>';
   }
   function renderWorkflow() {
     const tpl=t();if(!tpl)return '';
     selectedRoles(tpl);
     const selectedSteps=state.selectedStepIds;
     const activeRoles=new Set(state.selectedRoleIds);
-    const items=tpl.steps.map((step,i)=>{
+    const items=allSteps(tpl).map((step,i)=>{
       const roleOk=activeRoles.has(step.roleId);
       const checked=roleOk && (selectedSteps===null || selectedSteps.includes(step.id));
-      const role=tpl.roles.find(x=>x.id===step.roleId);
+      const role=allRoles(tpl).find(x=>x.id===step.roleId);
       return '<div class="item"><input type="checkbox" data-flow="'+html(step.id)+'" '+(checked?'checked':'')+' '+(!roleOk?'disabled':'')+' aria-label="启用步骤 '+html(step.title)+'"><div><h3>'+(i+1)+'. '+html(step.title)+(roleOk?'':' · 岗位未启用')+'</h3><p>负责岗位：'+html(role?role.name:'未知')+' ｜ 交付：'+html(step.deliverable)+'</p><p>验收标准：'+html(step.quality)+'</p><p>所需工具：'+html((step.tools||[]).join('、')||'无需专用工具')+'（当前未提供实际工具就绪证明）</p></div></div>';
     }).join('');
     return '<div class="note">以下是建议的真实工作顺序。你可以取消不需要的步骤；但若取消审核、测试或质量关口，平台会在高风险项目中给出提醒。</div>'+
@@ -184,18 +198,33 @@
   $('back').addEventListener('click',()=>go(-1));
   $('next').addEventListener('click',()=>{if(state.step===5){render();return;}go(1);});
   $('reset').addEventListener('click',()=>{if(!window.confirm('确定清空当前未导出的立项草案吗？'))return;
-    Object.assign(state,{step:0,description:'',context:'',audience:'',deliveryExpectation:'',referenceNotes:'',templateId:null,answers:{},selectedRoleIds:null,selectedStepIds:null,assignments:{},showAll:false,result:null});render();
+    Object.assign(state,{step:0,description:'',context:'',audience:'',deliveryExpectation:'',referenceNotes:'',templateId:null,answers:{},selectedRoleIds:null,selectedStepIds:null,assignments:{},customRoles:[],customDeliverables:{},showAll:false,result:null});render();
   });
   $('step-content').addEventListener('click',async event=>{
     const tplButton=event.target.closest('[data-template]');
     if(tplButton){
       const id=tplButton.dataset.template;
-      if(state.templateId!==id){state.templateId=id;state.answers={};state.selectedRoleIds=null;state.selectedStepIds=null;state.assignments={};}
+      if(state.templateId!==id){state.templateId=id;state.answers={};state.selectedRoleIds=null;state.selectedStepIds=null;state.assignments={};state.customRoles=[];state.customDeliverables={};}
       render();return;
     }
     if(event.target.id==='toggle-all'){state.showAll=!state.showAll;render();return;}
-    if(event.target.id==='restore-roles'){state.selectedRoleIds=E.recommendRoles(t(),state.answers).selectedRoleIds;render();return;}
+    if(event.target.id==='restore-roles'){state.selectedRoleIds=[...E.recommendRoles(t(),state.answers).selectedRoleIds,...state.customRoles.map(r=>r.id)];render();return;}
     const action=event.target.closest('[data-action]')?.dataset.action;
+    if(action==='addcustom'){
+      sync();
+      if(state.customRoles.length>=12)return showError('自定义岗位最多 12 个');
+      const name=($('new-role-name')?.value||'').trim();
+      const duty=($('new-role-duty')?.value||'').trim();
+      const standard=($('new-role-standard')?.value||'').trim();
+      const deliverable=($('new-role-deliverable')?.value||'').trim();
+      if(!name||!duty||!standard)return showError('请填写岗位名称、职责和验收标准');
+      const id='custom-'+Math.random().toString(36).slice(2,10);
+      state.customRoles.push({id,name,duty,standard,capabilities:[],required:false});
+      state.customDeliverables[id]=deliverable||'形成可审核的工作成果';
+      state.selectedRoleIds.push(id);
+      if(state.selectedStepIds!==null)state.selectedStepIds.push('step-'+id);
+      render();return;
+    }
     if(action){
       const r=state.result;if(!r||!r.ok)return;
       if(action==='copy'){const ok=await copyText(E.formatPrompt(r.plan));event.target.textContent=ok?'已复制 ✓':'复制失败，请手动选择文字';}
