@@ -40,7 +40,7 @@
         '<input id="'+html(id)+'" type="text" placeholder="'+html(placeholder)+'" value="'+html(value)+'">')+'</div>';
   }
   function renderTask() {
-    return '<div class="note">举例：“帮我设计一套集团组织架构，列出各部门权责、对比事业部制与矩阵制，交付 Word 方案和组织图。”</div>'+
+    return '<div class="note">任何行业、任何类型的任务都可以。举例：“开发一个预约小程序并附测试”“分析近三年销售数据并给出 Excel 结论”“写一份新品发布 PPT”“为一门入门课程设计 8 次课的教案”。</div>'+
       field('description','你想完成什么项目？（必填）','描述问题、目标和希望得到的成果，至少8个字',state.description,true)+
       '<div class="grid">'+
       field('context','项目背景（可选）','例如企业规模、行业或目前存在的问题',state.context,true)+

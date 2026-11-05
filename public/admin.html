@@ -206,7 +206,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
     <div class="col">
       <section>
         <h2>运行任务 <small>全程驱动大屏</small></h2>
-        <textarea id="task" placeholder="输入任务，例如：起草一份新员工入职引导方案。"></textarea>
+        <textarea id="task" placeholder="输入任务，例如：比较三种方案的成本与风险，给出推荐和依据。"></textarea>
         <div class="row end" style="margin-top:8px">
           <label>由谁来做<select id="runBy"><option value="team">AI 团队</option><option value="models">直接选模型</option></select></label>
           <label id="runTeamL">团队<select id="runTeam"></select></label>
@@ -215,7 +215,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
           <label>流程<select id="mode"><option value="full">起草 → 审核 → 修订</option><option value="review">起草 → 审核</option><option value="single">只起草</option></select></label>
           <button class="pri" id="runBtn">运行</button>
         </div>
-        <p class="note warn">任务内容会发送给所选模型的服务商。人事、薪酬等敏感信息请先脱敏，或只使用本地模型。</p>
+        <p class="note warn">任务内容会发送给所选模型的服务商。个人信息、财务、客户或商业机密等敏感内容请先脱敏，或只使用本地模型。</p>
         <div id="runOut"></div>
       </section>
     </div>
