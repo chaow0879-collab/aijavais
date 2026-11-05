@@ -95,6 +95,10 @@
       state.project.roles.forEach(r=>select.append(node('option',{value:r.roleId,text:r.name || r.roleId})));
       select.value=step.roleId; b.append(node('label',{text:'负责岗位'}),select);grid.append(a,b);row.append(grid);
       field(row,'执行指令与交付要求','textarea',step.prompt,v=>step.prompt=v,{placeholder:'说明这一步应如何使用前序成果，并产出什么内容',maxLength:20000});
+      const inputs=node('select',{'aria-label':'步骤'+(index+1)+'接收的前序成果',onchange:e=>{step.handoff=e.target.value;state.dirty=true;}});
+      inputs.append(node('option',{value:'previous',text:'只接收上一步的成果'}),node('option',{value:'all',text:'接收前面所有步骤的成果'}));inputs.value=step.handoff || 'previous';
+      const mat=node('input',{type:'checkbox',onchange:e=>{step.useMaterials=e.target.checked;state.dirty=true;}});mat.checked=step.useMaterials!==false;
+      row.append(node('div',{class:'inline-fields'},[node('label',{},[node('span',{text:'交接内容 '}),inputs]),node('label',{class:'check'},[mat,node('span',{text:'本步骤读取项目资料'})])]));
       const advanced=node('details');advanced.append(node('summary',{text:'Skill、工具调用与质量检查（高级）'}));
       const skills=node('select',{'aria-label':'步骤'+(index+1)+' Skill',onchange:e=>{step.skillId=e.target.value || undefined;state.dirty=true;}});
       skills.append(node('option',{value:'',text:'不额外应用 Skill'}));

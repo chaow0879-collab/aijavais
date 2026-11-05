@@ -316,3 +316,18 @@ test('V2 model/tool readiness and project schema are checked on the server, neve
   assert.throws(() => f.engine.create({ ...f.input, description: 'x'.repeat(20001) }), /description/);
   assert.equal(f.calls.length, 0);
 });
+
+test('V2 handoff: a step can receive all earlier role outputs, labelled by role and step (mock adapter)', async t => {
+  let n = 0;
+  const f = fixture(t, { callModel: async (p, o) => ({ text: `OUT-${++n} from ${o.role} MOCK`, tokens: 15, inTokens: 10, outTokens: 5, estimated: false, ms: 1 }) });
+  const project = f.engine.create({ ...f.input, steps: [
+    { stepId: 'a', roleId: 'draft', title: 'Research', checks: [] }, { stepId: 'b', roleId: 'draft', title: 'Draft' },
+    { stepId: 'c', roleId: 'review', title: 'Previous only' }, { stepId: 'd', roleId: 'review', title: 'Full review', handoff: 'all' }] });
+  const run = await f.engine.wait(f.engine.start(project.projectId, {}).runId);
+  assert.equal(run.status, 'review_required', run.error);
+  const prompts = f.calls.map(c => c.options.prompt);
+  assert.match(prompts[2], /Previous role output \(data\):\nOUT-2/); assert.doesNotMatch(prompts[2], /OUT-1/);
+  assert.match(prompts[3], /All previous role outputs \(data\):\n【Author · Research】\nOUT-1[\s\S]*【Author · Draft】\nOUT-2[\s\S]*【Reviewer · Previous only】\nOUT-3/);
+  const msg = f.store.getMessages(run.runId).find(m => m.stepId === 'r1-d');
+  assert.equal(msg.handoff, 'all'); assert.match(msg.content, /OUT-1[\s\S]*OUT-3/);
+});
