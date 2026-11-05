@@ -23,11 +23,14 @@ const { Runtime } = require('./lib/runtime');
 const { ArtifactStore } = require('./lib/artifacts');
 const ACC = require('./lib/access');
 const PERM = require('./lib/permissions');
+const { ModelRegistry, diagnose } = require('./lib/models');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
 const DATA = process.env.AIJ_DATA_DIR ? path.resolve(process.env.AIJ_DATA_DIR) : path.join(ROOT, 'data');
 const CONFIG_FILE = path.join(DATA, 'config.json');
+const MODELS_FILE = path.join(DATA, 'models.json');       // 模型注册信息（不含密钥）
+const CREDS_FILE = path.join(DATA, 'credentials.json');   // 模型凭证（0600，接口永不返回明文）
 const TASKS_FILE = path.join(DATA, 'tasks.json');
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -48,15 +51,10 @@ function rateOk(kind, key, perSec, burst) {
 }
 
 /* ------------------------------------------------------------------ 配置 */
-const PRESETS = {
-  claude: { label: 'Claude', type: 'anthropic', baseUrl: 'https://api.anthropic.com', envKey: 'ANTHROPIC_API_KEY', modelHint: 'claude-sonnet-5-5' },
-  chatgpt: { label: 'ChatGPT', type: 'openai', baseUrl: 'https://api.openai.com/v1', envKey: 'OPENAI_API_KEY', modelHint: '填写 OpenAI 模型名' },
-  kimi: { label: 'Kimi', type: 'openai', baseUrl: 'https://api.moonshot.cn/v1', envKey: 'MOONSHOT_API_KEY', modelHint: '填写 Kimi 模型名' },
-  deepseek: { label: 'DeepSeek', type: 'openai', baseUrl: 'https://api.deepseek.com', envKey: 'DEEPSEEK_API_KEY', modelHint: '填写 DeepSeek 模型名' },
-  custom: { label: '自定义', type: 'openai', baseUrl: '', envKey: '', modelHint: '任意 OpenAI 兼容接口' },
-};
+/* 服务商目录：版本化数据文件 catalog/providers.v1.json（不写死在代码或页面里） */
+const CATALOG = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalog', 'providers.v1.json'), 'utf8'));
 
-const DEFAULT_SETTINGS = { showText: false, idleTimeoutSec: 120, maxTokens: 4096, timeoutSec: 300 };
+const DEFAULT_SETTINGS = { showText: false, idleTimeoutSec: 120, maxTokens: 4096, timeoutSec: 300, defaultConnectionId: '' };
 
 function defaultConfig() {
   return { token: crypto.randomBytes(12).toString('hex'), settings: { ...DEFAULT_SETTINGS }, providers: [], ingestTokens: [] };
@@ -74,10 +72,7 @@ function loadConfig() {
   if (!c || typeof c !== 'object') { c = d; }
   c.token = c.token || d.token;
   c.settings = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
-  c.providers = Array.isArray(c.providers) ? c.providers : [];
   c.ingestTokens = Array.isArray(c.ingestTokens) ? c.ingestTokens.filter(t => t && /^[\w-]{1,32}$/.test(t.name) && /^[a-f0-9]{64}$/.test(t.hash)) : [];
-  /* 旧配置里不合规的 envKey 一律清空（防止借它读取任意环境变量） */
-  for (const p of c.providers) if (!SEC.isAllowedEnvKey(p.envKey)) { console.error(`供应商 ${p.id} 的 envKey 不在允许范围，已清空：`, p.envKey); p.envKey = ''; }
   return c;
 }
 const cfg = loadConfig();
@@ -88,14 +83,34 @@ const access = ACC.createAccess({
   adminToken: () => cfg.token, viewToken: VIEW_TOKEN, trustProxy: TRUST_PROXY,
   ingestTokens: () => (ENV_INGEST ? [ENV_INGEST, ...cfg.ingestTokens] : cfg.ingestTokens),
 });
-/* 云端部署（配置不持久）：用环境变量固定令牌并自动建立供应商。
+/* ------------------------------------------------------------------ 模型注册中心（lib/models.js） */
+const readJson = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
+function writeJsonAtomic(file, obj) {
+  fs.mkdirSync(DATA, { recursive: true });
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2), { mode: 0o600 });
+  fs.renameSync(tmp, file);
+}
+const models = new ModelRegistry({ catalog: CATALOG, policy: POLICY });
+models.load({ models: readJson(MODELS_FILE), credentials: readJson(CREDS_FILE) });
+function saveModels() { const d = models.serialize(); writeJsonAtomic(MODELS_FILE, d.models); writeJsonAtomic(CREDS_FILE, d.credentials); }
+/* 旧版 config.json 里的 providers → 模型连接（先写新文件，成功后才从旧配置里移除） */
+if (Array.isArray(cfg.providers) && cfg.providers.length) {
+  const n = models.migrateLegacy(cfg.providers);
+  try { saveModels(); delete cfg.providers; if (n) console.log(`  已将 ${n} 个旧版供应商迁移为模型连接（data/models.json）`); }
+  catch (e) { console.error('模型配置迁移失败，保留旧配置：', e.message); }
+} else delete cfg.providers;
+/* 云端部署（配置不持久）：用环境变量固定令牌并自动建立模型连接。
    ADMIN_TOKEN=管理令牌；<KEY 环境变量> + <ID>_MODEL，如 ANTHROPIC_API_KEY + CLAUDE_MODEL。 */
 if (process.env.ADMIN_TOKEN && process.env.ADMIN_TOKEN.length >= 12) cfg.token = process.env.ADMIN_TOKEN;
-for (const id of ['claude', 'chatgpt', 'kimi', 'deepseek']) {
-  const pr = PRESETS[id], model = (process.env[id.toUpperCase() + '_MODEL'] || '').trim();
-  if (!process.env[pr.envKey] || !model || cfg.providers.some(x => x.id === id)) continue;
-  cfg.providers.push({ id, apiKey: '', label: pr.label, type: pr.type, baseUrl: pr.baseUrl, model, role: '', envKey: pr.envKey, enabled: true });
+for (const [id, providerId] of [['claude', 'anthropic'], ['chatgpt', 'openai'], ['kimi', 'moonshot'], ['deepseek', 'deepseek']]) {
+  const prov = CATALOG.providers.find(x => x.providerId === providerId), model = (process.env[id.toUpperCase() + '_MODEL'] || '').trim();
+  if (!prov || !process.env[prov.envKey] || !model || models.has(id)) continue;
+  const r = models.add({ connectionId: id, providerId, modelId: model, envKey: prov.envKey });
+  if (!r.ok) console.error('环境变量模型连接 ' + id + ' 未建立：', r.error);
 }
+if (cfg.settings.defaultConnectionId && !models.has(cfg.settings.defaultConnectionId)) cfg.settings.defaultConnectionId = '';
+try { saveModels(); } catch (e) { console.error('无法写入 data/models.json：', e.message); }
 try { saveConfig(); } catch (e) { console.error('无法写入 data/config.json：', e.message); }
 
 /* ------------------------------------------------------------------ 状态 */
@@ -163,7 +178,7 @@ function recordTaskEvent(ev) {
 const seenClientEvents = new Map();
 const MAX_CLIENT_EVENTS = 5000;
 const MAX_EXTERNAL_TASKS_PER_OWNER = 50;
-const isProviderId = id => cfg.providers.some(p => p.id === id);
+const isProviderId = id => models.has(id);
 
 /* 外部上报的任务归属：平台内部任务一律拒绝；外部任务只属于首次创建它的上报主体 */
 function claimExternalTask(taskId, owner, input) {
@@ -239,7 +254,7 @@ function snapshot(level = 2) {
   const list = RT.publicAgents(24).map(a => ACC.redactAgent(a, level));
   return {
     type: 'state', now: Date.now(), working: list.filter(a => a.status === 'working').length, agents: list,
-    providers: level >= ACC.LEVEL.VIEWER ? cfg.providers.map(p => ({ id: p.id, label: p.label, model: p.model, enabled: p.enabled !== false, ready: providerReady(p) })) : [],
+    providers: level >= ACC.LEVEL.VIEWER ? models.list().map(c => ({ id: c.connectionId, label: c.displayName, model: c.modelId, enabled: c.enabled, ready: c.ready })) : [],
     totals: { ...RT.totals, agents: RT.agents.size }, showText: level >= 2 && !!cfg.settings.showText,
   };
 }
@@ -276,18 +291,17 @@ const TEST_TIMEOUT_MS = Number(process.env.AIJ_TEST_TIMEOUT_MS) || 0;
 if (Number(process.env.AIJ_TEST_MAX_CALL_BYTES) > 0) LIMITS.maxCallBytes = Number(process.env.AIJ_TEST_MAX_CALL_BYTES);
 const taskBytes = new Map();
 const providerKey = p => p.apiKey || (p.envKey && SEC.isAllowedEnvKey(p.envKey) && process.env[p.envKey]) || '';
-const providerReady = p => !!(providerKey(p) && p.model);
 
 async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onActivity, onBytes }) {
   const key = providerKey(p);
-  if (!key) throw new Error('未配置 API Key（可在管理界面填写，或设置环境变量 ' + (p.envKey || '—') + '）');
+  if (!key && !p.noKey) throw new Error('未配置 API Key（可在管理界面填写，或设置环境变量 ' + (p.envKey || '—') + '）');
   if (!p.model) throw new Error('未填写模型名');
   if (!p.baseUrl) throw new Error('未填写 Base URL');
   /* 密钥来源优先级：供应商里显式保存的 apiKey > 环境变量（envKey）。
      环境变量密钥与目标主机严格绑定：官方变量只发往官方主机，没有白名单例外；第三方接口请用 AIJ_*_KEY。 */
   let host;
   try { host = new URL(p.baseUrl).hostname.replace(/^\[|\]$/g, '').toLowerCase(); } catch { throw new Error('Base URL 格式不正确'); }
-  if (!p.apiKey && !SEC.envKeyHostOk(p.envKey, host)) {
+  if (key && !p.apiKey && !SEC.envKeyHostOk(p.envKey, host)) {
     throw new Error('环境变量 ' + p.envKey + ' 只能用于其官方主机；第三方接口请直接填写 API Key，或改用 AIJ_ 开头的环境变量名');
   }
   const base = p.baseUrl.replace(/\/+$/, '');
@@ -300,7 +314,8 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
     if (system) body.system = system;
   } else {
     url = base + '/chat/completions';
-    headers = { 'content-type': 'application/json', authorization: 'Bearer ' + key };
+    headers = { 'content-type': 'application/json' };
+    if (key) headers.authorization = 'Bearer ' + key;
     const messages = [];
     if (system) messages.push({ role: 'system', content: system });
     messages.push({ role: 'user', content: prompt });
@@ -411,13 +426,13 @@ bus.onTransition = ({ message: m, to }) => {
   { taskId: m.taskId, runId: m.runId, agentInstanceId: from.instanceId, roleId: from.roleId });
 };
 
-/* 当前可用的模型连接：存在、未停用、已就绪 */
+/* 当前可用的模型连接：存在、未停用、已就绪；返回运行时对象（含凭证，仅服务端内部使用） */
 function connectionState(id) {
-  const p = cfg.providers.find(x => x.id === id);
-  if (!p) return { error: '不存在（可能已被删除）', code: 'connection_missing' };
-  if (p.enabled === false) return { error: '已停用', code: 'connection_disabled' };
-  if (!providerReady(p)) return { error: '未就绪（缺少 API Key 或模型名）', code: 'connection_not_ready' };
-  return { p };
+  const c = models.get(id);
+  if (!c) return { error: '不存在（可能已被删除）', code: 'connection_missing' };
+  if (c.enabled === false) return { error: '已停用', code: 'connection_disabled' };
+  if (!models.ready(id)) return { error: '未就绪（缺少 API Key 或模型名）', code: 'connection_not_ready' };
+  return { p: models.runtime(id) };
 }
 
 const MSG_PREVIEW = 2000;
@@ -554,33 +569,96 @@ function readBody(req, limit = 1 << 20) {
     req.on('error', reject);
   });
 }
-const maskProvider = p => ({
-  id: p.id, label: p.label, type: p.type, baseUrl: p.baseUrl, model: p.model, role: p.role || '', envKey: p.envKey || '',
-  enabled: p.enabled !== false, hasKey: !!p.apiKey, envReady: !!(p.envKey && SEC.isAllowedEnvKey(p.envKey) && process.env[p.envKey]), keyHint: p.apiKey ? '••••' + p.apiKey.slice(-4) : '',
+/* ------------------------------------------------------------------ 模型连接：兼容视图、影响分析、删除、测试、模型发现 */
+const legacyView = c => ({
+  id: c.connectionId, label: c.displayName, type: c.protocol, baseUrl: c.baseUrl, model: c.modelId, role: c.notes || '', envKey: c.envKey || '',
+  enabled: c.enabled, hasKey: c.hasKey, envReady: c.envReady, keyHint: c.keyHint, providerId: c.providerId, status: c.status,
 });
-const hostOf = u => { try { return new URL(u).hostname.replace(/^\[|\]$/g, '').toLowerCase(); } catch { return ''; } };
-/* 保存供应商前的统一校验。返回错误文本，或 null 表示通过。 */
-function validateProviderInput(next, existing, newKey, clearKey) {
-  if (!SEC.isAllowedEnvKey(next.envKey)) {
-    return 'envKey 只能是 ' + Object.keys(SEC.ENV_KEY_HOST).join(' / ') + '，或以 AIJ_ 开头、以 _KEY 结尾的自定义名称';
+function fromLegacy(b) {
+  const prov = models.inferProvider(b.baseUrl, b.type);
+  const o = { providerId: prov.providerId, protocol: b.type === 'anthropic' ? 'anthropic' : 'openai', baseUrl: b.baseUrl, modelId: b.model, displayName: b.label, notes: b.role, envKey: b.envKey, enabled: b.enabled !== false, clearKey: !!b.clearKey };
+  if (typeof b.apiKey === 'string') o.apiKey = b.apiKey;
+  for (const k of Object.keys(o)) if (o[k] === undefined) delete o[k];
+  return o;
+}
+/* 团队对模型连接的引用（由团队注册中心提供；未接入时为空） */
+let teamRefs = () => [];
+let replaceInTeams = () => 0;
+/* 删除 / 停用前的影响分析 */
+function modelImpact(id) {
+  const running = [...tasks.values()].filter(t => t.status === 'running' && (t.agents || []).some(x => x.connectionId === id)).map(t => ({ id: t.id, title: t.title }));
+  const teams = teamRefs(id);
+  const alternatives = models.list().filter(c => c.connectionId !== id && c.enabled && c.ready).map(c => ({ connectionId: c.connectionId, displayName: c.displayName }));
+  const isDefault = cfg.settings.defaultConnectionId === id;
+  const blockers = [];
+  if (running.length) blockers.push(`有 ${running.length} 个运行中的任务正在使用它（已发出的调用会完成，后续步骤会停止）`);
+  if (teams.length) blockers.push(`被 ${teams.length} 个团队岗位引用`);
+  if (isDefault) blockers.push('是当前默认模型');
+  return { connectionId: id, runningTasks: running, teams, isDefault, alternatives, historyKept: true, blockers };
+}
+/*
+ * 删除模型连接：
+ *   - 有运行中任务：需要 force=1（已发出的调用按原配置完成，下一步明确停止）
+ *   - 被团队引用：需要 replacement=<另一个连接>（替换为它）或 detach=1（岗位改为“待分配”）
+ *   - 是默认模型：默认改为 replacement，否则清空
+ * 历史任务保留执行时的模型信息，不受影响。
+ */
+function removeConnection(id, { replacement = '', force = false, detach = false } = {}) {
+  const impact = modelImpact(id);
+  if (replacement) {
+    if (replacement === id) return { code: 400, error: '替代模型不能是自己' };
+    const st = models.get(replacement);
+    if (!st) return { code: 400, error: '替代模型不存在' };
+    if (st.enabled === false) return { code: 400, error: '替代模型已停用' };
   }
-  let host = '';
-  if (next.baseUrl) {
-    const c = SEC.checkBaseUrlSyntax(next.baseUrl, POLICY);
-    if (!c.ok) return c.error;
-    host = c.host;
+  if (impact.runningTasks.length && !force) return { code: 409, error: '有运行中的任务正在使用该模型。确认删除请加 force=1', impact };
+  if (impact.teams.length && !replacement && !detach) return { code: 409, error: '该模型被团队岗位引用。请选择替代模型（replacement），或确认把这些岗位改为待分配（detach=1）', impact };
+  const replaced = replaceInTeams(id, replacement || null);
+  if (impact.isDefault) cfg.settings.defaultConnectionId = replacement || '';
+  const r = models.remove(id);
+  saveModels(); saveConfig();
+  return { ok: true, removed: r.removed, replacement: replacement || null, teamRolesUpdated: replaced, defaultConnectionId: cfg.settings.defaultConnectionId, impact };
+}
+async function testConnection(id) {
+  const rt = models.runtime(id);
+  const t0 = Date.now();
+  let out;
+  try {
+    const r = await callModel(rt, { role: '连接测试', task: '连接测试', prompt: '只回复一个字：好', maxTokens: 32 });
+    out = { ok: true, ms: Date.now() - t0, tokens: r.tokens, reply: r.text.slice(0, 60) };
+  } catch (e) { out = { ok: false, ms: Date.now() - t0, error: e.message, hint: diagnose(e.message) }; }
+  models.recordTest(id, out);
+  saveModels();
+  return { ...out, connection: models.view(models.get(id)) };
+}
+/* 从服务商接口读取可用模型列表（不预置、不编造模型名）。可用已保存连接的凭证，或本次粘贴的 Key（不保存） */
+async function discoverModels(b) {
+  let base, protocol, key;
+  if (b.connectionId) {
+    const rt = models.runtime(b.connectionId);
+    if (!rt) return { ok: false, error: '模型连接不存在' };
+    base = rt.baseUrl; protocol = rt.type; key = typeof b.apiKey === 'string' && b.apiKey.trim() ? b.apiKey.trim() : providerKey(rt);
+  } else {
+    const prov = CATALOG.providers.find(x => x.providerId === b.providerId);
+    if (!prov) return { ok: false, error: '未知的服务商' };
+    base = String(b.baseUrl || prov.baseUrl || '').trim().replace(/\/+$/, ''); protocol = prov.protocol;
+    key = typeof b.apiKey === 'string' ? b.apiKey.trim() : '';
+    if (!key && prov.envKey && process.env[prov.envKey] && SEC.envKeyHostOk(prov.envKey, (() => { try { return new URL(base).hostname; } catch { return ''; } })())) key = process.env[prov.envKey];
   }
-  const keyAfter = clearKey ? '' : (newKey || (existing && existing.apiKey) || '');
-  /* 没有显式 API Key 时将使用环境变量：官方变量必须与官方主机一一绑定 */
-  if (host && !keyAfter && next.envKey && !SEC.envKeyHostOk(next.envKey, host)) {
-    return '环境变量 ' + next.envKey + ' 只能用于 ' + SEC.ENV_KEY_HOST[next.envKey] + '；第三方接口请直接填写 API Key，或改用 AIJ_ 开头的环境变量名';
+  if (!base) return { ok: false, error: '缺少 Base URL' };
+  const url = protocol === 'anthropic' ? (/\/v1$/.test(base) ? base + '/models' : base + '/v1/models') + '?limit=100' : base + '/models';
+  const headers = protocol === 'anthropic' ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' } : (key ? { authorization: 'Bearer ' + key } : {});
+  try {
+    const res = await SEC.pinnedFetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(15000), maxBytes: 2 << 20 }, POLICY);
+    const text = await SSE.readLimitedText(res, 2 << 20);
+    if (!res.ok) { const e = 'HTTP ' + res.status + '：' + SEC.scrubSecrets(text.replace(/\s+/g, ' ').slice(0, 200), [key]); return { ok: false, error: e, hint: diagnose(e) }; }
+    let j; try { j = JSON.parse(text); } catch { return { ok: false, error: '服务商返回的不是 JSON', hint: '该服务商可能不支持模型列表接口，请手动填写模型名。' }; }
+    const list = (Array.isArray(j.data) ? j.data : Array.isArray(j.models) ? j.models : []).map(x => String(x.id || x.name || '').replace(/^models\//, '')).filter(x => /^[\w.:/@-]{1,80}$/.test(x));
+    return { ok: true, models: [...new Set(list)].sort().slice(0, 300) };
+  } catch (e) {
+    const msg = SEC.scrubSecrets(e?.name === 'TimeoutError' ? '请求超时' : (e?.message || String(e)), [key]);
+    return { ok: false, error: msg, hint: diagnose(msg) };
   }
-  /* 已保存的 API Key 不会自动转发到新主机：换主机必须重新填写 */
-  if (existing && existing.apiKey && !newKey && !clearKey) {
-    const old = hostOf(existing.baseUrl);
-    if (old && host && old !== host) return '更换 Base URL 的主机后，需要重新填写 API Key（已保存的密钥不会自动发往新主机）';
-  }
-  return null;
 }
 const slug = s => (String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ai').slice(0, 24);
 
@@ -638,7 +716,7 @@ async function api(req, res, url) {
     if (!/^[\w-]{1,32}$/.test(name) || name === 'env') return json(res, 400, { error: '名称只能包含字母、数字、下划线、连字符（1–32 位），且不能是 env' });
     if (cfg.ingestTokens.some(t => t.name === name)) return json(res, 400, { error: '名称已存在' });
     const agentsList = Array.isArray(b.agents) ? b.agents.map(x => String(x).trim()).filter(Boolean) : [];
-    if (agentsList.length > 20 || agentsList.some(x => !/^[\w.-]{1,40}$/.test(x) || /^demo-/i.test(x) || cfg.providers.some(pv => pv.id === x))) return json(res, 400, { error: 'agents 必须是最多 20 个合法 ID，且不能是模型连接 ID 或 demo- 开头' });
+    if (agentsList.length > 20 || agentsList.some(x => !/^[\w.-]{1,40}$/.test(x) || /^demo-/i.test(x) || models.has(x))) return json(res, 400, { error: 'agents 必须是最多 20 个合法 ID，且不能是模型连接 ID 或 demo- 开头' });
     const t = ACC.newIngestToken();
     cfg.ingestTokens.push({ name, hash: t.hash, hint: t.hint, agents: agentsList, createdAt: Date.now() });
     saveConfig();
@@ -654,11 +732,13 @@ async function api(req, res, url) {
 
   if (p === '/api/config' && m === 'GET') {
     return json(res, 200, {
-      providers: cfg.providers.map(maskProvider), settings: cfg.settings, presets: PRESETS,
-      /* 不再通过配置接口回传管理令牌；令牌见服务启动日志或 data/config.json */
-      server: { port: PORT, host: HOST, lan: lanUrls(), root: ROOT, node: process.version },
+      models: models.list(), catalog: CATALOG, settings: cfg.settings,
+      providers: models.list().map(legacyView), // 兼容旧版管理界面
+      /* 不通过配置接口回传管理令牌；令牌见 data/config.json */
+      server: { port: PORT, host: HOST, lan: lanUrls(), node: process.version, localTargets: [...POLICY.localTargets] },
     });
   }
+  if (p === '/api/catalog' && m === 'GET') return json(res, 200, CATALOG);
   if (p === '/api/settings' && m === 'POST') {
     const b = await readBody(req);
     const s = cfg.settings;
@@ -666,53 +746,68 @@ async function api(req, res, url) {
     if (Number.isFinite(b.idleTimeoutSec)) s.idleTimeoutSec = Math.max(10, Math.min(3600, b.idleTimeoutSec | 0));
     if (Number.isFinite(b.maxTokens)) s.maxTokens = Math.max(256, Math.min(64000, b.maxTokens | 0));
     if (Number.isFinite(b.timeoutSec)) s.timeoutSec = Math.max(30, Math.min(1800, b.timeoutSec | 0));
+    if (b.defaultConnectionId !== undefined) {
+      if (b.defaultConnectionId && !models.has(b.defaultConnectionId)) return json(res, 400, { error: '默认模型不存在' });
+      s.defaultConnectionId = b.defaultConnectionId || '';
+    }
     saveConfig();
     return json(res, 200, { settings: s });
   }
+
+  /* ---------------- 模型注册中心 ---------------- */
+  if (p === '/api/models' && m === 'GET') return json(res, 200, { models: models.list(), defaultConnectionId: cfg.settings.defaultConnectionId });
+  if (p === '/api/models' && m === 'POST') {
+    const r = models.add(await readBody(req));
+    if (!r.ok) return json(res, 400, { error: r.error });
+    if (!cfg.settings.defaultConnectionId) { cfg.settings.defaultConnectionId = r.connection.connectionId; saveConfig(); }
+    saveModels();
+    return json(res, 200, { connection: r.connection });
+  }
+  if (p === '/api/models/discover' && m === 'POST') return json(res, 200, await discoverModels(await readBody(req)));
+  let mm;
+  if ((mm = p.match(/^\/api\/models\/([\w-]{1,40})(?:\/(enable|disable|test|impact|capabilities))?$/))) {
+    const id = mm[1], act = mm[2];
+    if (!models.has(id)) return json(res, 404, { error: '模型连接不存在' });
+    if (!act && m === 'GET') return json(res, 200, { connection: models.view(models.get(id)), impact: modelImpact(id) });
+    if (!act && (m === 'PUT' || m === 'POST')) {
+      const r = models.update(id, await readBody(req));
+      if (!r.ok) return json(res, r.code || 400, { error: r.error });
+      saveModels();
+      return json(res, 200, { connection: r.connection });
+    }
+    if ((act === 'enable' || act === 'disable') && m === 'POST') {
+      const r = models.setEnabled(id, act === 'enable');
+      saveModels();
+      return json(res, 200, { connection: r.connection, impact: act === 'disable' ? modelImpact(id) : undefined });
+    }
+    if (act === 'test' && m === 'POST') return json(res, 200, await testConnection(id));
+    if (act === 'impact' && m === 'GET') return json(res, 200, modelImpact(id));
+    if (act === 'capabilities' && m === 'GET') return json(res, 200, models.getCapabilities(id));
+    if (!act && m === 'DELETE') {
+      const r = removeConnection(id, { replacement: url.searchParams.get('replacement') || '', force: url.searchParams.get('force') === '1', detach: url.searchParams.get('detach') === '1' });
+      return json(res, r.code || 200, r);
+    }
+    return json(res, 405, { error: '不支持的操作' });
+  }
+
+  /* ---------------- 旧接口（兼容）：/api/providers → 模型注册中心 ---------------- */
   if (p === '/api/providers' && m === 'POST') {
     const b = await readBody(req);
-    const existing = b.id ? cfg.providers.find(x => x.id === b.id) : null;
-    const next = {
-      label: str(b.label || (existing && existing.label) || 'AI', 40),
-      type: b.type === 'anthropic' ? 'anthropic' : 'openai',
-      baseUrl: str(b.baseUrl, 300).trim(),
-      model: str(b.model, 80).trim(),
-      role: str(b.role, 80),
-      envKey: str(b.envKey, 60).trim(),
-      enabled: b.enabled !== false,
-    };
-    const newKey = typeof b.apiKey === 'string' ? b.apiKey.trim() : '';
-    /* 先校验、通过后才修改配置：校验失败不留下任何半成品 */
-    const bad = validateProviderInput(next, existing, newKey, !!b.clearKey);
-    if (bad) return json(res, 400, { error: bad });
-    let prov = existing;
-    if (!prov) {
-      let id = slug(b.label || b.id || 'ai'), n = 2;
-      while (cfg.providers.some(x => x.id === id)) id = slug(b.label || 'ai') + '-' + n++;
-      prov = { id, apiKey: '' };
-      cfg.providers.push(prov);
-    }
-    Object.assign(prov, next);
-    if (b.clearKey) prov.apiKey = '';
-    else if (newKey) prov.apiKey = newKey;
-    saveConfig();
-    return json(res, 200, { provider: maskProvider(prov) });
+    const input = fromLegacy(b);
+    const r = b.id && models.has(b.id) ? models.update(b.id, input) : models.add(input);
+    if (!r.ok) return json(res, 400, { error: r.error });
+    if (!cfg.settings.defaultConnectionId) { cfg.settings.defaultConnectionId = r.connection.connectionId; saveConfig(); }
+    saveModels();
+    return json(res, 200, { provider: legacyView(r.connection) });
   }
-  let mm;
   if ((mm = p.match(/^\/api\/providers\/([\w-]+)$/)) && m === 'DELETE') {
-    const i = cfg.providers.findIndex(x => x.id === mm[1]);
-    if (i < 0) return json(res, 404, { error: '不存在' });
-    cfg.providers.splice(i, 1); saveConfig();
-    return json(res, 200, { ok: true });
+    if (!models.has(mm[1])) return json(res, 404, { error: '不存在' });
+    const r = removeConnection(mm[1], { force: true, detach: true });
+    return json(res, r.code || 200, r);
   }
   if ((mm = p.match(/^\/api\/providers\/([\w-]+)\/test$/)) && m === 'POST') {
-    const prov = cfg.providers.find(x => x.id === mm[1]);
-    if (!prov) return json(res, 404, { error: '不存在' });
-    const t0 = Date.now();
-    try {
-      const r = await callModel(prov, { role: '连接测试', task: '连接测试', prompt: '只回复一个字：好', maxTokens: 32 });
-      return json(res, 200, { ok: true, ms: Date.now() - t0, tokens: r.tokens, reply: r.text.slice(0, 60) });
-    } catch (e) { return json(res, 200, { ok: false, ms: Date.now() - t0, error: e.message }); }
+    if (!models.has(mm[1])) return json(res, 404, { error: '不存在' });
+    return json(res, 200, await testConnection(mm[1]));
   }
   if (p === '/api/demo' && m === 'POST') {
     const b = await readBody(req);
@@ -726,10 +821,10 @@ async function api(req, res, url) {
     if (!task) return json(res, 400, { error: '任务内容为空' });
     if (task.length > MAX_TASK_CHARS) return json(res, 400, { error: `任务内容 ${task.length} 字符，超过 ${MAX_TASK_CHARS} 字符上限。请精简或拆分后再提交（系统不会自动截断）` });
     const mode = ['single', 'review', 'full'].includes(b.mode) ? b.mode : 'full';
-    const sa = connectionState(b.a);
+    const sa = connectionState(b.a || cfg.settings.defaultConnectionId);
     if (sa.error) return json(res, 400, { error: '模型 A ' + sa.error, code: sa.code });
     let sb = null;
-    if (mode !== 'single') { sb = connectionState(b.b); if (sb.error) return json(res, 400, { error: '模型 B ' + sb.error, code: sb.code }); }
+    if (mode !== 'single') { sb = connectionState(b.b || b.a || cfg.settings.defaultConnectionId); if (sb.error) return json(res, 400, { error: '模型 B ' + sb.error, code: sb.code }); }
     let id;
     do id = crypto.randomBytes(6).toString('hex'); while (tasks.has(id));
     const run = { id, kind: 'internal', ownerId: user.userId, runId: EV.newRunId(), title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now() };
