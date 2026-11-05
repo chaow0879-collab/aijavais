@@ -78,7 +78,9 @@ try { saveConfig(); } catch (e) { console.error('无法写入 data/config.json�
 
 /* ------------------------------------------------------------------ 状态 */
 const agents = new Map();
-const totals = { calls: 0, tokens: 0, errors: 0 };
+/* totals 只统计平台自己发起并观察到的真实模型调用（source=server）。
+   tokens = 厂商返回的真实用量；estimatedTokens = 估算值，单独统计，不当作计费依据；外部上报与演示只计事件数。 */
+const totals = { calls: 0, tokens: 0, estimatedTokens: 0, errors: 0, reportedEvents: 0, simulatedEvents: 0 };
 const clients = new Set(); // 每个 res 带 res._lvl：2 管理员/本机，1 观看者，0 匿名
 const str = (s, n) => String(s == null ? '' : s).slice(0, n);
 
@@ -94,21 +96,25 @@ function loadTasks() {
     tasks.set(t.id, t);
   }
 }
+function writeTasksNow() {
+  tasksDirty = false;
+  try {
+    fs.mkdirSync(DATA, { recursive: true });
+    const tmp = TASKS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify([...tasks.values()]), { mode: 0o600 });
+    fs.renameSync(tmp, TASKS_FILE);
+  } catch (e) { console.error('无法写入 data/tasks.json：', e.message); }
+}
 function persistTasks() {
   tasksDirty = true;
   if (tasksTimer) return;
-  tasksTimer = setTimeout(() => {
-    tasksTimer = null;
-    if (!tasksDirty) return;
-    tasksDirty = false;
-    try {
-      fs.mkdirSync(DATA, { recursive: true });
-      const tmp = TASKS_FILE + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify([...tasks.values()]), { mode: 0o600 });
-      fs.renameSync(tmp, TASKS_FILE);
-    } catch (e) { console.error('无法写入 data/tasks.json：', e.message); }
-  }, 800);
+  tasksTimer = setTimeout(() => { tasksTimer = null; if (tasksDirty) writeTasksNow(); }, 800);
   tasksTimer.unref?.();
+}
+/* 立即落盘（任务结束、服务关闭时使用） */
+function flushTasks() {
+  if (tasksTimer) { clearTimeout(tasksTimer); tasksTimer = null; }
+  writeTasksNow();
 }
 function trimTasks() { while (tasks.size > MAX_TASKS) tasks.delete(tasks.keys().next().value); }
 function taskSummary(t) {
@@ -126,46 +132,99 @@ function recordTaskEvent(ev) {
   persistTasks();
 }
 
+/* 外部上报去重：同一 agent 的同一 clientEventId 只处理一次（重试 / 网络重发不会重复计数） */
+const seenClientEvents = new Map();
+const MAX_CLIENT_EVENTS = 5000;
+const isProviderId = id => cfg.providers.some(p => p.id === id);
+
+/*
+ * ingest：校验 → 去重 → 规范化 → 更新运行时计数 → 记录到任务 → 广播。
+ * opts：{ source, taskId, runId, spanId, parentSpanId, attempt, usageSource }（服务端上下文，优先于事件体内的同名字段）
+ * 运行时计数规则：
+ *   - 模型调用并发数按 spanId 集合统计（a.spans），一个供应商同时跑多个任务互不覆盖；
+ *   - task_* 任务级事件不改变“正在调用模型”的状态；
+ *   - totals 只计 source=server 的真实调用；external（reported）与 demo（simulated）不进入真实统计。
+ */
 function ingest(ev, opts = {}) {
   const source = opts.source || 'server';
-  const norm = EV.normalize(ev, { source, taskId: opts.taskId });
+  const input = ev && typeof ev === 'object' && !Array.isArray(ev) ? ev : {};
+  const aid = str(input.agentId !== undefined ? input.agentId : input.agent, 40).trim();
+  if (source === 'external') {
+    if (aid && (isProviderId(aid) || /^demo-/i.test(aid))) return { error: '外部事件不能使用平台供应商 ID 或 demo- 前缀的 agentId，请换一个名称' };
+    if (input.clientEventId !== undefined && input.clientEventId !== null) {
+      if (typeof input.clientEventId !== 'string' || !EV.ID_RE.test(input.clientEventId)) return { error: 'clientEventId 格式不合法（字母、数字、下划线、点、连字符，最长 64 位）' };
+      const dk = aid + '\u0000' + input.clientEventId;
+      if (seenClientEvents.has(dk)) return { duplicate: true, eventId: seenClientEvents.get(dk) };
+    }
+  } else if (source === 'demo' && !/^demo-/.test(aid)) return { error: '演示事件的 agentId 必须以 demo- 开头' };
+  const existing = aid ? agents.get(aid) : null;
+  if (existing && existing.source !== source) return { error: 'agentId "' + aid + '" 已被其它来源（' + existing.source + '）占用，不能以 ' + source + ' 身份写入' };
+
+  const norm = EV.normalize(input, { source, taskId: opts.taskId, runId: opts.runId, spanId: opts.spanId, parentSpanId: opts.parentSpanId, attempt: opts.attempt, usageSource: opts.usageSource });
   if (!norm.ok) return { error: norm.error };
   const env = norm.ev;
+  if (source === 'external' && input.clientEventId) {
+    seenClientEvents.set(aid + '\u0000' + input.clientEventId, env.eventId);
+    if (seenClientEvents.size > MAX_CLIENT_EVENTS) seenClientEvents.delete(seenClientEvents.keys().next().value);
+  }
   const id = env.agentId;
   const status = env.status;
   const now = env.timestamp;
-  let a = agents.get(id);
+  let a = existing;
   if (!a) {
     if (agents.size >= 200) {
       const old = [...agents.values()].filter(x => x.status !== 'working').sort((x, y) => x.last - y.last)[0];
       if (old) agents.delete(old.id);
     }
-    a = { id, label: id, model: '', role: '', status: 'idle', task: '', calls: 0, tokens: 0, errors: 0, since: now, last: now, ms: 0, live: 0, active: 0 };
+    a = { id, source, verification: env.verification, label: id, model: '', role: '', status: 'idle', task: '', calls: 0, tokens: 0, estimatedTokens: 0, errors: 0, since: now, last: now, ms: 0, live: 0, active: 0, spans: new Set() };
     agents.set(id, a);
   }
   a.last = now;
-  if (ev.label) a.label = str(ev.label, 40);
-  if (ev.model) a.model = str(ev.model, 60);
-  if (ev.role !== undefined) a.role = str(ev.role, 40);
-  if (ev.task !== undefined) a.task = str(ev.task, 80);
+  if (input.label) a.label = str(input.label, 40);
+  if (input.model) a.model = str(input.model, 60);
+  if (input.role !== undefined) a.role = str(input.role, 40);
+  if (input.task !== undefined) a.task = str(input.task, 80);
 
-  const tk = env.tokenUsage && env.tokenUsage.total;
+  const usage = env.tokenUsage;
+  const tk = usage && usage.total;
   let tokens;
-  /* a.active：该智能体同时在飞的调用数，并行任务共用一个供应商时不再互相覆盖状态 */
-  if (status === 'start') {
-    a.active = (a.active || 0) + 1;
-    a.status = 'working'; a.since = now; a.calls++; totals.calls++; a.live = 0;
-  } else if (status === 'stream') {
-    if (a.status !== 'working') { a.status = 'working'; a.since = now; }
-    if (tk !== undefined) a.live = tk;
-  } else if (status === 'done') {
-    a.active = Math.max(0, (a.active || 0) - 1);
-    if (!a.active) a.status = 'idle';
-    a.ms = env.durationMs !== undefined ? env.durationMs : now - a.since;
-    if (tk > 0) { a.tokens += tk; totals.tokens += tk; tokens = tk; }
-  } else if (status === 'error') {
-    a.active = Math.max(0, (a.active || 0) - 1);
-    a.status = a.active ? 'working' : 'error'; a.errors++; totals.errors++;
+  if (source === 'server') {
+    const et = env.eventType, sid = env.spanId;
+    if (et === 'model_start') {
+      a.spans.add(sid); a.status = 'working'; a.since = now; a.calls++; totals.calls++; a.live = 0;
+    } else if (et === 'model_stream') {
+      if (a.spans.has(sid) && a.status !== 'working') { a.status = 'working'; a.since = now; }
+      if (tk !== undefined) a.live = tk;
+    } else if (et === 'model_done') {
+      a.spans.delete(sid);
+      if (!a.spans.size) a.status = 'idle';
+      a.ms = env.durationMs !== undefined ? env.durationMs : now - a.since;
+      if (tk > 0) {
+        if (usage.source === 'provider') { a.tokens += tk; totals.tokens += tk; tokens = tk; }
+        else { a.estimatedTokens += tk; totals.estimatedTokens += tk; }
+      }
+    } else if (et === 'model_error') {
+      a.spans.delete(sid);
+      a.status = a.spans.size ? 'working' : 'error'; a.errors++; totals.errors++;
+    }
+    a.active = a.spans.size;
+  } else {
+    /* external / demo：沿用旧的 status 计数（供 signal.js 与演示使用），但不进入真实统计 */
+    if (source === 'external') totals.reportedEvents++; else totals.simulatedEvents++;
+    if (status === 'start') {
+      a.active++; a.status = 'working'; a.since = now; a.calls++; a.live = 0;
+    } else if (status === 'stream') {
+      if (a.status !== 'working') { a.status = 'working'; a.since = now; }
+      if (tk !== undefined) a.live = tk;
+    } else if (status === 'done') {
+      a.active = Math.max(0, a.active - 1);
+      if (!a.active) a.status = 'idle';
+      a.ms = env.durationMs !== undefined ? env.durationMs : now - a.since;
+      if (tk > 0) { a.tokens += tk; tokens = tk; }
+    } else if (status === 'error') {
+      a.active = Math.max(0, a.active - 1);
+      a.status = a.active ? 'working' : 'error'; a.errors++;
+    }
   }
   const working = [...agents.values()].filter(x => x.status === 'working').length;
   /* 输出 = 新协议信封 + 旧版字段（大屏 panel.html 仍按旧字段响应，协议向后兼容） */
@@ -173,10 +232,10 @@ function ingest(ev, opts = {}) {
     ...env,
     type: 'event', t: now, agent: id, label: a.label, model: a.model, role: a.role,
     task: a.task, tokens: tokens !== undefined ? tokens : tk,
-    ms: env.durationMs, to: ev.to ? str(ev.to, 40) : undefined, working,
+    ms: env.durationMs, to: input.to ? str(input.to, 40) : undefined, working,
   };
-  if (ev.error) out.error = str(ev.error, 160);
-  if (cfg.settings.showText && ev.text) out.text = str(ev.text, 400);
+  if (input.error) out.error = str(input.error, 160);
+  if (cfg.settings.showText && input.text) out.text = str(input.text, 400);
   recordTaskEvent(out);
   broadcast(out);
   return out;
@@ -185,7 +244,8 @@ function ingest(ev, opts = {}) {
 function snapshot(level = 2) {
   const list = [...agents.values()].sort((a, b) => b.last - a.last).slice(0, 24).map(a => EV.redact({
     id: a.id, label: a.label, model: a.model, role: a.role, status: a.status, task: a.task,
-    calls: a.calls, tokens: a.tokens, errors: a.errors, since: a.since, last: a.last, ms: a.ms, live: a.live,
+    calls: a.calls, tokens: a.tokens, estimatedTokens: a.estimatedTokens, errors: a.errors, since: a.since, last: a.last, ms: a.ms, live: a.live,
+    source: a.source, verification: a.verification,
   }, level));
   return {
     type: 'state', now: Date.now(), working: list.filter(a => a.status === 'working').length, agents: list,
@@ -211,7 +271,7 @@ function broadcastState() {
 setInterval(() => {
   const now = Date.now(), limit = cfg.settings.idleTimeoutSec * 1000;
   for (const a of agents.values()) {
-    if (a.status === 'working' && now - a.last > limit) { a.status = 'idle'; a.active = 0; ingest({ agent: a.id, status: 'info', eventType: 'planning', task: '超时，回到待机' }); }
+    if (a.status === 'working' && now - a.last > limit) { a.status = 'idle'; a.active = 0; a.spans.clear(); ingest({ agent: a.id, eventType: 'activity', task: '超时，回到待机' }, { source: a.source }); }
     else if (a.status === 'error' && now - a.last > 30000) a.status = 'idle';
   }
   broadcastState();
@@ -295,16 +355,17 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
   });
 }
 
-async function callModel(p, { role, task, system, prompt, maxTokens, taskId }) {
-  const T = { taskId };
-  ingest({ agent: p.id, label: p.label, model: p.model, role, task, status: 'start', eventType: 'model_start' }, T);
+async function callModel(p, { role, task, system, prompt, maxTokens, taskId, runId, parentSpanId, attempt }) {
+  const spanId = EV.newSpanId();
+  const T = { taskId, runId, spanId, parentSpanId, attempt };
+  ingest({ agent: p.id, label: p.label, model: p.model, role, task, eventType: 'model_start' }, T);
   const t0 = Date.now();
   let out = '', inTok = 0, outTok = 0, pending = '', lastEmit = 0;
   const flush = force => {
     const now = Date.now();
     if (!force && now - lastEmit < 150) return;
     lastEmit = now;
-    ingest({ agent: p.id, status: 'stream', eventType: 'model_stream', tokenUsage: { total: outTok || Math.ceil(out.length / 1.6), estimated: !outTok }, text: pending }, T);
+    ingest({ agent: p.id, eventType: 'model_stream', tokenUsage: { total: outTok || Math.ceil(out.length / 1.6) }, text: pending }, { ...T, usageSource: outTok ? 'provider' : 'estimated' });
     pending = '';
   };
   try {
@@ -319,12 +380,12 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId }) {
     const total = (inTok + outTok) || Math.ceil((prompt.length + out.length) / 1.6);
     const ms = Date.now() - t0;
     /* 厂商未返回 usage 时为估算值，事件里明确标记 estimated，不当作真实计费依据 */
-    ingest({ agent: p.id, status: 'done', eventType: 'model_done', durationMs: ms, tokenUsage: { input: inTok || undefined, output: outTok || undefined, total, estimated } }, T);
-    return { text: out, tokens: total, inTokens: inTok, outTokens: outTok, ms, estimated };
+    ingest({ agent: p.id, eventType: 'model_done', durationMs: ms, tokenUsage: { input: inTok || undefined, output: outTok || undefined, total } }, { ...T, usageSource: estimated ? 'estimated' : 'provider' });
+    return { text: out, tokens: total, inTokens: inTok, outTokens: outTok, ms, estimated, spanId };
   } catch (e) {
     /* 写入事件 / 任务记录 / 响应前统一脱敏，防止上游错误回显密钥 */
     const msg = SEC.scrubSecrets(e?.name === 'TimeoutError' ? '请求超时' : (e?.message || String(e)), [providerKey(p)]);
-    ingest({ agent: p.id, status: 'error', eventType: 'task_error', error: msg }, T);
+    ingest({ agent: p.id, eventType: 'model_error', error: msg, durationMs: Date.now() - t0 }, T);
     throw new Error(msg);
   }
 }
@@ -340,21 +401,32 @@ async function runPipeline(run, A, B) {
     const s = { label, providerId: p.id, provider: p.label, status: 'running', text: '', tokens: 0, ms: 0 };
     steps.push(s);
     try {
-      const r = await callModel(p, { role, task: run.title, system, prompt, taskId: run.id });
+      const r = await callModel(p, { role, task: run.title, system, prompt, taskId: run.id, runId: run.runId });
       Object.assign(s, { status: 'done', text: r.text, tokens: r.tokens, ms: r.ms });
       return r.text;
     } catch (e) { Object.assign(s, { status: 'error', error: e.message }); throw e; }
   };
+  const T = { taskId: run.id, runId: run.runId };
+  ingest({ agent: A.id, label: A.label, task: run.title, eventType: 'task_start' }, T);
   try {
-    const draft = await doStep('起草', A, '起草', SYS_DRAFT, run.task);
-    if (run.mode === 'single') { run.status = 'done'; return; }
-    ingest({ agent: A.id, status: 'handoff', to: B.id, role: '交接审核', eventType: 'handoff' }, { taskId: run.id });
-    const review = await doStep('交叉审核', B, '审核', SYS_REVIEW, `【任务】\n${run.task}\n\n【待审核输出】\n${draft}`);
-    if (run.mode === 'review') { run.status = 'done'; return; }
-    ingest({ agent: B.id, status: 'handoff', to: A.id, role: '回交修订', eventType: 'handoff' }, { taskId: run.id });
-    await doStep('修订', A, '修订', SYS_REVISE, `【任务】\n${run.task}\n\n【你的原稿】\n${draft}\n\n【审核意见】\n${review}`);
+    await pipelineBody();
     run.status = 'done';
-  } catch (e) { run.status = 'error'; run.error = e.message; }
+    ingest({ agent: A.id, task: run.title, eventType: 'task_done' }, T);
+  } catch (e) {
+    run.status = 'error'; run.error = e.message;
+    ingest({ agent: A.id, task: run.title, eventType: 'task_error', error: e.message }, T);
+  }
+  run.endedAt = Date.now();
+  flushTasks(); // 任务结束（成功 / 失败）立即落盘，不等防抖定时器
+  async function pipelineBody() {
+    const draft = await doStep('起草', A, '起草', SYS_DRAFT, run.task);
+    if (run.mode === 'single') return;
+    ingest({ agent: A.id, to: B.id, role: '交接审核', eventType: 'handoff' }, { taskId: run.id, runId: run.runId });
+    const review = await doStep('交叉审核', B, '审核', SYS_REVIEW, `【任务】\n${run.task}\n\n【待审核输出】\n${draft}`);
+    if (run.mode === 'review') return;
+    ingest({ agent: B.id, to: A.id, role: '回交修订', eventType: 'handoff' }, { taskId: run.id, runId: run.runId });
+    await doStep('修订', A, '修订', SYS_REVISE, `【任务】\n${run.task}\n\n【你的原稿】\n${draft}\n\n【审核意见】\n${review}`);
+  }
 }
 
 /* ------------------------------------------------------------------ 演示（无需任何 API Key） */
@@ -447,8 +519,10 @@ async function api(req, res, url) {
 
   if (p === '/api/events' && m === 'GET') {
     res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no' });
+    /* 过渡实现：目前所有连接按完整级别（2）收发，与分级前行为一致；第三批将改为按令牌区分 0/1/2 级并做字段白名单 */
+    res._lvl = 2;
     res.write('retry: 2000\n\n');
-    res.write('data: ' + JSON.stringify(snapshot()) + '\n\n');
+    res.write('data: ' + JSON.stringify(snapshot(2)) + '\n\n');
     clients.add(res);
     req.on('close', () => clients.delete(res));
     return;
@@ -524,7 +598,7 @@ async function api(req, res, url) {
     if (!b || typeof b !== 'object' || !b.agent) return json(res, 400, { error: '缺少 agent 字段' });
     const r = ingest(b, { source: 'external' });
     if (r.error) return json(res, 400, { error: r.error });
-    return json(res, 200, { ok: true, eventId: r.eventId });
+    return json(res, 200, { ok: true, eventId: r.eventId, ...(r.duplicate ? { duplicate: true } : {}) });
   }
   if (p === '/api/demo' && m === 'POST') {
     const b = await readBody(req);
@@ -540,7 +614,7 @@ async function api(req, res, url) {
     if (!A) return json(res, 400, { error: '请选择模型 A' });
     if (mode !== 'single' && !B) return json(res, 400, { error: '请选择模型 B' });
     const id = crypto.randomBytes(6).toString('hex');
-    const run = { id, title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now() };
+    const run = { id, runId: EV.newRunId(), title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now() };
     tasks.set(id, run);
     trimTasks();
     persistTasks();
@@ -594,6 +668,13 @@ server.on('error', e => {
   else console.error(e);
   process.exit(1);
 });
+/* 关闭时：仍在运行的任务标记为中断并立即落盘，避免重启后状态与实际不一致 */
+function shutdown() {
+  for (const t of tasks.values()) if (t.status === 'running') { t.status = 'interrupted'; t.error = '服务停止，任务中断'; t.endedAt = Date.now(); }
+  flushTasks();
+}
+process.on('SIGINT', () => { shutdown(); process.exit(0); });
+process.on('SIGTERM', () => { shutdown(); process.exit(0); });
 server.listen(PORT, HOST, () => {
   console.log('\n  AI 星环 已启动');
   console.log(`  大屏      http://localhost:${PORT}/`);

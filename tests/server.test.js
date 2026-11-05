@@ -36,7 +36,7 @@ async function startServer(extraEnv = {}) {
   for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'MOONSHOT_API_KEY', 'DEEPSEEK_API_KEY', 'ADMIN_TOKEN']) if (!(k in extraEnv)) delete env[k];
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], { env, stdio: 'ignore' });
   for (let i = 0; i < 50; i++) { try { if ((await call(port, 'GET', '/api/state')).status === 200) break; } catch { /* 等待启动 */ } await new Promise(r => setTimeout(r, 100)); }
-  return { port, dir, stop: () => { child.kill(); fs.rmSync(dir, { recursive: true, force: true }); } };
+  return { port, dir, stop: () => new Promise(r => { child.once('exit', () => { fs.rmSync(dir, { recursive: true, force: true }); r(); }); child.kill('SIGTERM'); }) };
 }
 
 test('服务接口：供应商校验、密钥绑定、配置不回传令牌、事件来源标记', async t => {

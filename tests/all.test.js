@@ -4,3 +4,4 @@ require('./events.test.js');
 require('./messages.test.js');
 require('./security.test.js');
 require('./server.test.js');
+require('./runtime.test.js');
