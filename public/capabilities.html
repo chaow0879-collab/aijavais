@@ -17,7 +17,7 @@
     .item{display:grid;grid-template-columns:90px minmax(0,1fr);gap:4px 14px;padding:10px 0;border-top:1px solid var(--line)}.item:first-child{border-top:0}
     .pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;border:1px solid var(--line);white-space:nowrap}
     .item .pill{justify-self:start;align-self:start;margin-top:2px}.ok{color:var(--accent);border-color:var(--accent)}.warn{color:var(--warn);border-color:var(--warn)}.missing,.bad{color:var(--bad);border-color:var(--bad)}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+    label{display:block;font-size:13px;color:var(--dim)}input,select{width:100%;background:#0b1622;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px;font:inherit;margin-top:3px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
     .cap{background:#0d1a29;border:1px solid var(--line);border-radius:9px;padding:12px 14px}.cap p{margin:6px 0;font-size:13px}
     .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}pre{white-space:pre-wrap;background:#0b1622;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;overflow:auto}
     .group-required h3{color:var(--bad)}.group-recommended h3{color:var(--warn)}.group-optional h3{color:var(--dim)}
@@ -51,11 +51,26 @@
     </section>
     <section id="panel-mcp" hidden>
       <div class="card"><h2>什么是 MCP？</h2>
-        <p>MCP（Model Context Protocol）是一种让 AI 平台连接外部工具的通用接口，例如连接网页检索、数据库或企业系统。<strong>不安装 MCP 也能使用 AIJAVAIS 的全部基础功能</strong>（模型协作、上传资料、生成 Word/Excel/PPT）。</p>
-        <p class="hint">需要在服务器上运行程序的 MCP Server 只能由服务器管理员在服务器配置文件中添加（防止网页上安装任意程序）。添加后可在这里测试连接。</p>
-        <button id="mcp-discover" type="button">测试已配置的 MCP 连接</button> <span id="mcp-note" class="hint"></span>
+        <p>MCP（Model Context Protocol）是让 AI 平台连接外部工具的通用接口，例如网页读取、数据库、企业系统。<strong>不安装 MCP 也能使用 AIJAVAIS 的全部基础功能</strong>（模型协作、上传资料、数据分析、生成 Word/Excel/PPT/图表）。</p>
+        <p class="hint">两种接入方式：① 远程 MCP（服务商提供 https 地址）——可在下方直接添加；② 本机 MCP 程序——为防止网页安装任意程序，只能由服务器管理员安装固定版本并写入服务器配置文件，之后在这里测试与启停。</p>
       </div>
-      <div class="card"><h2>已配置的 MCP Server</h2><div id="mcp-servers"><p class="hint">尚未测试。</p></div></div>
+      <div class="card"><h2>已接入的 MCP Server</h2><div id="mcp-servers"><p class="hint">正在读取…</p></div><span id="mcp-note" class="hint"></span></div>
+      <div class="card" id="mcp-try" hidden><h2>工具调用测试</h2>
+        <p class="hint">真实调用所选工具一次，结果原样显示。调用会写入运行日志。</p>
+        <label>工具 <select id="try-tool"></select></label>
+        <label style="display:block;margin-top:8px">参数（JSON）<textarea id="try-args" rows="4" style="width:100%;background:#0b1622;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:8px">{}</textarea></label>
+        <button id="try-run" type="button" class="primary">调用一次</button><pre id="try-result" hidden></pre></div>
+      <div class="card"><h2>添加远程 MCP（HTTP）</h2>
+        <div class="grid">
+          <label>标识（英文/数字）<input id="add-id" maxlength="40" placeholder="例如 search"></label>
+          <label>显示名称<input id="add-name" maxlength="80" placeholder="例如 检索服务"></label>
+          <label>https 地址<input id="add-url" maxlength="500" placeholder="https://服务商地址/mcp"></label>
+          <label>访问令牌（可选，保存在服务器，不再显示）<input id="add-token" type="password" autocomplete="off"></label>
+        </div>
+        <button id="add-server" type="button">添加并测试</button> <span id="add-note" class="hint"></span>
+        <p class="hint">暂不支持需要 OAuth 网页登录授权的 MCP 服务。远程服务的费用和权限以服务商说明为准。</p></div>
+      <div class="card"><h2>MCP 目录（已审核的参考服务）</h2><p class="hint" id="catalog-note"></p><div id="mcp-catalog" class="grid"></div></div>
+      <div class="card"><h2>运行日志（最近 100 条，重启后清空；完整审计见服务器 audit.log）</h2><div id="mcp-logs"></div></div>
     </section>
   </main>
   <script src="/capabilities.js"></script>

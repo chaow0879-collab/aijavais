@@ -83,26 +83,65 @@
     }
   }
   async function mcp() {
-    $('mcp-note').textContent = '正在连接…';
-    const r = await api('/api/v2/tools/discover', 'POST', {});
+    const r = await api('/api/v2/mcp');
     const target = $('mcp-servers'); target.replaceChildren();
-    if (!r.servers.length) target.append(node('p', { class: 'hint', text: '服务器上没有配置 MCP Server。基础功能不受影响；如需外部工具，请联系服务器管理员按部署文档添加。' }));
-    for (const s of r.servers) target.append(node('div', { class: 'item' }, [node('span', { class: 'pill ' + (s.available ? 'ok' : 'bad'), text: s.available ? '连接成功' : '连接失败' }),
-      node('div', {}, [node('strong', { text: s.serverId }), node('div', { class: 'hint', text: s.available ? '发现 ' + s.tools + ' 个工具' : '原因：' + (s.error || s.code) })])]));
-    $('mcp-note').textContent = '已完成实际连接测试。';
-    await caps();
+    if (!r.servers.length) target.append(node('p', { class: 'hint', text: '还没有接入任何 MCP Server。基础功能不受影响。' }));
+    const toolOptions = [];
+    for (const s of r.servers) {
+      const t = s.lastTest;
+      const status = !s.enabled ? ['已停用', 'warn'] : !t ? ['未测试', 'warn'] : t.available ? ['连接成功', 'ok'] : ['连接失败', 'bad'];
+      const where = s.transport === 'http' ? '远程 · ' + s.host + (s.hasToken ? ' · 已保存令牌' : '') : '本机程序 · ' + s.program + '（服务器配置文件管理）';
+      const actions = node('div', { class: 'meta' }, [
+        node('button', { type: 'button', text: '测试连接', onclick: () => act(async () => { const x = await api('/api/v2/mcp/servers/' + encodeURIComponent(s.serverId) + '/test', 'POST', {}); $('mcp-note').textContent = s.serverId + '：' + (x.state.available ? '连接成功，发现 ' + x.state.tools + ' 个工具' : '失败 — ' + (x.state.hint || x.state.error)); }) }),
+        node('button', { type: 'button', text: s.enabled ? '停用' : '启用', onclick: () => act(() => api('/api/v2/mcp/servers/' + encodeURIComponent(s.serverId) + '/' + (s.enabled ? 'disable' : 'enable'), 'POST', {})) }),
+        s.removable ? node('button', { type: 'button', text: '移除', onclick: () => act(async () => { if (confirm('移除远程 MCP「' + s.name + '」？保存的令牌会一并删除。')) await api('/api/v2/mcp/servers/' + encodeURIComponent(s.serverId), 'DELETE'); }) }) : null]);
+      target.append(node('div', { class: 'item' }, [node('span', { class: 'pill ' + status[1], text: status[0] }), node('div', {}, [node('strong', { text: s.name + '（' + s.serverId + '）' }), node('div', { class: 'hint', text: where + ' · ' + s.tools + ' 个工具' }),
+        t && !t.available && s.enabled ? node('div', { class: 'hint', text: '原因：' + (t.error || t.code) + (t.hint ? ' — ' + t.hint : '') }) : null, actions])]));
+    }
+    $('catalog-note').textContent = r.catalogNote;
+    const cat = $('mcp-catalog'); cat.replaceChildren();
+    for (const c of r.catalog) cat.append(node('div', { class: 'cap' }, [node('strong', { text: c.name }),
+      node('div', { class: 'meta' }, [node('span', { class: 'pill', text: c.category }), node('span', { class: 'pill', text: c.transport === 'http' ? '远程' : '本机程序' }),
+        c.free === true ? node('span', { class: 'pill', text: '免费' }) : null, c.needsApiKey ? node('span', { class: 'pill warn', text: '需要 API Key' }) : null, c.network ? node('span', { class: 'pill warn', text: '会联网' }) : null]),
+      node('p', { text: c.description }), node('p', { class: 'hint', text: '所需权限：' + c.permissions.join('、') }), node('p', { class: 'hint', text: '安装/连接：' + c.install }),
+      c.configExample ? node('pre', { text: '服务器配置文件 servers 中的一项：\n' + JSON.stringify(c.configExample, null, 2) }) : null,
+      c.source ? node('a', { href: c.source, target: '_blank', rel: 'noopener', text: '来源与许可证' }) : null]));
+    const logs = $('mcp-logs'); logs.replaceChildren();
+    if (!r.logs.length) logs.append(node('p', { class: 'hint', text: '暂无记录。' }));
+    for (const l of r.logs) logs.append(node('div', { class: 'item' }, [node('span', { class: 'pill ' + (l.status === 'done' ? 'ok' : 'bad'), text: l.status === 'done' ? '成功' : '失败' }),
+      node('div', { class: 'hint', text: new Date(l.at).toLocaleString() + ' · ' + l.serverId + ' · ' + (l.action === 'call' ? '调用 ' + l.toolId : '连接测试') + (l.durationMs != null ? ' · ' + l.durationMs + ' ms' : '') + (l.code ? ' · ' + l.code : '') + (l.error ? ' · ' + l.error : '') })]));
+    const caps = await api('/api/v2/capabilities');
+    for (const c of caps.capabilities.filter(c => c.kind === 'mcp')) toolOptions.push(c);
+    $('mcp-try').hidden = !toolOptions.length;
+    const sel = $('try-tool'); const keep = sel.value; sel.replaceChildren(...toolOptions.map(c => node('option', { value: c.id, text: c.id + ' — ' + (c.description || c.name) })));
+    if (keep) sel.value = keep;
   }
+  async function act(fn) { try { await fn(); } catch (e) { $('mcp-note').textContent = e.message; } await mcp().catch(e => { $('mcp-note').textContent = e.message; }); }
+  $('add-server').addEventListener('click', () => act(async () => {
+    const id = $('add-id').value.trim();
+    await api('/api/v2/mcp/servers', 'POST', { id, name: $('add-name').value.trim() || id, url: $('add-url').value.trim(), ...($('add-token').value ? { token: $('add-token').value } : {}) });
+    $('add-token').value = '';
+    const x = await api('/api/v2/mcp/servers/' + encodeURIComponent(id) + '/test', 'POST', {});
+    $('add-note').textContent = x.state.available ? '已添加，连接成功，发现 ' + x.state.tools + ' 个工具。' : '已添加，但连接失败：' + (x.state.hint || x.state.error);
+  }));
+  $('try-run').addEventListener('click', async () => {
+    const out = $('try-result'); out.hidden = false;
+    let args; try { args = JSON.parse($('try-args').value || '{}'); } catch { out.textContent = '参数不是有效的 JSON'; return; }
+    const toolId = $('try-tool').value;
+    try { const r = await api('/api/v2/tools/call', 'POST', { toolId, args, allowedTools: [toolId] }); out.textContent = JSON.stringify(r.result, null, 2); }
+    catch (e) { out.textContent = '调用失败：' + e.message; }
+    await mcp().catch(() => {});
+  });
   const showError = e => { $('ready-summary').textContent = e.message; };
   $('tab-ready').addEventListener('click', () => tabs('ready'));
   $('tab-caps').addEventListener('click', () => { tabs('caps'); caps().catch(showError); });
-  $('tab-mcp').addEventListener('click', () => tabs('mcp'));
+  $('tab-mcp').addEventListener('click', () => { tabs('mcp'); mcp().catch(e => { $('mcp-note').textContent = e.message; }); });
   $('run-check').addEventListener('click', () => check().catch(showError));
-  $('mcp-discover').addEventListener('click', () => mcp().catch(e => { $('mcp-note').textContent = e.message; }));
   $('copy-list').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(listText()); $('copy-note').textContent = '已复制。'; }
     catch { const pre = node('pre', { text: listText() }); $('missing').append(pre); $('copy-note').textContent = '浏览器不允许自动复制，请手动选择下方文字。'; }
   });
   let tab = 'ready'; try { tab = localStorage.getItem('aij-cap-tab') || 'ready'; } catch { /* optional */ }
   tabs(['ready', 'caps', 'mcp'].includes(tab) ? tab : 'ready');
-  check().catch(showError); caps().catch(showError);
+  check().catch(showError); caps().catch(showError); if (tab === 'mcp') mcp().catch(e => { $('mcp-note').textContent = e.message; });
 })();

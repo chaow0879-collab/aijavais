@@ -1,7 +1,7 @@
 {
   "version": 1,
   "updatedAt": "2026-11-05",
-  "note": "Reviewed directory for the MCP management center. AIJAVAIS never downloads or installs these programs: a server administrator installs a pinned version, verifies its source and licence, and lists its absolute executable path in AIJ_MCP_SERVERS_FILE. Remote (HTTP) servers can be added in the UI because no local program is executed; their URLs obey the same outbound security policy as model APIs. Verify current package names, versions and licences in the upstream repository before installing.",
+  "note": "已审核的参考目录。AIJAVAIS 不会自动下载或安装这些程序：本机程序需由服务器管理员安装固定版本、核实来源与许可证，并把可执行文件的绝对路径写入 AIJ_MCP_SERVERS_FILE 配置文件。远程（HTTP）服务可以在本页直接添加，因为不会在服务器上运行程序；其地址与模型接口遵守同样的出站安全规则。安装前请在上游仓库核实当前的包名、版本和许可证。",
   "servers": [
     { "id": "time", "name": "时间与时区", "category": "通用", "transport": "stdio", "free": true, "needsApiKey": false, "network": false,
       "permissions": ["无文件或网络访问"], "description": "查询当前时间、换算时区。适合用来第一次体验 MCP。",

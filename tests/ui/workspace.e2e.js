@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
 const H = require('../helpers');
 
 (async () => {
-  let app, browser;
+  let app, browser, mcpServer;
   let calls = 0;
   const mockPrompts = [];
   const mock = http.createServer((req,res) => {
@@ -25,7 +25,8 @@ const H = require('../helpers');
   await new Promise(resolve=>mock.listen(0,'127.0.0.1',resolve));
   try {
     const mockPort=mock.address().port;
-    app=await H.boot({env:{LOCAL_MODEL_TARGETS:'127.0.0.1:'+mockPort}});
+    const mcpFx=await require('../fixtures/mcp-http-server.cjs')('ui-token');mcpServer=mcpFx.server;
+    app=await H.boot({env:{LOCAL_MODEL_TARGETS:'127.0.0.1:'+mockPort+',127.0.0.1:'+mcpFx.port}});
     const base='http://localhost:'+app.port;
     const models=[];
     for(const name of ['writer','reviewer']) {
@@ -108,15 +109,26 @@ const H = require('../helpers');
     await page.waitForFunction(()=>document.querySelector('#caps').textContent.includes('生成 Word 文档'));
     const capsText=await page.textContent('#caps');
     assert.match(capsText,/内置工具/);assert.match(capsText,/尚未实现/);assert.match(capsText,/本身不是工具/);
-    await page.click('#tab-mcp');await page.click('#mcp-discover');
-    await page.waitForFunction(()=>document.querySelector('#mcp-note').textContent.includes('已完成'));
-    assert.match(await page.textContent('#mcp-servers'),/没有配置 MCP Server/);
+    await page.click('#tab-mcp');
+    await page.waitForFunction(()=>document.querySelector('#mcp-servers').textContent.includes('还没有接入'));
+    await page.waitForFunction(()=>document.querySelector('#mcp-catalog').textContent.includes('时间与时区'));
+    await page.fill('#add-id','remote');await page.fill('#add-name','远程测试');await page.fill('#add-url','http://127.0.0.1:'+mcpFx.port+'/mcp');await page.fill('#add-token','ui-token');
+    await page.click('#add-server');
+    await page.waitForFunction(()=>document.querySelector('#add-note').textContent.includes('连接成功'));
+    assert.equal(await page.inputValue('#add-token'),'','token field cleared after saving');
+    await page.waitForSelector('#mcp-try:not([hidden])');
+    await page.selectOption('#try-tool','mcp:remote:sse_echo');await page.fill('#try-args','{"value":"界面调用"}');await page.click('#try-run');
+    await page.waitForFunction(()=>document.querySelector('#try-result').textContent.includes('sse:界面调用'));
+    await page.waitForFunction(()=>document.querySelector('#mcp-logs').textContent.includes('调用 mcp:remote:sse_echo'));
+    assert.doesNotMatch(await page.content(),/ui-token/,'token never rendered back');
+    if(process.env.UI_SHOTS)await page.screenshot({path:require('path').join(process.env.UI_SHOTS,'mcp.png'),fullPage:true});
     if(process.env.UI_SHOTS){await page.click('#tab-ready');await page.screenshot({path:require('path').join(process.env.UI_SHOTS,'capabilities.png'),fullPage:true});}
     assert.deepEqual(errors,[],'no JavaScript exceptions');
     console.log('PASS workspace E2E: live login/session, project save/validate, two local MOCK model calls, XSS-safe output, human review, real DOCX export/persistence, real DOCX upload+parse+role handoff, conservative wizard draft handoff. No paid API used.');
   } finally {
     if(browser)await browser.close();
     if(app)await app.stop();
+    if(mcpServer)mcpServer.close();
     await new Promise(resolve=>mock.close(resolve));
   }
 })().catch(error=>{console.error(error);process.exitCode=1;});
