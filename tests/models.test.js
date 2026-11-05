@@ -254,7 +254,8 @@ test('ledger write failure is never silent: audited without secrets and reported
   const audits = [];
   const entry = { kind: 'connection_test', connectionId: 'c1', modelId: 'm', ok: true, tokens: 8, cost: null, error: undefined };
   const failing = { recordSystemUsage() { throw Object.assign(new Error('disk full sk-secret-123456'), { code: 'SQLITE_FULL' }); } };
-  const r = recordSystemCall({ store: failing, audit: (e, d) => audits.push([e, d]) }, entry);
+  const r = recordSystemCall({ store: failing, audit: (e, d) => { audits.push([e, d]); return true; } }, entry);
+  assert.equal(recordSystemCall({ store: failing, audit: () => undefined }, entry).audited, false, 'only an explicit true counts as audited');
   assert.equal(r.recorded, false); assert.match(r.warning, /未能写入账本（已记录审计事件）/); assert.match(r.warning, /不要当作零费用/); assert.equal(r.audited, true);
   assert.deepEqual(audits, [['usage_ledger_write_failed', { kind: 'connection_test', connectionId: 'c1', modelId: 'm', ok: true, tokens: 8, cost: null, reason: 'SQLITE_FULL' }]]);
   assert.doesNotMatch(JSON.stringify(audits), /sk-secret/, 'error text (which may echo secrets) is not logged');
@@ -287,4 +288,40 @@ test('API: a connection test whose usage cannot be recorded is reported and not 
   assert.equal(probe.ok, true); assert.equal(probe.usageRecorded, false);
   const saved = (await call(S.port, 'POST', '/api/models', { providerId: 'custom', baseUrl: base, apiKey: 'k2', modelId: 'm2', displayName: 'm2' })).json.connection;
   assert.notEqual(saved.status, 'available', 'an unrecorded pre-save probe is not reused as a passing test');
+});
+
+test('real AuthStore: audit() reports write failure; ledger+audit failure is never reported as audited', () => {
+  const { AuthStore } = require('../lib/auth');
+  const { recordSystemCall } = require('../lib/usage-ledger');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aij-audit-'));
+  try {
+    const authStore = new AuthStore({ dir });
+    assert.equal(authStore.audit('probe_ok', { a: 1 }), true);
+    assert.match(fs.readFileSync(path.join(dir, 'audit.log'), 'utf8'), /probe_ok/);
+    // Make the audit file unwritable in a way that also fails for root (CI): replace it with a directory.
+    fs.rmSync(path.join(dir, 'audit.log')); fs.mkdirSync(path.join(dir, 'audit.log'));
+    assert.equal(authStore.audit('probe_fail', {}), false, 'failure is reported, not thrown');
+    const entry = { kind: 'connection_test', connectionId: 'c1', modelId: 'm', ok: true, tokens: 8, cost: null };
+    const failingStore = { recordSystemUsage() { throw new Error('ledger down'); } };
+    const r = recordSystemCall({ store: failingStore, audit: (e, d) => authStore.audit(e, d) }, entry);
+    assert.deepEqual([r.recorded, r.audited], [false, false]);
+    assert.match(r.warning, /审计事件也未能写入/); assert.doesNotMatch(r.warning, /已记录审计事件/);
+    fs.rmSync(path.join(dir, 'audit.log'), { recursive: true }); // writable again
+    const ok = recordSystemCall({ store: failingStore, audit: (e, d) => authStore.audit(e, d) }, entry);
+    assert.deepEqual([ok.recorded, ok.audited], [false, true]); assert.match(ok.warning, /已记录审计事件/);
+    assert.match(fs.readFileSync(path.join(dir, 'audit.log'), 'utf8'), /usage_ledger_write_failed/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('getCapabilities agrees with status(): an unrecorded probe does not verify chat; normal probes still do', () => {
+  const r = reg({ LOCAL_MODEL_TARGETS: '127.0.0.1:11434' });
+  const a = r.add({ providerId: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', modelId: 'm1', pricingMode: 'local' }).connection.connectionId;
+  r.recordTest(a, { ok: true, ms: 5 });
+  assert.equal(r.status(a), 'available'); assert.deepEqual(r.getCapabilities(a).verified, ['chat']);
+  r.recordTest(a, { ok: true, ms: 5, usageRecorded: false });
+  assert.equal(r.status(a), 'untested'); assert.deepEqual(r.getCapabilities(a).verified, [], 'not verified while accounting is incomplete');
+  r.recordTest(a, { ok: true, ms: 5, usageRecorded: true });
+  assert.equal(r.status(a), 'available'); assert.deepEqual(r.getCapabilities(a).verified, ['chat']);
+  r.recordTest(a, { ok: false, ms: 5, error: 'HTTP 500' });
+  assert.deepEqual(r.getCapabilities(a).verified, []);
 });
