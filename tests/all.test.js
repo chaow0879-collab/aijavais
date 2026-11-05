@@ -25,3 +25,4 @@ require('./capabilities.test.js');
 require('./data-analysis.test.js');
 require('./office-render.test.js');
 require('./mcp-management.test.js');
+require('./code-exec.test.js');

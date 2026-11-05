@@ -74,6 +74,7 @@
           c.needsApiKey ? node('span', { class: 'pill warn', text: '需要 API Key' }) : null]);
         grid.append(node('div', { class: 'cap' }, [node('strong', { text: c.name }), meta, node('p', { text: c.description || '' }),
           c.permissions?.length ? node('p', { class: 'hint', text: '所需权限：' + c.permissions.join('、') }) : null,
+          c.reason ? node('p', { class: 'hint', text: '当前原因：' + c.reason }) : null,
           c.howTo ? node('p', { class: 'hint', text: '如何启用：' + c.howTo }) : null,
           c.alternative ? node('p', { class: 'hint', text: '替代方案：' + c.alternative }) : null,
           c.note ? node('p', { class: 'hint', text: c.note }) : null,

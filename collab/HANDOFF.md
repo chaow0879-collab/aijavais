@@ -14,16 +14,17 @@
 6. 内置工具：`project_file_read`、`data_analysis`、`chart_generation`（SVG）、`document_convert`（LibreOffice→PDF）、`document_render`（PNG + 空白页检查）。
 7. MCP：远程 Streamable HTTP（静态令牌）、启停、连接/调用测试、诊断、运行日志、移除；审核目录 `catalog/mcp-servers.v1.json`。
 8. 立项向导结果页显示服务端实时工具检查；立项工具 ID 映射到真实工具。
-9. 文档：`docs/USER-GUIDE.md`（普通用户）、`docs/DEPLOYMENT-PARALLEL.md`（与第一代并行部署）、FEATURE-STATUS / ARCHITECTURE / TESTING 更新。
+9. 步骤可接收全部前序成果（handoff:'all'）；受控 JavaScript 执行（默认关闭，网络命名空间 + Node 权限模型）。
+10. 文档：`docs/USER-GUIDE.md`（普通用户）、`docs/DEPLOYMENT-PARALLEL.md`（与第一代并行部署）、FEATURE-STATUS / ARCHITECTURE / TESTING 更新。
 
 ## 测试
 
-`npm test` 182/182（本地 0 跳过）；`test:ui`、`test:workspace` 通过。全部为本地 Mock 模型、本地 MCP fixture、真实文件与系统程序；真实厂商 API 与第三方生产 MCP 未测。
+`npm test` 185/185（本地 0 跳过）；`test:ui`、`test:workspace` 通过。全部为本地 Mock 模型、本地 MCP fixture、真实文件与系统程序；真实厂商 API 与第三方生产 MCP 未测。
 
 ## 尚未完成（按建议顺序）
 
-1. 受控代码执行（需隔离运行环境，默认关闭、每次授权）——尚未实现。
-2. 多步交接：后续岗位可选择接收全部前序成果；团队备用模型自动切换（需纳入批准与价表）；32-token 试连费用入账。
+1. 受控代码执行已实现（JavaScript，默认关闭）；生产强隔离可改为独立容器运行器。
+2. 团队备用模型自动切换（需纳入批准与价表）；32-token 试连费用入账。
 3. 图表嵌入 Word/PPT；流程图/结构图；已上传 Office 文件的编辑（替换文字后重新生成）。
 4. 由模型提出团队/流程草案（需走同一预算批准）以支持模板外的全新项目类型。
 5. 负责人提供服务器后，按 `docs/DEPLOYMENT-PARALLEL.md` 只读检查 → 备份 → 并行部署 → 12 项测试 → 报告；未经批准不切换生产流量。
