@@ -24,7 +24,7 @@ flowchart TD
 
 旧认证/配置保持兼容：`config.json`、`models.json`、`credentials.json`、`teams.json`、`auth.json`、`sessions.json`、`audit.log`、旧 `tasks.json`。凭据不进入公开模型视图；文件权限 0600。V2 不无损恢复旧内存 MessageBus/ArtifactStore，旧 `/api/run` 历史继续按原语义读取。
 
-新增 `projects.sqlite`（schema v3；v1 库启动时先 `VACUUM INTO` 生成 0600 备份再前向迁移）开启 foreign_keys、WAL、synchronous FULL、busy timeout，使用参数化 SQL：
+新增 `projects.sqlite`（schema v4；旧库启动时先 `VACUUM INTO` 生成 0600 备份再前向迁移）开启 foreign_keys、WAL、synchronous FULL、busy timeout，使用参数化 SQL：
 
 | 表 | 实际用途 |
 |---|---|
@@ -37,6 +37,7 @@ flowchart TD
 | artifacts | run FK、MIME、SHA-256、元数据、真实内容 BLOB |
 | usage_ledger | 调用用量、真实/部分/估算/未知来源、价格及保守费用 |
 | settings | 版本化 Skills 完整快照；MCP 远程连接、停用列表与访问令牌（令牌从不返回给前端） |
+| model_requests | （v4）owner/kind/requestId永久唯一键、参数摘要、派发/结算状态、唯一system_usage外键；不存提示词/凭据 |
 | system_usage | （v3）项目运行以外的模型调用（连接测试、AI团队草案）用量；无价表的远程费用记为 null（未知） |
 | project_files | （v2）项目资料原始字节、SHA-256、提取出的文字与提取状态；随项目级联删除 |
 
@@ -98,4 +99,4 @@ MCP 支持 stdio（管理员配置文件）与远程 Streamable HTTP（网页添
 
 ## 动态团队草案（工作单元2）
 
-`lib/budget.js`是ProjectEngine与IntakeDraftService共用的模型授权/预留/结算策略，持久化由各调用方负责。`POST /api/v2/intake/ai-draft`只调用一次已测模型，严格白名单JSON后返回可编辑项目数据；它没有工具权限，也不创建项目。system_usage先持久预留再更新同一行，未知远程费用null、保守budgetCost另列。前端单独批准调用，编辑后另行确认保存；执行仍由工作台另行授权。数据库结构保持v3。详情见AI-DRAFT.md。
+`lib/budget.js`是ProjectEngine与IntakeDraftService共用的模型授权/预留/结算策略，持久化由各调用方负责。`POST /api/v2/intake/ai-draft`只调用一次已测模型，严格白名单JSON后返回可编辑项目数据；它没有工具权限，也不创建项目。system_usage先持久预留再更新同一行，未知远程费用null、保守budgetCost另列。前端单独批准调用，编辑后另行确认保存；执行仍由工作台另行授权。schema v4增加持久幂等状态表；claim+预留、单次结算分别事务提交，网络前先提交dispatching；启动在DATA锁下保守恢复、不重放。旧版所有可识别ID有通配墓碑，历史账单完整保留。管理员只读异常查询与能力中心提示，详见LEDGER-RECOVERY.md和AI-DRAFT.md。

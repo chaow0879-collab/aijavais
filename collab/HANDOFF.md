@@ -2,7 +2,24 @@
 
 分支 `feat/codex-v2-p1-ledger-recovery`；精确起点 `b71faaa65bb66e04ea2a015c9238a3a129bdb68e`（保留Claude已验收#5及#5-F的全部实现）。本轮不延用落后两提交的Codex旧分支。唯一负责人Codex，Claude待命。设计先行，见[LEDGER-RECOVERY](../docs/LEDGER-RECOVERY.md)。以下历史记录不能覆盖最新GitHub第十轮授权。
 
-状态：设计检查点，代码与测试尚未开始；不得将设计当作完成。最终测试、CI、完整SHA和遗留风险将在交付前写入本节。
+状态：#6+#8已实施，本地验证完成，等待最终分支CI与独立审计；最终完整候选SHA和CI链接/计数发布于Issue #6/#8的AGENT_REPORT_V1（以相同最终HEAD为准）。最终报告后停写，不开#7/#9。
+
+独立检查点：
+- 设计：36e2c7a96cd107e9b88ed74eae1abaee758a75f1（已推送）。
+- 事务与恢复核心：84dfd8ddd8cf06aaeb4bcf78857b79bf1e946191（已推送）；相关54项回归通过。
+- 后续只读API/UI、HTTP与浏览器验收、此文档组成完整候选；完整40位SHA请读取上述Issue最终评论，避免把核心检查点误认为全部交付。
+
+实际实现：SQLite schema v4 model_requests永久唯一(owner,kind,requestId)，规范化参数/目标hash，事务claim+费用预留，网络前dispatching，ledgerId单次原子结算；独占DATA锁下claimed恢复not_dispatched费用0、dispatching保守未知null/保留上界。v3所有可识别intake ID有跨主体墓碑，重复历史账单不丢失，reserved按未知恢复；没有ID的历史无法补回丢失幂等键。认证管理员只读`GET /api/v2/usage/system/exceptions`按主体隔离、安全字段白名单；能力中心警示与UTC时间，不含人工改账或重发操作。保留#5 HTTP202/ok:false财务未完成与人工保存语义。
+
+本地真实结果：`npm test` **238通过/0失败/0跳过**；`npm run test:intake`、`test:ui`、`test:workspace`全部通过。模型全部为Mock；SQLite/WAL/事务/备份、SIGKILL、HTTP、Chromium和既有Office生成/解析回归是真实执行。细项与派发计数见docs/TESTING.md：并发同ID1次；重启仍1次；1001条后续历史后的旧ID重试增量0；强杀窗口0/0/1、恢复增量0；浏览器4次，重试/查询增量0。未删测试。
+
+修改范围：lib/project-store.js、lib/intake-draft.js、lib/v2-api.js、public/capabilities.js；新model-request-recovery与intake-draft-idempotency测试/强杀fixture，现有HTTP/Chromium及旧迁移fixture，all.test入口；CI仅增加新分支push触发；AGENTS/CLAUDE/架构/费用设计/测试/部署/功能状态与交接文档。未改ProjectEngine/budget/models/auth等业务规则。
+
+风险与未完成：#7忽略AbortSignal的底层生命周期仍P1；#9未开工；估算非厂商账单，未知费用不可视0；无人工reconcile写接口（需另批）。v3缺owner按通配保守拒绝ID、缺ID无法重建；墓碑本阶段永久保留、尚无清理。无真实付费API/第三方账单/生产DB迁移/生产强杀/部署验证。
+
+迁移/回滚：仅临时SQLite已测v3→v4、VACUUM INTO0600一致备份、事务失败回滚、备份失败中止、损坏/未来版本拒绝。实际生产迁移仍需授权。停唯一实例归档完整DATA，以匹配代码和一致备份隔离验证；迁移后若有模型请求，不可丢弃v4墓碑恢复旧库对外服务，应保全账本/幂等证据后申请前向修复或受审计恢复方案。详细步骤见docs/LEDGER-RECOVERY.md。
+
+下一步交GPT：读取#6/#8最终同SHA报告与Actions，安排#2独立只读审计事务/跨进程/恢复/迁移及#5回归；确认后再授权#7，不能把Codex自报当最终验收或直接部署。
 
 ---
 

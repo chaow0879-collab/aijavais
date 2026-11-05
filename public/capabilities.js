@@ -44,6 +44,32 @@
       for (const i of list) box.append(node('div', { class: 'item' }, [node('strong', { text: i.label }), node('div', {}, [node('div', { text: i.detail }), node('div', { class: 'hint', text: '怎么做：' + (i.howTo || '—') })])]));
       missing.append(box);
     }
+    // This panel is advisory and read-only. It never settles a ledger or resends a request.
+    let accounting = $('system-usage-warning');
+    if (!accounting) {
+      accounting = node('div', { id: 'system-usage-warning', class: 'card', role: 'status' });
+      $('panel-ready').insertBefore(accounting, $('missing').parentElement);
+    }
+    const exceptions = r.accounting?.exceptions || [];
+    accounting.hidden = !exceptions.length;
+    accounting.replaceChildren();
+    if (exceptions.length) {
+      accounting.append(node('h2', { text: '只读异常账本 · 待结算或需要人工核对' }), node('p', { class: 'hint', text: r.accounting.note }));
+      for (const entry of exceptions) {
+        const time = Number(entry.createdAt);
+        const date = new Date(time);
+        const utc = entry.createdAt != null && Number.isFinite(date.getTime()) ? date.toISOString() : '时间未知';
+        const cost = entry.cost === null || entry.cost === undefined ? '费用未知' : entry.cost + ' USD';
+        const bound = entry.costUpperBound ?? entry.reservedCost;
+        accounting.append(node('div', { class: 'cap' }, [
+          node('strong', { text: '请求 ' + (entry.requestId || '历史记录无请求ID') }),
+          node('p', { class: 'hint', text: '账本 ' + entry.ledgerId + ' · ' + (entry.modelId || entry.connectionId || '模型未知') }),
+          node('p', { class: 'hint', text: utc + ' · ' + (entry.requestState || entry.status || '待核对') }),
+          node('p', { text: cost + '；预留上界：' + (bound === null || bound === undefined ? '未知' : bound + ' USD') + '（非厂商账单）' })
+        ]));
+      }
+      accounting.append(node('a', { href: '/api/v2/usage/system/exceptions?limit=1000', target: '_blank', rel: 'noopener', text: '查看只读异常清单（最多1000条）' }));
+    }
     const checks = $('checks'); checks.replaceChildren();
     for (const i of r.items) {
       const [label, cls] = STATUS[i.status];

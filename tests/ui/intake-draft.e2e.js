@@ -104,7 +104,25 @@ const sample = require('../fixtures/ai-draft.cjs');
     assert.equal(await page.isChecked('#ai-save-confirm'),false,'saving still requires explicit confirmation');assert.deepEqual(errors,[]);
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile form does not overflow');
+    // #6+#8: replay the actual browser request ID after settlement failed. The
+    // durable key must block another Mock dispatch, and the admin sees only a
+    // read-only accounting warning (never a reconciliation or retry button).
+    const duplicate=await page.evaluate(async input=>{
+      const res=await fetch('/api/v2/intake/ai-draft',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});
+      return {status:res.status,body:await res.json()};
+    },rr.request().postDataJSON());
+    assert.equal(duplicate.status,409);assert.equal(duplicate.body.code,'duplicate_request');assert.equal(duplicate.body.requestState,'dispatching');
+    assert.equal(calls,4,'duplicate request never redispatches after failed settlement');
+    const exceptions=(await app.call('GET','/api/v2/usage/system/exceptions')).json;
+    assert.equal(exceptions.readOnly,true);assert.ok(exceptions.exceptions.some(x=>x.requestId===rb.requestId&&x.cost===null));
+    await page.setViewportSize({width:1360,height:950});await page.goto(base+'/capabilities.html');
+    await page.waitForSelector('#system-usage-warning:not([hidden])');
+    const warning=await page.textContent('#system-usage-warning');
+    assert.ok(warning.includes(rb.requestId));assert.match(warning,/费用未知|预留上界/);assert.match(warning,/\d{4}-\d{2}-\d{2}T.*Z/);
+    assert.match(warning,/不等于厂商账单|非厂商账单/);assert.equal(await page.locator('#system-usage-warning button').count(),0);
+    assert.equal(calls,4,'viewing exceptions never dispatches');assert.deepEqual(errors,[]);
     console.log('PASS AI draft E2E: original templates, explicit single-call consent, no-call estimates, budget limits, actual local MOCK requests, editable/add/remove roles and steps, XSS-safe rendering, confirmed save without run, cancellation/unknown fees and invalid-JSON manual fallback. No paid API or tools executed.');
+    console.log('PASS durable ledger E2E: HTTP202 unsettled draft, HTTP409 same-ID retry, Mock draft dispatches=4 (increment on retry/read=0), admin readonly exceptions with UTC/unknown fees/reservation bounds.');
   }finally{
     if(browser)await browser.close();if(app)await app.stop();mock.closeAllConnections();await new Promise(r=>mock.close(r));
   }

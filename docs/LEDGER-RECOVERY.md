@@ -1,6 +1,6 @@
 # #6 + #8 持久请求与异常账本设计
 
-状态：设计检查点；实施和验证结果另见 HANDOFF。授权：Issue #6 第十轮评论 6660869089；唯一开发者 Codex。分支 feat/codex-v2-p1-ledger-recovery，精确基线 b71faaa65bb66e04ea2a015c9238a3a129bdb68e。仅测试临时 SQLite，无生产迁移授权。
+状态：已实施，待独立审计；最终验证结果另见 HANDOFF。授权：Issue #6 第十轮评论 6660869089；唯一开发者 Codex。分支 feat/codex-v2-p1-ledger-recovery，精确基线 b71faaa65bb66e04ea2a015c9238a3a129bdb68e。仅测试临时 SQLite，无生产迁移授权。
 
 ## Schema v4
 
@@ -37,3 +37,10 @@
 Mock模型+临时SQLite断言底层派发次数：并发同ID、异参、跨owner、重启和1000历史后；claim与dispatching崩溃边界；子进程强杀/重启、第二活进程锁拒绝；预留/结算事务故障；重复恢复；v3历史、备份/迁移失败、损坏库/未来版本；只读认证/脱敏；#5 HTTP202与原ProjectEngine预算恢复回归。运行npm test、test:intake、适用浏览器测试和本分支Actions。全部报告真实计数、失败/跳过与Mock次数。
 
 不涉及#7底层忽略AbortSignal的取消生命周期或#9，不新增人工改账，不调用真实收费API，不改main/生产库/服务器/Caddy/S-UI。若必要依赖越界则BLOCKED。
+
+
+## 实现检查点
+
+设计提交：36e2c7a96cd107e9b88ed74eae1abaee758a75f1。事务/恢复实现提交：84dfd8ddd8cf06aaeb4bcf78857b79bf1e946191，相关54项回归通过（本地Mock、临时SQLite）。新增服务测试实际派发1002次后最早ID重启重试增量0；强杀窗口Mock计数为claimed=0/dispatching=0/called=1，恢复后增量0；HTTP服务强杀后底层Mock请求总数仍1。最终完整测试、只读UI和CI见HANDOFF及Issue #6/#8交付报告。
+
+运行中已验证本地免费调用保留费用0（#5）；启动对dispatching一律按未知恢复，包括本地目标，以显式状态机的保守规则处理崩溃证据，不将legacy cost0当作未派发证明。恢复仅处理非终态/遗留预留，不改变已完成的本地0费用账单。

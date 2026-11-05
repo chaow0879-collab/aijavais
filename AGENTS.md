@@ -12,4 +12,4 @@ AIJAVAIS 的产品定位是**全行业通用型 AI 工作操作系统**。不要
 - Node 24+，`npm test`；浏览器验证 `npm run test:ui` 和 `npm run test:workspace`。详情见 TESTING。
 - 私有 DATA、API Key、设置码、Cookie、数据库和截图不得提交到 Git。
 - 更改数据库先备份并增加迁移；单进程独占 DATA，禁止盲删活锁。
-- 此次 Codex 检查点推送及 SHA 核对完成后停止对交接分支写入，由 Claude Code 接管。
+- 最新第十轮授权：Codex独占 `feat/codex-v2-p1-ledger-recovery` 的#6+#8；Claude待命。完成推送/CI并在两Issue交付READY_FOR_REVIEW后停止写入，等待#2独立审计；不得自行开#7/#9或关闭Issue。历史Claude接力指令不覆盖本轮授权。

@@ -11,7 +11,7 @@
 - `reserveCall`：按UTF-8输入字节+256、输出上限保守预留；不够则不发送请求，目标变化也会阻断。
 - `settleCall`：完整厂商用量、部分用量、估算和未知分别处理。未知保守消耗预算；总量、分项或费用超上界会停止。
 
-这些是纯策略函数。ProjectEngine在事务中保存运行账本；草案在schema v3的system_usage记账，两处不复制授权或计费规则。新增方法更新已有JSON账目，不改变数据库结构。
+这些是纯策略函数。ProjectEngine在事务中保存运行账本；草案在schema v4通过model_requests和system_usage原子占位与预留，两处不复制授权或计费规则。状态机及迁移见[LEDGER-RECOVERY](LEDGER-RECOVERY.md)。
 
 ## 接口
 
@@ -35,8 +35,8 @@
 示例数字仅为接口格式，不代表任何服务商真实价格或免费额度。未批准的远程请求返回402且不发请求。本机调用仍受Token限制；前端也要求用户明确确认这一请求。请求上限不能替代供应商账单核对。
 
 - `/intake/ai-draft/estimate`：相同输入但不需调用批准，纯计算保守上界，`requestSent:false`。不发送模型请求、不开项目、不形成真实调用授权。
-- `/intake/ai-draft/cancel`：`{requestId}`，仅取消本管理员的活动请求。HTTP断开也传递取消；服务关闭先取消和等待结算。
-- 单次默认超时60秒，最多3个活动草案请求。当前进程内requestId去重，防止同一请求立即重发；不是跨重启的永久幂等承诺。
+- `/intake/ai-draft/cancel`：`{requestId}`，仅取消本管理员的活动请求。HTTP断开也传递取消；服务关闭先取消并等待上层处理。底层忽略AbortSignal时的生命周期为独立#7 P1，本轮未修复。
+- 单次默认超时60秒，最多3个活动草案请求。按认证owner+kind+requestId在SQLite永久去重；同参数返回409 duplicate_request、异参409 idempotency_key_reused，含requestState/ledgerId；并发、重启、1000条以后均不重发。不存结果重放，仍可手工设计新方案。
 
 成功返回`{ok:true,draft,guidance,modelRecommendations,toolCheck,skillCheck,handoffs,usage,usageRecorded,requestId}`。模型输出只接受JSON（可带单层JSON围栏）；严格检查字段类型、长度、1–12岗位、1–30步骤、唯一ID与有效岗位引用。
 
@@ -46,9 +46,11 @@
 
 ## 失败与费用
 
-调用前通过`recordSystemCall`创建`kind:intake_draft,status:reserved`记录；预写失败返回503，绝不调用模型。调用后更新同一行，不增加一条重复费用账目。完成后释放reservation计数，保留`costUpperBound`和`budgetCost`供核查。
+调用前`claimModelRequest`在同一BEGIN IMMEDIATE事务创建持久请求与`kind:intake_draft,status:reserved`账单；预写或查询失败返回503，绝不调用模型。网络前另提交dispatching；并发唯一键是最终权威。调用后更新同一行，不增加一条重复费用账目。完成后释放reservation计数，保留`costUpperBound`和`budgetCost`供核查。
 
-完整厂商用量可按用户价表计算；远程部分/未知用量的`cost:null`，不是0，保守预算在`budgetCost`。失败、超时、取消同样记录可能费用。进程中断会留下显式pending/unknown预留，不能当作零费用；不自动重放请求。后写失败返回`usageRecorded:false`和明确警告，保留预留并按审计实际结果报告，不自动重试。
+完整厂商用量可按用户价表计算；远程部分/未知用量的`cost:null`，不是0，保守预算在`budgetCost`。失败、超时、取消同样记录可能费用。进程中断后claimed恢复not_dispatched费用0；dispatching恢复interrupted_unknown费用null保留预留上界，即使可能尚未真正发出也不能归零。v3遗留reserved全部保守未知；不自动重放。后写失败时请求与账单一起保留，生成成功但未记账返回HTTP202、ok:false、usageRecorded:false、financiallyComplete:false和明确警告；保留草案可编辑/人工确认保存，不能把它当财务完成。审计实际结果如实报告，不自动重试。
+
+`GET /api/v2/usage/system/exceptions`在管理员认证后按主体读取白名单字段；`/readiness`和能力中心给出待结算/费用未知提示。此查询不修改账单、不调用模型；无reconcile写接口。估算不等于厂商账单，人工核对流程见LEDGER-RECOVERY。
 
 非法JSON/无效引用返回422、超时504、取消409、模型错误502，并提供`fallback:manual`；手工基础草案或原规则模板始终可用。错误先脱敏再截断，账本不保存用户需求或完整模型原文。已发出的请求不保证能撤销厂商费用。
 
@@ -71,4 +73,4 @@
 | 费用账本 | 预写失败零调用、后写失败警告、部分/未知与单行结算 |
 | 原向导回归 | 原project-intake单元、test:workspace及原规则模板保留断言 |
 
-命令：`npm test`、`npm run test:ui`、`npm run test:workspace`、`npm run test:intake`。本地最终207/207，0失败/跳过，三个浏览器流程通过；远程CI及完整提交SHA见HANDOFF和最终交付消息。
+命令：`npm test`、`npm run test:ui`、`npm run test:workspace`、`npm run test:intake`。工作单元2原始检查点为207/207；#6+#8本轮最终结果、完整SHA与CI见HANDOFF及Issue #6/#8，不混用历史计数。

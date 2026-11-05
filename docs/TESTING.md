@@ -20,6 +20,19 @@ npm run test:workspace
 - **浏览器：真实Chromium、登录会话、模型/团队管理及V2保存/运行/审核/DOCX下载/XSS检查**；模型仍是本地Mock。
 - **部署：真实Docker构建/非root/健康/持久卷重启**，Caddy配置校验；未执行公网ACME、Render部署或完整故障灾备恢复。
 
+## 第十轮 #6 + #8 本地验证（Codex，2026-11-05）
+
+分支`feat/codex-v2-p1-ledger-recovery`，起点`b71faaa65bb66e04ea2a015c9238a3a129bdb68e`。最终代码本地`npm test` **238/238通过，0失败，0跳过**（Node v24.22.1，实际子测试计数）；`test:ui`、`test:workspace`、`test:intake`均通过。GitHub Actions结果见Issue #6/#8最终同SHA报告，不能用本地结果代替CI。
+
+- `model-request-recovery.test.js` 15项：真实SQLite/事务触发器故障、跨进程唯一性和独占锁、SIGKILL、两次恢复、v3历史迁移/备份0600/失败回滚/损坏及未来库拒绝、只读脱敏。
+- `intake-draft-idempotency.test.js` 8项：服务底层Mock计数、同参并发/异参、目标和预算摘要、成功失败未结算重启、跨主体、预留/派发/读取故障、1001条后续历史。
+- `intake-draft-api.test.js` 6项：真实本地HTTP管理员/CSRF门禁、200/202既有语义、409防重、503预留失败、真正服务强杀后未知账本、不重发与只读异常查询。202服务级断言在intake-draft.test.js，真实HTTP+Chromium断言在test:intake。
+- 原ProjectEngine17项预算/中断恢复回归全部通过，未修改其代码。未删旧测试；旧v1迁移fixture仅增加删除v4表后重建真实v1结构、动态版本断言。
+
+关键派发证据：同ID并发总数1；服务成功/失败/未结算各重启后仍1；1001个后续请求后总数1002、重试增量0；SIGKILL claimed/dispatching标记后尚未调用/实际调用三个窗口分别0/0/1，恢复增量0；真实服务器已发送Mock HTTP后强杀，恢复后总数1；草案E2E共4次Mock派发，409重试和只读查询增量0。跨owner同ID为两个独立授权请求，总数2。
+
+真实厂商API/收费账单/生产迁移/生产重启/部署均NOT_RUN；MCP、Office、隔离执行仅既有fixture与临时进程回归，未启用生产代码执行。本轮不是#7或全部P1验收。迁移与回滚门禁见[LEDGER-RECOVERY](LEDGER-RECOVERY.md)。
+
 ## 当前检查点结果（2026-11-05，Claude Code 接力）
 
 本地（Node v24.22.1，含 poppler 24.02、LibreOffice 24.2、python-docx/openpyxl/python-pptx）：`npm test` **187 项全部通过，0 失败，0 跳过**（提交 de11c14）；`npm run test:ui` 与 `npm run test:workspace` 通过（修复收尾竞态后连跑多次稳定）。GitHub Actions：`tests`、`browser`、`container` 三个任务以远程实际结果为准；CI 已安装 poppler、LibreOffice 与固定版本的 Python 解析器，使相关测试真实运行而不是跳过。缺少可选程序的环境中，渲染相关测试会显示为 **skipped** 并注明原因，不计为通过。
