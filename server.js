@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const EV = require('./lib/events');
 const SEC = require('./lib/security');
 const MSG = require('./lib/messages');
+const SSE = require('./lib/sse');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -281,27 +282,16 @@ setInterval(() => { for (const res of clients) sseSend(res, ': hb\n\n'); }, 1500
 
 /* ------------------------------------------------------------------ 模型调用 */
 loadTasks();
+/* 流量上限：单事件 / 单次调用 / 单任务累计，防止异常上游无限输出 */
+const LIMITS = { maxEventBytes: 1 << 20, maxCallBytes: 8 << 20, maxTaskBytes: 32 << 20 };
+/* 仅供自动化测试：缩短超时 / 流量上限以便快速覆盖失败路径；生产环境不要设置 */
+const TEST_TIMEOUT_MS = Number(process.env.AIJ_TEST_TIMEOUT_MS) || 0;
+if (Number(process.env.AIJ_TEST_MAX_CALL_BYTES) > 0) LIMITS.maxCallBytes = Number(process.env.AIJ_TEST_MAX_CALL_BYTES);
+const taskBytes = new Map();
 const providerKey = p => p.apiKey || (p.envKey && SEC.isAllowedEnvKey(p.envKey) && process.env[p.envKey]) || '';
 const providerReady = p => !!(providerKey(p) && p.model);
 
-async function readSSE(res, onData) {
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = '';
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, i).replace(/\r$/, '');
-      buf = buf.slice(i + 1);
-      if (line.startsWith('data:')) onData(line.slice(5).trim());
-    }
-  }
-}
-
-async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onActivity }) {
+async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onActivity, onBytes }) {
   const key = providerKey(p);
   if (!key) throw new Error('未配置 API Key（可在管理界面填写，或设置环境变量 ' + (p.envKey || '—') + '）');
   if (!p.model) throw new Error('未填写模型名');
@@ -314,7 +304,7 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
     throw new Error('环境变量 ' + p.envKey + ' 只能用于其官方主机；第三方接口请直接填写 API Key，或改用 AIJ_ 开头的环境变量名');
   }
   const base = p.baseUrl.replace(/\/+$/, '');
-  const signal = AbortSignal.timeout(cfg.settings.timeoutSec * 1000);
+  const signal = AbortSignal.timeout(TEST_TIMEOUT_MS || cfg.settings.timeoutSec * 1000);
   let url, headers, body;
   if (p.type === 'anthropic') {
     url = /\/v1$/.test(base) ? base + '/messages' : base + '/v1/messages';
@@ -334,10 +324,10 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
   const res = await SEC.pinnedFetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }, POLICY);
   if (!res.ok) {
     let t = '';
-    try { t = SEC.scrubSecrets((await res.text()).replace(/\s+/g, ' ').slice(0, 240), [key]); } catch { /* ignore */ }
+    try { t = SEC.scrubSecrets((await SSE.readLimitedText(res, 4096)).replace(/\s+/g, ' ').slice(0, 240), [key]); } catch { /* ignore */ }
     throw new Error('HTTP ' + res.status + (t ? '：' + t : ''));
   }
-  await readSSE(res, data => {
+  await SSE.parseSSE(res.body, data => {
     if (!data || data === '[DONE]') return;
     let j; try { j = JSON.parse(data); } catch { return; }
     if (p.type === 'anthropic') {
@@ -353,7 +343,7 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
       else if (d?.reasoning_content) onActivity();
       if (j.usage) onUsage(j.usage.prompt_tokens, j.usage.completion_tokens);
     }
-  });
+  }, { maxEventBytes: LIMITS.maxEventBytes, maxTotalBytes: LIMITS.maxCallBytes, onBytes });
 }
 
 async function callModel(p, { role, task, system, prompt, maxTokens, taskId, runId, parentSpanId, attempt }) {
@@ -375,6 +365,13 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId, run
       onDelta: t => { out += t; if (cfg.settings.showText) pending += t; flush(false); },
       onUsage: (i, o) => { if (i) inTok = i; if (o) outTok = o; },
       onActivity: () => flush(false),
+      onBytes: n => {
+        if (!taskId) return;
+        const used = (taskBytes.get(taskId) || 0) + n;
+        taskBytes.set(taskId, used);
+        if (taskBytes.size > 500) taskBytes.delete(taskBytes.keys().next().value);
+        if (used > LIMITS.maxTaskBytes) throw new SSE.LimitError('任务累计响应超过 ' + LIMITS.maxTaskBytes + ' 字节上限');
+      },
     });
     flush(true);
     const estimated = !(inTok + outTok);
@@ -723,6 +720,6 @@ server.listen(PORT, HOST, () => {
   console.log(`  大屏      http://localhost:${PORT}/`);
   console.log(`  管理界面  http://localhost:${PORT}/admin.html`);
   for (const u of lanUrls()) console.log(`  局域网    ${u}/   （远程访问管理接口需令牌）`);
-  if (lanUrls().length) console.log(`  管理令牌  ${cfg.token}`);
+  if (lanUrls().length) console.log('  远程管理需要令牌：保存在 data/config.json（不在日志中打印）');
   console.log('  按 Ctrl+C 停止\n');
 });
