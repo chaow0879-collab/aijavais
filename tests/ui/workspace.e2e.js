@@ -99,6 +99,19 @@ const H = require('../helpers');
     assert.match(await page.textContent('#intake-note'),/立项草案/);
     assert.ok((await page.inputValue('#required-tools')).includes('pptx_generation'));
     assert.equal(await page.isChecked('#approve-paid'),false);
+    // Capability center: live readiness and honest capability classes.
+    await page.goto(base+'/capabilities.html');
+    await page.waitForFunction(()=>document.querySelector('#checks').textContent.includes('AI 模型连接'));
+    assert.match(await page.textContent('#checks'),/2 个连接测试通过/);
+    assert.match(await page.textContent('#missing'),/必须配置（0）/);
+    await page.click('#tab-caps');
+    await page.waitForFunction(()=>document.querySelector('#caps').textContent.includes('生成 Word 文档'));
+    const capsText=await page.textContent('#caps');
+    assert.match(capsText,/内置工具/);assert.match(capsText,/尚未实现/);assert.match(capsText,/本身不是工具/);
+    await page.click('#tab-mcp');await page.click('#mcp-discover');
+    await page.waitForFunction(()=>document.querySelector('#mcp-note').textContent.includes('已完成'));
+    assert.match(await page.textContent('#mcp-servers'),/没有配置 MCP Server/);
+    if(process.env.UI_SHOTS){await page.click('#tab-ready');await page.screenshot({path:require('path').join(process.env.UI_SHOTS,'capabilities.png'),fullPage:true});}
     assert.deepEqual(errors,[],'no JavaScript exceptions');
     console.log('PASS workspace E2E: live login/session, project save/validate, two local MOCK model calls, XSS-safe output, human review, real DOCX export/persistence, real DOCX upload+parse+role handoff, conservative wizard draft handoff. No paid API used.');
   } finally {

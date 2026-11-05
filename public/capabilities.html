@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AIJAVAIS · 能力中心与就绪检查</title>
+  <style>
+    :root{color-scheme:dark;--bg:#08111c;--card:#101f30;--line:#2a4359;--text:#e0edf6;--dim:#9bb2c6;--accent:#66dfd2;--warn:#ffcf85;--bad:#ff9a9a;font:14px/1.6 system-ui,"Microsoft YaHei",sans-serif}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+    header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px;padding:18px 30px;border-bottom:1px solid var(--line);background:#0d1927}
+    header strong{font-size:20px;letter-spacing:.12em}nav{display:flex;flex-wrap:wrap;gap:18px}
+    main{max-width:1200px;margin:auto;padding:24px 16px 60px}h1{font-size:26px;margin:4px 0}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:18px 0 8px}
+    .hint{color:var(--dim);font-size:12px}.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:16px 0}
+    .tabs{display:flex;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--line);margin:18px 0;padding-bottom:12px}
+    .tabs button,button{background:#14283d;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px 14px;cursor:pointer;font:inherit}
+    .tabs button[aria-selected=true]{border-color:var(--accent);color:var(--accent)}button.primary{background:#145a55;border-color:var(--accent)}
+    .scenarios{display:flex;flex-wrap:wrap;gap:10px 20px;margin:10px 0}.scenarios label{display:flex;gap:6px;align-items:center}
+    .item{display:grid;grid-template-columns:90px minmax(0,1fr);gap:4px 14px;padding:10px 0;border-top:1px solid var(--line)}.item:first-child{border-top:0}
+    .pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12px;border:1px solid var(--line);white-space:nowrap}
+    .item .pill{justify-self:start;align-self:start;margin-top:2px}.ok{color:var(--accent);border-color:var(--accent)}.warn{color:var(--warn);border-color:var(--warn)}.missing,.bad{color:var(--bad);border-color:var(--bad)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+    .cap{background:#0d1a29;border:1px solid var(--line);border-radius:9px;padding:12px 14px}.cap p{margin:6px 0;font-size:13px}
+    .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}pre{white-space:pre-wrap;background:#0b1622;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;overflow:auto}
+    .group-required h3{color:var(--bad)}.group-recommended h3{color:var(--warn)}.group-optional h3{color:var(--dim)}
+    @media(max-width:600px){header{padding:14px 16px}.item{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header><div><strong>AIJAVAIS</strong> <span class="hint">能力中心</span></div>
+    <nav><a href="/workspace.html">项目工作台</a><a href="/project-intake.html">智能立项</a><a href="/admin.html">模型与团队</a><a href="/panel.html">实时大屏</a></nav></header>
+  <main>
+    <h1>能力中心与系统就绪检查</h1>
+    <p class="hint">这里只显示平台<strong>实际</strong>具备的能力和真实检查结果。基础功能不需要安装 MCP。</p>
+    <div class="tabs" role="tablist">
+      <button id="tab-ready" role="tab" aria-selected="true">系统就绪检查</button>
+      <button id="tab-caps" role="tab" aria-selected="false">全部能力</button>
+      <button id="tab-mcp" role="tab" aria-selected="false">MCP 管理</button>
+    </div>
+    <section id="panel-ready">
+      <div class="card"><h2>你打算怎么使用 AIJAVAIS？</h2>
+        <div class="scenarios" id="scenarios"></div>
+        <button id="run-check" class="primary" type="button">重新检查</button>
+        <span id="ready-summary" class="hint"></span>
+      </div>
+      <div class="card"><h2>《AIJAVAIS 当前缺失配置清单》</h2><div id="missing"></div>
+        <button id="copy-list" type="button">复制清单文字</button> <span id="copy-note" class="hint"></span></div>
+      <div class="card"><h2>全部检查项</h2><div id="checks"></div></div>
+    </section>
+    <section id="panel-caps" hidden>
+      <p class="hint">「内置」= 平台自带并由服务器真实执行；「MCP」= 由已连接的 MCP Server 提供；「Skill」= 提示词与检查的组合流程，本身不是工具；「外部服务」= 需要第三方服务或 API Key；「尚未实现」= 目前不可用，仅供了解。</p>
+      <div id="caps"></div>
+    </section>
+    <section id="panel-mcp" hidden>
+      <div class="card"><h2>什么是 MCP？</h2>
+        <p>MCP（Model Context Protocol）是一种让 AI 平台连接外部工具的通用接口，例如连接网页检索、数据库或企业系统。<strong>不安装 MCP 也能使用 AIJAVAIS 的全部基础功能</strong>（模型协作、上传资料、生成 Word/Excel/PPT）。</p>
+        <p class="hint">需要在服务器上运行程序的 MCP Server 只能由服务器管理员在服务器配置文件中添加（防止网页上安装任意程序）。添加后可在这里测试连接。</p>
+        <button id="mcp-discover" type="button">测试已配置的 MCP 连接</button> <span id="mcp-note" class="hint"></span>
+      </div>
+      <div class="card"><h2>已配置的 MCP Server</h2><div id="mcp-servers"><p class="hint">尚未测试。</p></div></div>
+    </section>
+  </main>
+  <script src="/capabilities.js"></script>
+</body>
+</html>
