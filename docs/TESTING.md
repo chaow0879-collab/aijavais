@@ -20,12 +20,16 @@ npm run test:workspace
 - **浏览器：真实Chromium、登录会话、模型/团队管理及V2保存/运行/审核/DOCX下载/XSS检查**；模型仍是本地Mock。
 - **部署：真实Docker构建/非root/健康/持久卷重启**，Caddy配置校验；未执行公网ACME、Render部署或完整故障灾备恢复。
 
-## 当前检查点结果
+## 当前检查点结果（2026-11-05，Claude Code 接力）
 
-集成基线80项通过；随后完整149项通过。追加工具扩展和最后连接试连并发回归后，最终 `npm test` **155项全部通过，0失败，0跳过**。中途一个防伪工具断言误选了默认流程不要求的slide_render，已改成该流程实际要求的chart_generation，没有关闭断言或放宽能力门禁。
+本地（Node v24.22.1，含 poppler 24.02、LibreOffice 24.2、python-docx/openpyxl/python-pptx）：`npm test` **182 项全部通过，0 失败，0 跳过**；`npm run test:ui` 与 `npm run test:workspace` 通过（修复收尾竞态后连跑多次稳定）。GitHub Actions：`tests`、`browser`、`container` 三个任务以远程实际结果为准；CI 已安装 poppler、LibreOffice 与固定版本的 Python 解析器，使相关测试真实运行而不是跳过。缺少可选程序的环境中，渲染相关测试会显示为 **skipped** 并注明原因，不计为通过。
 
-管理员浏览器测试最终通过：0 JS/额外资源错误、无移动端横向溢出、模型替换有效；预期付费门槛HTTP402被实际触发。V2浏览器最终通过：项目创建、校验、两次Mock模型调用、文本XSS安全、人工审核、真实DOCX下载/持久化、向导草案保存；未执行收费API。
+新增验证类别：
 
-当前云本地日志位于 `/workspace/scratch/v2-*-tests.log`，办公证据位于 `/workspace/scratch/v2-office-evidence/`。这些是当前机器临时证据，不保证GitHub或新任务恢复；可重复的测试脚本已提交。数据库/凭据/运行截图不提交。
+- **真实外部生成文件**：`tests/fixtures/files/` 中的 DOCX/XLSX/PPTX 由 python-docx、openpyxl、python-pptx 生成，PDF 由 LibreOffice 生成（生成脚本 `tests/fixtures/make-office-fixtures.py`），不是用本项目自己的写入器生成。
+- **恶意/异常输入**：扩展名与内容不符、加密 ZIP、CRC 错误、DTD、压缩炸弹、截断文件、非 UTF-8、超限。
+- **MCP HTTP**：本地 Streamable HTTP 协议 fixture（令牌、会话 ID、SSE 响应），不是第三方生产服务。
+- **数据分析**：样本标准差与 Python `statistics.stdev` 交叉核对。
+- **浏览器**：上传真实 DOCX→预览→进入模型 prompt；能力中心三个标签页；网页添加远程 MCP、测试、调用、日志；立项向导服务端工具检查。
 
-下一开发者应在自己的接力分支重新运行完整测试及两个浏览器测试，再申请有预算授权的真实API/MCP端到端验收。GitHub Actions是否通过须查远程结果，不能因工作流文件存在便声称通过。
+仍未执行：真实收费厂商 API、第三方生产 MCP、公网部署与灾备恢复演练。
