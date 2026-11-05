@@ -12,6 +12,7 @@ require('./models.test.js');
 require('./teams.test.js');
 require('./acceptance.test.js');
 require('./project-intake.test.js');
+require('./budget.test.js');
 require('./proxy.test.js');
 require('./projects-v2.test.js');
 require('./tools-v2.test.js');
