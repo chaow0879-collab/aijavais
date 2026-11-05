@@ -22,7 +22,7 @@ npm run test:workspace
 
 ## 当前检查点结果（2026-11-05，Claude Code 接力）
 
-本地（Node v24.22.1，含 poppler 24.02、LibreOffice 24.2、python-docx/openpyxl/python-pptx）：`npm test` **182 项全部通过，0 失败，0 跳过**；`npm run test:ui` 与 `npm run test:workspace` 通过（修复收尾竞态后连跑多次稳定）。GitHub Actions：`tests`、`browser`、`container` 三个任务以远程实际结果为准；CI 已安装 poppler、LibreOffice 与固定版本的 Python 解析器，使相关测试真实运行而不是跳过。缺少可选程序的环境中，渲染相关测试会显示为 **skipped** 并注明原因，不计为通过。
+本地（Node v24.22.1，含 poppler 24.02、LibreOffice 24.2、python-docx/openpyxl/python-pptx）：`npm test` **187 项全部通过，0 失败，0 跳过**（提交 de11c14）；`npm run test:ui` 与 `npm run test:workspace` 通过（修复收尾竞态后连跑多次稳定）。GitHub Actions：`tests`、`browser`、`container` 三个任务以远程实际结果为准；CI 已安装 poppler、LibreOffice 与固定版本的 Python 解析器，使相关测试真实运行而不是跳过。缺少可选程序的环境中，渲染相关测试会显示为 **skipped** 并注明原因，不计为通过。
 
 新增验证类别：
 
@@ -31,5 +31,7 @@ npm run test:workspace
 - **MCP HTTP**：本地 Streamable HTTP 协议 fixture（令牌、会话 ID、SSE 响应），不是第三方生产服务。
 - **数据分析**：样本标准差与 Python `statistics.stdev` 交叉核对。
 - **浏览器**：上传真实 DOCX→预览→进入模型 prompt；能力中心三个标签页；网页添加远程 MCP、测试、调用、日志；立项向导服务端工具检查。
+
+GitHub Actions 在 4f863b6 上：185 项中 184 通过、1 跳过（代码执行隔离测试：Runner 禁止非特权命名空间，工具在该环境按设计拒绝运行）。
 
 仍未执行：真实收费厂商 API、第三方生产 MCP、公网部署与灾备恢复演练。

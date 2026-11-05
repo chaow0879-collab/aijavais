@@ -24,7 +24,7 @@ flowchart TD
 
 旧认证/配置保持兼容：`config.json`、`models.json`、`credentials.json`、`teams.json`、`auth.json`、`sessions.json`、`audit.log`、旧 `tasks.json`。凭据不进入公开模型视图；文件权限 0600。V2 不无损恢复旧内存 MessageBus/ArtifactStore，旧 `/api/run` 历史继续按原语义读取。
 
-新增 `projects.sqlite`（schema v2；v1 库启动时先 `VACUUM INTO` 生成 0600 备份再前向迁移）开启 foreign_keys、WAL、synchronous FULL、busy timeout，使用参数化 SQL：
+新增 `projects.sqlite`（schema v3；v1 库启动时先 `VACUUM INTO` 生成 0600 备份再前向迁移）开启 foreign_keys、WAL、synchronous FULL、busy timeout，使用参数化 SQL：
 
 | 表 | 实际用途 |
 |---|---|
@@ -37,6 +37,7 @@ flowchart TD
 | artifacts | run FK、MIME、SHA-256、元数据、真实内容 BLOB |
 | usage_ledger | 调用用量、真实/部分/估算/未知来源、价格及保守费用 |
 | settings | 版本化 Skills 完整快照；MCP 远程连接、停用列表与访问令牌（令牌从不返回给前端） |
+| system_usage | （v3）项目运行以外的模型调用（连接测试）用量；无价表的远程费用记为 null（未知） |
 | project_files | （v2）项目资料原始字节、SHA-256、提取出的文字与提取状态；随项目级联删除 |
 
 `projects.sqlite.lock` 阻止第二应用实例打开同一数据目录；死 PID 恢复有独立 recovery 锁。恢复时将未结束运行和步骤标为 interrupted，并把遗留费用预留转为未知账单记录。没有自动重放。在线备份工具用只读 SQLite 连接，避免实例恢复副作用。
@@ -71,7 +72,7 @@ DOCX/XLSX/PPTX 是实际 ZIP/CRC32/OOXML，不是改后缀文本。Code ZIP 只�
 
 严格 DNS 模式固定校验过的 IP；平台代理使用 TLS CONNECT 且保持证书验证、不直连回退。显式 `AIJ_PROXY_DNS=delegate` 仅用于官方或显式白名单公共主机，代理必须负责 DNS/私网阻断；应用不能证明代理实际连接 IP。
 
-MCP 仅 stdio，支持 initialize、tools/list、tools/call。管理员配置进程具有服务账户 OS 权限；`shell:false` 不是沙箱。工具返回内容是未受信数据，不能更改预算/权限。共享 MCP 子进程的取消可能使同服务器并发调用失败，下次重连。尚无 MCP HTTP/OAuth、模型自主工具选择、任意代码安全运行器、专业工程校核或通用附件读取。
+MCP 支持 stdio（管理员配置文件）与远程 Streamable HTTP（网页添加，静态令牌，暂不支持 OAuth），协议方法为 initialize、tools/list、tools/call。管理员配置进程具有服务账户 OS 权限；`shell:false` 不是沙箱。工具返回内容是未受信数据，不能更改预算/权限。共享 MCP 子进程的取消可能使同服务器并发调用失败，下次重连。尚无 MCP OAuth、模型自主工具选择、强隔离的任意代码运行器（现有受控 JavaScript 执行默认关闭、非强沙箱）、专业工程校核；第三方生产 MCP 未验收。
 
 ## 2026-11 新增模块（Claude Code 接力）
 
@@ -90,3 +91,7 @@ MCP 仅 stdio，支持 initialize、tools/list、tools/call。管理员配置进
 **项目资料进入模型的方式**：运行开始时快照资料文件 ID 与 SHA-256；每步按 `materials.maxChars` 预算把提取文字作为“不可信数据”放入 prompt，截断会明确告知模型并记录实际字数；无法读取的文件会告知模型“存在但无法读取”。步骤可设 `useMaterials:false`。
 
 **MCP 安全边界**：网页只能添加远程 HTTP MCP（不在服务器运行程序）；本机 stdio MCP 只能由管理员写入 `AIJ_MCP_SERVERS_FILE`。停用的服务器工具被移出注册表并拒绝调用。远程服务的地址校验在添加时（语法）和每次请求时（DNS/IP）各做一次。
+
+**工具风险与授权（2026-11 GPT 审核 P1-01）**：每个工具有风险级别 `read` / `internal_write` / `exec` / `external`（全部 MCP 工具）。手动调用中，只读工具需在请求中显式授权；其他工具需要服务端签发的一次性确认（`/api/v2/tools/call/prepare`，绑定工具与参数哈希，120 秒）。项目运行中，`external` 与 `exec` 工具除了 `allowedTools` 外还需 `approveExternalTools: true`，并记入运行快照。MCP 的 readOnly 等标注只作为未经验证的提示。
+
+**交接**：默认后一步接收前一步完整输出；步骤可设 `handoff: 'all'` 接收本轮全部前序成果（按岗位与步骤标注），仍受 200k 字符输入上限约束。

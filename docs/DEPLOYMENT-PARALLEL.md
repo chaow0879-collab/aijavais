@@ -2,9 +2,50 @@
 
 适用情况：负责人已在自己的服务器上运行第一代 AIJAVAIS 并通过 HTTPS 使用。V2 **与第一代并行部署**，复用现有 HTTPS 入口，不需要新购服务器。**本文件是执行手册，尚未在负责人服务器上执行**；执行前需要负责人提供服务器访问并逐步确认。
 
+## 负责人服务器实况与本方案的适配（2026-11-05，经 GPT 审核确认）
+
+已知环境：Debian 13，内存 2 GB；**S-UI 正在运行**；Caddy 提供 HTTPS；系统原有 Node.js 20 之外已单独安装 Node.js 24.22.2；已安装 LibreOffice 与 Poppler；第一代位于 `/opt/ai-ring`，服务名 `ai-ring.service`；V2 开发版已下载到 `/opt/aijavais-v2/app`，负责人在服务器上测试过的是提交 `88e2757`（180 项中 179 通过、1 跳过），临时启动与登录保护检查通过。**服务器上的 `88e2757` 不是最新批准版本**，尚无最新代码常驻运行的证据。
+
+因此本方案在该服务器上：**不安装 Docker**（第 3 节 B 方式：独立 Node 24 + 独立 systemd 服务）；复用已安装的 Node 24、LibreOffice、Poppler；**不修改 S-UI 的配置、端口和服务，不重启 S-UI**；不重装 Caddy、不做不必要的 Caddy 重启（只在批准后新增站点块并 `caddy validate` + reload）；不覆盖或卸载 Node 20；V2 使用独立系统用户、独立数据目录、仅 `127.0.0.1` 的独立端口；生产经 Caddy 代理时必须设置 `AIJ_ENV=production` 与 `TRUST_PROXY=1`；部署**最新批准的提交**并在服务器上重新运行测试，而不是沿用 `88e2757`。
+
+**域名**：不强制新增子域名。测试阶段只在本机端口隔离测试；如需公网 HTTPS 并行验收，经负责人确认后再加临时测试子域名。V2 通过全部验收后，经负责人批准再把现有域名 `javis.ailp.fun` 切换到 V2，之后才处理第一代。
+
+**2 GB 内存的资源限制**：用 systemd 限制 V2（示例：`MemoryMax=900M`、`CPUQuota=150%`、`TasksMax=256`）；代码执行保持关闭（`AIJ_ENABLE_CODE_EXECUTION` 不设置）；Office 转换/渲染按需使用，避免同时运行多个；平台本身最多 3 个并发运行。
+
+systemd 单元示例（路径按实际 Node 24 位置填写，先 `systemd-analyze verify` 再启用；**新增**文件，不改动 `ai-ring.service`）：
+
+```ini
+# /etc/systemd/system/aijavais-v2.service
+[Unit]
+Description=AIJAVAIS V2 (parallel to ai-ring)
+After=network-online.target
+
+[Service]
+User=aijavais-v2
+WorkingDirectory=/opt/aijavais-v2/app
+Environment=HOST=127.0.0.1 PORT=18787 AIJ_DATA_DIR=/opt/aijavais-v2/data AIJ_ENV=production TRUST_PROXY=1
+ExecStart=/实际/node24/bin/node server.js
+Restart=on-failure
+MemoryMax=900M
+CPUQuota=150%
+TasksMax=256
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/aijavais-v2/data
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+升级 V2 代码（只影响 V2）：先 `npm run db:backup` 与完整数据目录备份 → `git -C /opt/aijavais-v2/app fetch origin && git -C /opt/aijavais-v2/app checkout <批准的 SHA>` → 在服务器上运行 `npm test` 并核对数量 → `systemctl restart aijavais-v2` → `/healthz` 与登录检查。所有命令执行前先确认当前目录、服务名和 SHA，避免误操作第一代或 S-UI。
+
+下文第 3 节 A（Docker）仅适用于其他已有 Docker 的服务器。
+
 ## 0. 红线（确认现有环境前一律不做）
 
-不停止第一代服务；不覆盖第一代代码；不修改、迁移或打开写入第一代数据库与数据目录；不删除任何文件；不重置管理员密码；不直接替换现有 Nginx/Caddy 配置（只新增独立站点块，且先备份并测试语法）；不执行 `docker compose down -v`、`docker volume rm`、`rm -rf` 这类会删除数据的命令；不让两代程序写同一份数据。不把 API Key、密码、设置码、Cookie、备份文件写入 Git、日志或报告。
+不停止第一代服务；不覆盖第一代代码；不修改、迁移或打开写入第一代数据库与数据目录；**不修改或重启 S-UI**；不删除任何文件；不重置管理员密码；不直接替换现有 Nginx/Caddy 配置（只新增独立站点块，且先备份并测试语法）；不执行 `docker compose down -v`、`docker volume rm`、`rm -rf` 这类会删除数据的命令；不让两代程序写同一份数据。不把 API Key、密码、设置码、Cookie、备份文件写入 Git、日志或报告。
 
 ## 1. 只读检查现有环境
 
