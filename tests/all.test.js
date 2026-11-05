@@ -2,6 +2,7 @@
 // 单一入口：npm test
 require('./events.test.js');
 require('./db.test.js');
+require('./artifacts.test.js');
 require('./messages.test.js');
 require('./security.test.js');
 require('./server.test.js');
