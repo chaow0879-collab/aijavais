@@ -748,7 +748,10 @@ v2 = createV2Api({ dir: DATA, models, teams, callModel,
     // Project/tool payloads are administrator-only. The existing visual adapter
     // independently publishes redacted model events to display sessions.
     for (const res of clients) if (res._lvl >= ACC.LEVEL.ADMIN) sseSend(res, line);
-  }, audit: (event, detail) => auth.audit(event, detail) });
+  }, audit: (event, detail) => auth.audit(event, detail),
+  // Non-secret facts for the readiness check; never includes keys, codes or paths of private files.
+  system: req => ({ node: process.version, production: PROD, trustProxy: TRUST_PROXY, https: isHttps(req), adminSetup: auth.isSetup(),
+    local: ['127.0.0.1', 'localhost', '::1'].includes(HOST), proxy: !!POLICY.httpsProxy, proxyDnsDelegate: !!POLICY.proxyDnsDelegate }) });
 
 function lanUrls() {
   if (HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1') return [];
