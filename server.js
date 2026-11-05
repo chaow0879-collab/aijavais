@@ -24,6 +24,8 @@ const { ArtifactStore } = require('./lib/artifacts');
 const ACC = require('./lib/access');
 const PERM = require('./lib/permissions');
 const { ModelRegistry, diagnose } = require('./lib/models');
+const { TeamRegistry } = require('./lib/teams');
+const { recommend } = require('./lib/matcher');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -31,6 +33,7 @@ const DATA = process.env.AIJ_DATA_DIR ? path.resolve(process.env.AIJ_DATA_DIR) :
 const CONFIG_FILE = path.join(DATA, 'config.json');
 const MODELS_FILE = path.join(DATA, 'models.json');       // 模型注册信息（不含密钥）
 const CREDS_FILE = path.join(DATA, 'credentials.json');   // 模型凭证（0600，接口永不返回明文）
+const TEAMS_FILE = path.join(DATA, 'teams.json');         // AI 团队（岗位 → 模型连接）
 const TASKS_FILE = path.join(DATA, 'tasks.json');
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -53,6 +56,7 @@ function rateOk(kind, key, perSec, burst) {
 /* ------------------------------------------------------------------ 配置 */
 /* 服务商目录：版本化数据文件 catalog/providers.v1.json（不写死在代码或页面里） */
 const CATALOG = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalog', 'providers.v1.json'), 'utf8'));
+const TEMPLATES = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalog', 'team-templates.v1.json'), 'utf8'));
 
 const DEFAULT_SETTINGS = { showText: false, idleTimeoutSec: 120, maxTokens: 4096, timeoutSec: 300, defaultConnectionId: '' };
 
@@ -111,6 +115,10 @@ for (const [id, providerId] of [['claude', 'anthropic'], ['chatgpt', 'openai'], 
 }
 if (cfg.settings.defaultConnectionId && !models.has(cfg.settings.defaultConnectionId)) cfg.settings.defaultConnectionId = '';
 try { saveModels(); } catch (e) { console.error('无法写入 data/models.json：', e.message); }
+/* ------------------------------------------------------------------ 团队注册中心（lib/teams.js） */
+const teams = new TeamRegistry({ templates: TEMPLATES, capTags: Object.keys(CATALOG.capabilities), hasConnection: id => models.has(id) });
+teams.load(readJson(TEAMS_FILE));
+function saveTeams() { writeJsonAtomic(TEAMS_FILE, teams.serialize()); }
 try { saveConfig(); } catch (e) { console.error('无法写入 data/config.json：', e.message); }
 
 /* ------------------------------------------------------------------ 状态 */
@@ -457,14 +465,15 @@ function readText(taskId, m) {
   return a.text;
 }
 
-async function runPipeline(run, A, B) {
+async function runPipeline(run, A, B, roleMeta = {}) {
   const steps = run.steps;
   const mkInst = (roleId, roleName, conn) => ({
-    instanceId: 'ai_' + crypto.randomBytes(4).toString('hex') + '_' + roleId, roleId, roleName,
+    instanceId: 'ai_' + crypto.randomBytes(4).toString('hex') + '_' + roleId.slice(0, 24), roleId, roleName,
     connectionId: conn.id, connectionLabel: conn.label, model: conn.model, type: conn.type,
   });
-  const drafter = mkInst('drafter', '起草', A);
-  const reviewer = run.mode === 'single' ? null : mkInst('reviewer', '审核', B);
+  const lead = roleMeta.lead || { roleId: 'drafter', name: '起草' }, rev = roleMeta.review || { roleId: 'reviewer', name: '审核' };
+  const drafter = mkInst(lead.roleId, lead.name, A);
+  const reviewer = run.mode === 'single' ? null : mkInst(rev.roleId, rev.name, B);
   run.agents = reviewer ? [drafter, reviewer] : [drafter]; // 落盘：历史任务保留执行时的模型信息
   const T = { taskId: run.id, runId: run.runId };
 
@@ -582,8 +591,8 @@ function fromLegacy(b) {
   return o;
 }
 /* 团队对模型连接的引用（由团队注册中心提供；未接入时为空） */
-let teamRefs = () => [];
-let replaceInTeams = () => 0;
+const teamRefs = id => teams.refs(id);
+const replaceInTeams = (oldId, replacement) => { const n = teams.replaceConnection(oldId, replacement); if (n) saveTeams(); return n; };
 /* 删除 / 停用前的影响分析 */
 function modelImpact(id) {
   const running = [...tasks.values()].filter(t => t.status === 'running' && (t.agents || []).some(x => x.connectionId === id)).map(t => ({ id: t.id, title: t.title }));
@@ -821,18 +830,91 @@ async function api(req, res, url) {
     if (!task) return json(res, 400, { error: '任务内容为空' });
     if (task.length > MAX_TASK_CHARS) return json(res, 400, { error: `任务内容 ${task.length} 字符，超过 ${MAX_TASK_CHARS} 字符上限。请精简或拆分后再提交（系统不会自动截断）` });
     const mode = ['single', 'review', 'full'].includes(b.mode) ? b.mode : 'full';
-    const sa = connectionState(b.a || cfg.settings.defaultConnectionId);
-    if (sa.error) return json(res, 400, { error: '模型 A ' + sa.error, code: sa.code });
-    let sb = null;
-    if (mode !== 'single') { sb = connectionState(b.b || b.a || cfg.settings.defaultConnectionId); if (sb.error) return json(res, 400, { error: '模型 B ' + sb.error, code: sb.code }); }
+    let sa, sb = null, roleMeta = {}, teamInfo = null;
+    if (b.teamId) {
+      /* 按团队运行：岗位 → 模型由团队配置决定（含备用模型与费用策略）；直接指定模型运行则视为本次已确认 */
+      const team = teams.get(b.teamId);
+      if (!team) return json(res, 404, { error: '团队不存在', code: 'team_missing' });
+      const leadId = team.workflow.leadRoleId, revId = team.workflow.reviewRoleId;
+      if (mode !== 'single' && !revId) return json(res, 400, { error: '该团队没有审核岗位，只能用“单模型”模式运行', code: 'role_missing' });
+      const ra = teams.resolveRole(team, leadId, models, { approvePaid: !!b.approvePaid });
+      if (!ra.ok) return json(res, ra.needsApproval ? 402 : 400, { error: ra.error, code: ra.code, connectionId: ra.connectionId, skipped: ra.skipped });
+      let rb = null;
+      if (mode !== 'single') {
+        rb = teams.resolveRole(team, revId, models, { approvePaid: !!b.approvePaid });
+        if (!rb.ok) return json(res, rb.needsApproval ? 402 : 400, { error: rb.error, code: rb.code, connectionId: rb.connectionId, skipped: rb.skipped });
+      }
+      sa = connectionState(ra.connectionId); sb = rb ? connectionState(rb.connectionId) : null;
+      if (sa.error || (sb && sb.error)) return json(res, 400, { error: '分配的模型暂不可用', code: (sa.error ? sa : sb).code });
+      roleMeta = { lead: { roleId: ra.role.roleId, name: ra.role.name }, review: rb ? { roleId: rb.role.roleId, name: rb.role.name } : undefined };
+      teamInfo = { teamId: team.teamId, teamName: team.name, budgetMode: team.budgetPolicy.mode, paidApproved: !!b.approvePaid,
+        assignments: [ra, rb].filter(Boolean).map(r => ({ roleId: r.role.roleId, roleName: r.role.name, connectionId: r.connectionId, usedFallback: r.usedFallback, paid: r.paid, skipped: r.skipped })) };
+    } else {
+      sa = connectionState(b.a || cfg.settings.defaultConnectionId);
+      if (sa.error) return json(res, 400, { error: '模型 A ' + sa.error, code: sa.code });
+      if (mode !== 'single') { sb = connectionState(b.b || b.a || cfg.settings.defaultConnectionId); if (sb.error) return json(res, 400, { error: '模型 B ' + sb.error, code: sb.code }); }
+    }
     let id;
     do id = crypto.randomBytes(6).toString('hex'); while (tasks.has(id));
-    const run = { id, kind: 'internal', ownerId: user.userId, runId: EV.newRunId(), title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now() };
+    const run = { id, kind: 'internal', ownerId: user.userId, runId: EV.newRunId(), title: str(task.replace(/\s+/g, ' '), 30), task, mode, status: 'running', steps: [], createdAt: Date.now(), ...(teamInfo ? { team: teamInfo } : {}) };
     tasks.set(id, run);
     trimTasks();
     persistTasks();
-    runPipeline(run, sa.p, sb && sb.p).catch(e => console.error('任务执行异常：', e && e.message)); // 兜底：任何异常都不影响服务进程
-    return json(res, 200, { runId: id });
+    runPipeline(run, sa.p, sb && sb.p, roleMeta).catch(e => console.error('任务执行异常：', e && e.message)); // 兜底：任何异常都不影响服务进程
+    return json(res, 200, { runId: id, team: teamInfo || undefined });
+  }
+
+  /* ---------------- 团队注册中心 ---------------- */
+  if (p === '/api/team-templates' && m === 'GET') return json(res, 200, TEMPLATES);
+  if (p === '/api/teams' && m === 'GET') return json(res, 200, { teams: teams.list().map(t => ({ ...t, health: teams.validate(t.teamId, models) })) });
+  if (p === '/api/teams' && m === 'POST') {
+    const b = await readBody(req);
+    const r = b.templateId && !b.roles ? teams.fromTemplate(b.templateId, b, user.userId) : teams.add(b, user.userId);
+    if (!r.ok) return json(res, 400, { error: r.error });
+    saveTeams();
+    return json(res, 200, { team: r.team, health: teams.validate(r.team.teamId, models) });
+  }
+  if (p === '/api/recommend' && m === 'POST') {
+    const b = await readBody(req);
+    let required = Array.isArray(b.requiredCapabilities) ? b.requiredCapabilities.map(String) : [];
+    let budget = null, roles = [];
+    if (b.teamId) {
+      const t = teams.get(b.teamId);
+      if (!t) return json(res, 404, { error: '团队不存在' });
+      budget = t.budgetPolicy; roles = t.roles;
+      const r = b.roleId && t.roles.find(x => x.roleId === b.roleId);
+      if (b.roleId && !r) return json(res, 404, { error: '岗位不存在' });
+      if (r) required = r.requiredCapabilities;
+    } else if (b.templateId) {
+      const tpl = TEMPLATES.templates.find(x => x.templateId === b.templateId);
+      if (!tpl) return json(res, 404, { error: '模板不存在' });
+      roles = tpl.roles;
+      const r = b.roleId && tpl.roles.find(x => x.roleId === b.roleId);
+      if (r) required = r.requiredCapabilities;
+    }
+    return json(res, 200, { requiredCapabilities: required, recommendations: recommend({ requiredCapabilities: required, connections: models.list(), budget, capNames: CATALOG.capabilities, roles }),
+      note: '推荐只依据你登记的能力标签、连接测试结果、状态与计费方式；能力标签与价格未经平台验证。' });
+  }
+  let tm;
+  if ((tm = p.match(/^\/api\/teams\/([\w-]{1,40})(?:\/(validate|roles\/([\w-]{1,32})))?$/))) {
+    const tid = tm[1];
+    if (!teams.get(tid)) return json(res, 404, { error: '团队不存在' });
+    if (!tm[2] && m === 'GET') return json(res, 200, { team: teams.get(tid), health: teams.validate(tid, models) });
+    if (!tm[2] && (m === 'PUT' || m === 'POST')) {
+      const r = teams.update(tid, await readBody(req));
+      if (!r.ok) return json(res, r.code || 400, { error: r.error });
+      saveTeams();
+      return json(res, 200, { team: r.team, health: teams.validate(tid, models) });
+    }
+    if (!tm[2] && m === 'DELETE') { teams.remove(tid); saveTeams(); return json(res, 200, { ok: true }); }
+    if (tm[2] === 'validate' && m === 'GET') return json(res, 200, teams.validate(tid, models));
+    if (tm[3] && (m === 'PUT' || m === 'POST')) {
+      const r = teams.assign(tid, tm[3], await readBody(req));
+      if (!r.ok) return json(res, r.code || 400, { error: r.error });
+      saveTeams();
+      return json(res, 200, { team: r.team, health: teams.validate(tid, models) });
+    }
+    return json(res, 405, { error: '不支持的操作' });
   }
   if ((mm = p.match(/^\/api\/runs\/([\w-]+)\/artifacts$/)) && m === 'GET') {
     if (!tasks.has(mm[1])) return json(res, 404, { error: '不存在' });

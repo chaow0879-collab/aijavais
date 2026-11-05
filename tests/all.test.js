@@ -9,3 +9,4 @@ require('./hardening.test.js');
 require('./runtime-unit.test.js');
 require('./access.test.js');
 require('./models.test.js');
+require('./teams.test.js');
