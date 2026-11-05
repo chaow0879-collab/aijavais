@@ -61,6 +61,21 @@
 - **工具建议≠权限**：草案响应新增`toolRecommendations[]`（`source:'ai_suggestion'`、`verification: registered_available|unverified`、`risk/highRisk`、`permission:'not_granted'`、`approval:'needs_approval_per_run'`）与`toolPermissions:{granted:[]}`。`requiredToolIds`仍是“执行前必须满足的需求”：保存时不授予任何工具；运行时`ProjectEngine._approval`要求每个必需工具出现在本次运行人工勾选的`allowedTools`中，外部/代码执行另需`approveExternalTools`。工作台工具复选框默认全部不勾选。恶意模型JSON中的`allowedTools/toolPermissions/toolRecommendations/approve*`被白名单丢弃，保存时附加的伪造权限字段也不会持久化（`tests/capability-truth.test.js`）。
 - **界面**：草案编辑器显示“AI建议的工具（未授予任何权限）……需逐次运行批准”；工作台模型下拉按当前状态显示“连接已测试且当前可用/已停用（历史测试不代表可用）/历史测试未完整记账，需重新测试”等（Chromium回归）。
 
+## 费用事实矩阵（#9 P2-03 / #14 包三）
+
+每条草案用量（HTTP响应`usage`与SQLite`system_usage`行）都带`billingFact`、`billingFactText`和`vendorInvoiceReconciled:false`（平台从不持有厂商账单）：
+
+| billingFact | 含义 | cost |
+|---|---|---|
+| `not_dispatched_zero` | 有发送前证据：未发送 | 0 |
+| `local_free_zero` | 服务器核实的本地回环目标，无API费用（不含电费/硬件） | 0 |
+| `user_rate_estimate` | 厂商返回完整用量×用户填写单价的**估算**，未与厂商账单核对 | 数值 |
+| `sent_usage_unknown` | 已发送但用量不完整/未知；预算按保守上界`budgetCost`计入 | null |
+| `sent_provider_outstanding_unknown` | 已发送，供应商调用尚未结束（#7） | null |
+| `sent_ledger_unrecorded_unknown` | 已发送但账本写入失败（HTTP202），`unbookedComputedCost`仅供核对 | null |
+
+`estimate`只返回保守上界，不是调用授权也不是账单。工作台运行费用指标改为“费用估算 USD（非厂商账单）”，缺失值显示“未知（不是0）”（原实现把缺失值显示为0.000000），含保守预留时注明。端到端矩阵`tests/cost-facts-matrix.test.js`经真实server.js逐行核对：401/403/402×3/409(停用)/200付费/200本地/200用量未知/422计费/409重复/409同ID不同参数/并发5次仅1次派发/202结算失败/503账本不可用/429容量/取消后409，HTTP状态、响应费用、SQLite行与Mock调用数一致；任何已发送远程行要么是>0估算要么为null，绝无静默0。
+
 ## 取消、超时、断连与真实底层容量（#7 / AUD-AB-003）
 
 **区分两个生命周期**：用户请求（HTTP/前端等待）与底层模型调用（适配器自己的Promise）。在基线`17ec74c`上已动态复现：适配器忽略AbortSignal时，取消3个外层请求后第4个被派发，`peakUnderlyingInFlight=4`，且前3个账本被提前结为failed（见`tests/intake-draft-cancel-lifecycle.test.js` TC7-01及#7评论）。整改后：

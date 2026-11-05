@@ -70,6 +70,9 @@ async function realLifecycleBodies(){
     assert.equal(calls,1);assert.equal(await page.isChecked('#ai-consent'),false,'one-time consent is cleared');
     assert.equal((await app.call('GET','/api/v2/projects')).json.projects.length,0,'no automatic save');
     assert.equal(await page.locator('#ai-roles img').count(),0);assert.equal(await page.evaluate(()=>window.__draftUnsafe),undefined);
+    // #9 P2-03: a settled paid draft is an estimate from the user's rates, never presented as a vendor bill.
+    const usageText=await page.textContent('#ai-usage');
+    assert.match(usageText,/\$0\.0001 USD（按你填写的单价×厂商返回用量计算的估算，未与厂商账单核对）/);assert.match(usageText,/已记录账本/);
     // #9 P2-02: AI tool suggestions are shown as unverified/not granted, never as permissions.
     const perms=await page.textContent('#ai-tool-permissions');
     assert.match(perms,/未授予任何权限/);assert.match(perms,/builtin:text-stats［已注册可用·需逐次运行批准］/);assert.match(perms,/不会授权工具、不会开始执行/);

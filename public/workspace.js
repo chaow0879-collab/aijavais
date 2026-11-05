@@ -249,7 +249,11 @@
     const run=state.run;$('run-empty').hidden=!!run;$('run-detail').hidden=!run;if(!run)return;
     $('run-status').textContent=statusName(run.status);
     const usage=run.usage || {},steps=Array.isArray(run.steps)?run.steps:[],tokens=usage.totalTokens ?? usage.tokens ?? ((usage.providerTokens || 0)+(usage.estimatedTokens || 0)+(usage.inputTokens || 0)+(usage.outputTokens || 0));
-    $('run-tokens').textContent=Number(tokens).toLocaleString();$('run-cost').textContent=Number(usage.cost ?? usage.totalCost ?? usage.estimatedCost ?? 0).toFixed(6);
+    $('run-tokens').textContent=Number(tokens).toLocaleString();// #9 P2-03: a missing cost is unknown, never 0; the figure is an estimate, not a vendor bill.
+    const costValue=usage.cost ?? usage.totalCost ?? usage.estimatedCost,ledgerRows=Array.isArray(run.usageLedger)?run.usageLedger:[];
+    const conservative=ledgerRows.some(e=>e.costSource==='conservative_reservation'||e.costSource==='restart_unknown'||e.tokenSource==='reserved_unknown');
+    $('run-cost').textContent=costValue===null||costValue===undefined||!Number.isFinite(Number(costValue))?'未知（不是0）':Number(costValue).toFixed(6)+(conservative?'（含保守预留）':'');
+    $('run-cost').title='按你填写的单价×厂商返回用量估算；用量未知的调用按保守预留计入。不是厂商账单，未与厂商账单核对。';
     $('run-progress').textContent=steps.filter(s=>['done','completed'].includes(s.status)).length+' / '+steps.length;
     $('run-error').textContent=run.error || '';$('cancel-run').disabled=!['running','queued'].includes(run.status);
     const awaiting=['review_required','awaiting_review','completed','done'].includes(run.status);

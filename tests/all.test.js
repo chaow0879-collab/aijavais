@@ -19,6 +19,7 @@ require('./model-request-recovery.test.js');
 require('./migration-backup-security.test.js');
 require('./intake-draft-idempotency.test.js');
 require('./intake-draft-cancel-lifecycle.test.js');
+require('./cost-facts-matrix.test.js');
 require('./proxy.test.js');
 require('./projects-v2.test.js');
 require('./tools-v2.test.js');
