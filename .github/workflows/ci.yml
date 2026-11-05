@@ -18,8 +18,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-      - name: Install pdftotext so PDF reading is tested for real
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+      - name: Install poppler and LibreOffice so PDF reading, conversion and rendering are tested for real
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Report optional programs
+        run: pdftotext -v; soffice --version
       - name: Unit and HTTP integration tests (local protocol fixtures; no paid APIs)
         run: npm test
   browser:

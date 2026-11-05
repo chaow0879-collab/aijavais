@@ -23,3 +23,4 @@ require('./product-neutrality.test.js');
 require('./project-files.test.js');
 require('./capabilities.test.js');
 require('./data-analysis.test.js');
+require('./office-render.test.js');

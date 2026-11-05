@@ -17,7 +17,8 @@ test('capabilities: kinds are distinct and nothing is "available" without a regi
   const by = id => capabilities.find(c => c.id === id);
   assert.equal(by('docx-generate').status, 'available');
   assert.equal(by('xlsx-generate').status, 'needs_setup', 'xlsx tool not registered in this fixture');
-  for (const id of ['code-execution', 'office-render', 'diagrams', 'image-read']) assert.equal(by(id).status, 'not_implemented', id);
+  for (const id of ['code-execution', 'diagrams', 'image-read']) assert.equal(by(id).status, 'not_implemented', id);
+  assert.equal(by('office-render').kind, 'builtin'); assert.notEqual(by('office-render').status, 'available', 'render tool not registered in this fixture');
   for (const id of ['charts', 'calculation']) { assert.equal(by(id).kind, 'builtin'); assert.equal(by(id).status, 'needs_setup', id + ' tool not registered in this fixture'); }
   assert.equal(by('web-search').kind, 'external'); assert.equal(by('web-search').status, 'not_implemented');
   assert.equal(by('mcp:fx:echo').kind, 'mcp');
