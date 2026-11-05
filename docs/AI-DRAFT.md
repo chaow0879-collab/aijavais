@@ -54,6 +54,18 @@
 
 非法JSON/无效引用返回422、超时504、取消409、模型错误502，并提供`fallback:manual`；手工基础草案或原规则模板始终可用。错误先脱敏再截断，账本不保存用户需求或完整模型原文。已发出的请求不保证能撤销厂商费用。
 
+## 取消、超时、断连与真实底层容量（#7 / AUD-AB-003）
+
+**区分两个生命周期**：用户请求（HTTP/前端等待）与底层模型调用（适配器自己的Promise）。在基线`17ec74c`上已动态复现：适配器忽略AbortSignal时，取消3个外层请求后第4个被派发，`peakUnderlyingInFlight=4`，且前3个账本被提前结为failed（见`tests/intake-draft-cancel-lifecycle.test.js` TC7-01及#7评论）。整改后：
+
+- **容量按底层计**：`IntakeDraftService.slots`在claim时占用，只在“从未派发”或“底层Promise真实settle”后释放；外层取消/超时/断连不释放。满3个时新请求直接`429 draft_busy`：不排队、不claim、不写账本、不派发（避免隐藏积压与活锁；名额释放后立即可用）。
+- **取消/超时/断连**：外层先结束时给合作式适配器`abortGraceMs`（默认250ms）收尾；生产适配器`pinnedFetch`在abort时销毁请求/响应流，属于合作式，通常在宽限内真实结束并正常结算。宽限后仍未结束（非合作式）则立即答复`409 cancelled`/`504 timeout`，`billingStatus:'dispatch_outstanding'`、`usage.cost:null`、`costUpperBound`、`ledgerId`、`providerMayStillBill:true`；账本保持`reserved`/请求`dispatching`作为证据，**不宣称已停止计费**。
+- **迟到结算恰好一次**：底层真实结束时用其实际用量（或未知=null）结算同一ledgerId一次（`lateSettlement:true`），同时由SQLite状态条件拒绝第二次转换；不重发、不自动重试；同ID再次提交得到`409 duplicate_request`（requestState=dispatching）。
+- **超时计时器**：改为引用型`setTimeout`（原`AbortSignal.timeout`为unref计时器，永不响应的调用可让事件循环提前结束——这也是Node 22下原测试cancelledByParent的原因）。
+- **有界关闭**：`close()`中止外层请求、最多等待`closeGraceMs`（默认2s），返回仍在途数量和ledgerIds并写审计`intake_draft_close_outstanding`；**不释放仍在途调用的名额**（关闭后拒绝新请求`503 service_closing`），关闭后的迟到结果不写已关闭数据库（计`lateAfterClose`）。持久`dispatching`在重启时按#8恢复为`interrupted_unknown`、费用null、保留上界，不重放。
+- **只读容量视图**：`GET /api/v2/intake/ai-draft/status`（同管理员会话门禁）返回`activeSlots/underlyingInFlight/peakUnderlyingInFlight/outstandingAfterResponse/lateSettlements`等计数，不含提示词、所有者或账本内容。
+- **边界**：永不结束的非合作调用会一直占用名额直至进程重启（进程退出关闭其套接字）；这是有意的安全选择——宁可降低可用性也不超过真实并发上限或伪造费用。平台无法保证已发出的厂商请求停止计费。
+
 ## 实际验证
 
 所有模型测试均为本地Mock或适配器Mock，不是付费厂商验证。SQLite、HTTP、取消、账本及Chromium是真实运行。
@@ -67,6 +79,7 @@
 | Token/金额超限 | 请求前402；分项及总量预留/超限回归 |
 | 失败及超时 | 已知用量按价表，未知费用null，60秒策略的缩短测试超时 |
 | 用户取消 | 服务/真实HTTP/浏览器取消、费用记录保留 |
+| 非合作取消/超时/断连（#7） | `intake-draft-cancel-lifecycle.test.js` TC7-01—06：底层计数器+barrier、峰值≤3、迟到结算一次、有界close+重启恢复；真实本地HTTP断连（非合作套接字保持/合作式套接字关闭）；`intake-draft-api.test.js`真实server.js生产适配器套接字关闭；Chromium渲染outstanding/429 |
 | 编辑与保存 | 浏览器增删岗位/步骤、修改标准/模型、另行确认保存 |
 | 不自动执行 | 生成后项目数0，保存后runs=[]，请求计数不增加 |
 | 恶意预算/权限 | 丢弃approvePaid/allowedTools/状态/连接/命令/工具执行字段 |

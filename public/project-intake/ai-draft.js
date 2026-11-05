@@ -70,9 +70,14 @@
     }catch(e){
       if(state!==currentState)return;
       const data=e.data;
-      if(data?.usage)state.result={...(state.result||{}),usage:data.usage,usageRecorded:data.usageRecorded,usageWarning:data.usageWarning,financiallyComplete:data.financiallyComplete,billingStatus:data.billingStatus};
+      if(data?.usage)state.result={...(state.result||{}),usage:data.usage,usageRecorded:data.usageRecorded,usageWarning:data.usageWarning,financiallyComplete:data.financiallyComplete,billingStatus:data.billingStatus,ledgerId:data.ledgerId};
       if(!state.draft&&data?.fallbackDraft)state.draft=data.fallbackDraft;
-      message(e.name==='AbortError'||data?.code==='cancelled'?'已取消。已发送的模型请求仍可能产生费用，请查看系统用量账本。':e.message+'；已回退手工方案，也可继续使用原模板。'+(data?.usageWarning?' '+data.usageWarning:''));
+      // The user's request ending is not the provider call ending: say so plainly.
+      const outstanding=data?.billingStatus==='dispatch_outstanding';
+      message(outstanding?(data.code==='timeout'?'请求已超时。':'已取消本次等待。')+'供应商调用尚未确认结束，可能仍在处理并计费：费用未知（不是0），账本保留预留上界'+(data.ledgerId?'（账本 '+data.ledgerId+'）':'')+'；它结束前继续占用一个并发名额，结束后自动结算一次。请勿为此重新生成。'
+        :data?.code==='draft_busy'?'已有3个草案模型调用仍在进行（含已取消但供应商尚未结束的调用），本次未发送请求、未产生费用；请稍后再试。'
+        :e.name==='AbortError'||data?.code==='cancelled'?'已取消。'+(data?.requestSent===false?'请求尚未发送，费用为0。':'已发送的模型请求仍可能产生费用，请查看系统用量账本。')
+        :e.message+'；已回退手工方案，也可继续使用原模板。'+(data?.usageWarning?' '+data.usageWarning:''));
     }finally{if(state===currentState){state.busy=false;render();}if(controller===active)controller=null;}
   }
   function selectModel(value, change, id) {
@@ -158,7 +163,7 @@
       el('button',{id:'ai-generate',type:'button',className:'btn primary',text:'生成可编辑团队草案',disabled:!eligible(),onclick:generate}),
       el('button',{id:'ai-cancel',type:'button',className:'btn',text:'取消本次请求',disabled:!state.busy,onclick:cancel}),
       el('p',{id:'ai-message',role:'status',className:'note',text:state.message}));
-    if(state.result?.usage){const u=state.result.usage;card.append(el('p',{id:'ai-usage',className:'hint',text:`本次用量：${u.tokens??'未知'} Token（${u.tokenSource}）；费用：${u.cost===null?'未知，不能视为零':('$'+u.cost+' USD')}；${state.result.financiallyComplete===true?'已记录账本':(u.cost===null?'账本未完成：费用未知，需要人工核对；请勿为补记账重新生成。':'账本未写入（本次费用已确定为 $'+u.cost+' USD），需要人工核对记录。')}`}));}
+    if(state.result?.usage){const u=state.result.usage;card.append(el('p',{id:'ai-usage',className:'hint',text:`本次用量：${u.tokens??'未知'} Token（${u.tokenSource}）；费用：${u.cost===null?'未知，不能视为零':('$'+u.cost+' USD')}；${state.result.financiallyComplete===true?'已记录账本':state.result.billingStatus==='dispatch_outstanding'?'供应商调用尚未结束：费用未知，可能仍计费；结束后自动结算一次，不会自动重发。':(u.cost===null?'账本未完成：费用未知，需要人工核对；请勿为补记账重新生成。':'账本未写入（本次费用已确定为 $'+u.cost+' USD），需要人工核对记录。')}`}));}
     if(state.draft)editor(card);root.append(card);
   }
   window.AIJIntakeDraft={mount(container,options){root=container;models=options.models||[];if(source!==options.description){source=options.description;state.description=source;invalidate();}render();},

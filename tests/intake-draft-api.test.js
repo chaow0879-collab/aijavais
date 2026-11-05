@@ -136,3 +136,43 @@ test('draft HTTP: explicit cancel aborts an in-flight local protocol call and re
   assert.equal(ledger.length, 1); assert.equal(ledger[0].status, 'failed'); assert.equal(ledger[0].cost, null);
   assert.equal((await f.app.call('GET', '/api/v2/projects')).json.projects.length, 0);
 });
+
+test('#7 real server + production adapter: cancel really closes the provider socket, frees capacity; status endpoint is authenticated and read-only', async t => {
+  // Ground truth from the provider side: did the outbound HTTP request actually end?
+  let open = 0, peakOpen = 0; const sockets = []; let hold = true;
+  const provider = http.createServer((req, res) => {
+    let input = ''; req.on('data', c => input += c); req.on('end', () => {
+      const body = JSON.parse(input), draft = body.messages.at(-1).content.startsWith('Design a team');
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      if (draft && hold) { const s = { closed: false }; sockets.push(s); open++; peakOpen = Math.max(peakOpen, open); res.on('close', () => { s.closed = true; open--; }); res.write(': pending\n\n'); return; }
+      res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: draft ? JSON.stringify(sample()) : '好' } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 10, completion_tokens: 20 } }) + '\n\ndata: [DONE]\n\n');
+    });
+  });
+  await new Promise(r => provider.listen(0, '127.0.0.1', r));
+  const app = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + provider.address().port } });
+  t.after(async () => { await app.stop(); provider.closeAllConnections(); await new Promise(r => provider.close(r)); });
+  const added = await app.call('POST', '/api/models', { providerId: 'ollama', modelId: 'MOCK-draft', displayName: 'Local draft fixture',
+    baseUrl: `http://127.0.0.1:${provider.address().port}/v1`, pricingMode: 'paid_api', capabilities: ['reasoning', 'writing'] });
+  const connectionId = added.json.connection.connectionId;
+  assert.equal((await app.call('POST', '/api/models/' + connectionId + '/test', {})).json.ok, true);
+  assert.equal((await app.call('GET', '/api/v2/intake/ai-draft/status', undefined, { cookie: false })).status, 401);
+  const input = id => ({ description: '为跨领域新项目设计适合的岗位和步骤，随后人工编辑确认。', connectionId, approvePaid: true, maxTokens: 32000, maxCost: 1, price: { inputPerMillion: 2, outputPerMillion: 4 }, requestId: id });
+  const pending = ['real-1', 'real-2', 'real-3'].map(id => app.call('POST', '/api/v2/intake/ai-draft', input(id)));
+  for (let i = 0; i < 200 && sockets.length < 3; i++) await H.sleep(5);
+  assert.equal(sockets.length, 3);
+  const busy = await app.call('POST', '/api/v2/intake/ai-draft', input('real-4'));
+  assert.equal(busy.status, 429); assert.equal(busy.json.code, 'draft_busy'); assert.equal(sockets.length, 3, 'refused request never reached the provider');
+  const status = (await app.call('GET', '/api/v2/intake/ai-draft/status')).json;
+  assert.equal(status.activeSlots, 3); assert.equal(status.underlyingInFlight, 3); assert.equal(status.readOnly, true);
+  for (const id of ['real-1', 'real-2', 'real-3']) assert.equal((await app.call('POST', '/api/v2/intake/ai-draft/cancel', { requestId: id })).status, 202);
+  const answered = await Promise.all(pending);
+  for (const r of answered) { assert.equal(r.status, 409); assert.equal(r.json.billingStatus, 'settled', 'production adapter stops within the grace window'); assert.equal(r.json.usage.cost, null); }
+  for (let i = 0; i < 200 && open; i++) await H.sleep(5);
+  assert.equal(open, 0, 'provider observed every outbound request closed'); assert.ok(sockets.every(s => s.closed)); assert.equal(peakOpen, 3);
+  const after = (await app.call('GET', '/api/v2/intake/ai-draft/status')).json;
+  assert.equal(after.activeSlots, 0); assert.equal(after.underlyingInFlight, 0); assert.equal(after.peakUnderlyingInFlight, 3);
+  hold = false;
+  const next = await app.call('POST', '/api/v2/intake/ai-draft', input('real-5'));
+  assert.equal(next.status, 200, next.text); assert.equal(sockets.length, 3);
+  t.diagnostic(JSON.stringify({ providerPeakOpen: peakOpen, statusDuring: status, statusAfter: after }));
+});

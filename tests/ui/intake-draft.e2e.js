@@ -7,6 +7,21 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const H = require('../helpers');
 const sample = require('../fixtures/ai-draft.cjs');
+async function realLifecycleBodies(){
+  const os=require('node:os');const {ProjectStore}=require('../../lib/project-store');const {IntakeDraftService}=require('../../lib/intake-draft');
+  const {controlledProvider}=require('../fixtures/lifecycle-provider.cjs');
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'aij-ui-lifecycle-')),store=new ProjectStore({dir}),P=controlledProvider({mode:'ignore'});
+  const c={connectionId:'m',modelId:'MOCK-UI',protocol:'openai',baseUrl:'https://mock.invalid/v1',enabled:true,ready:true,status:'available',pricingMode:'paid_api',updatedAt:1};
+  const models={policy:{localTargets:new Set()},get:()=>c,status:()=>'available',list:()=>[c],key:()=>'',runtime:()=>({})};
+  const svc=new IntakeDraftService({store,models,tools:{list:()=>[]},skills:{get:()=>null},callModel:P.callModel,abortGraceMs:10,closeGraceMs:10});
+  const input=id=>({description:'界面验证非合作取消后的费用状态。',connectionId:'m',approvePaid:true,maxTokens:32000,maxCost:1,price:{inputPerMillion:2,outputPerMillion:4},requestId:id});
+  const ops=['u1','u2','u3'].map(id=>svc.generate(input(id),{ownerId:'ui'}));await P.until(()=>P.metrics.started===3);
+  svc.cancel('ui','u1');const outstanding=(await ops[0]).body;let busy;
+  try{svc.generate(input('u4'),{ownerId:'ui'});}catch(e){busy={error:e.message,code:e.code,ok:false,fallback:'manual'};}
+  for(const x of P.pending())x.resolve();await Promise.all(ops);await svc.close();store.close();fs.rmSync(dir,{recursive:true,force:true});
+  assert.equal(outstanding.billingStatus,'dispatch_outstanding');assert.equal(busy.code,'draft_busy');
+  return {outstanding,busy};
+}
 (async () => {
   let app, browser, mode='valid', calls=0;
   const mock=http.createServer((req,res)=>{
@@ -84,6 +99,20 @@ const sample = require('../fixtures/ai-draft.cjs');
       if(rows.some(x=>x.errorCode==='cancelled'))break;await H.sleep(10);
     }
     const cancelled=(await app.call('GET','/api/v2/usage/system')).json.usage.find(x=>x.errorCode==='cancelled');assert.ok(cancelled);assert.equal(cancelled.cost,null);
+    // #7: non-cooperative provider outstanding after cancel, and the 429 refusal. The production adapter
+    // is cooperative (pinnedFetch destroys the stream on abort), so these response bodies are produced by
+    // the real IntakeDraftService in-process with a signal-ignoring local MOCK, then served to the real page.
+    const bodies=await realLifecycleBodies();
+    for(const [status,body,expect] of [[409,bodies.outstanding,/供应商调用尚未确认结束.*费用未知（不是0）.*请勿为此重新生成/],[429,bodies.busy,/已有3个草案模型调用仍在进行.*未发送请求、未产生费用/]]){
+      await page.route('**/api/v2/intake/ai-draft',route=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}));
+      const before=calls;await open();await quote();await page.check('#ai-consent');await page.click('#ai-generate');
+      await page.waitForFunction(re=>new RegExp(re).test(document.querySelector('#ai-message').textContent),expect.source);
+      if(status===409){const usage=await page.textContent('#ai-usage');assert.match(usage,/费用：未知，不能视为零/);assert.match(usage,/供应商调用尚未结束/);assert.ok((await page.textContent('#ai-message')).includes(body.ledgerId));}
+      assert.equal(calls,before,'served body; no model request');assert.equal((await app.call('GET','/api/v2/projects')).json.projects.length,1,'nothing saved');
+      await page.unroute('**/api/v2/intake/ai-draft');
+    }
+    if(process.env.UI_SHOTS)await page.screenshot({path:path.join(process.env.UI_SHOTS,'ai-draft-outstanding.png'),fullPage:true});
+    assert.deepEqual(errors,[]);
     mode='invalid';await open();await quote();await page.check('#ai-consent');await page.click('#ai-generate');
     await page.waitForFunction(()=>document.querySelector('#ai-message').textContent.includes('回退手工'));
     assert.equal(await page.locator('.ai-role-name').count(),1,'invalid JSON offers a manual fallback');
