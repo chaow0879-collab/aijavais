@@ -255,10 +255,36 @@ test('ledger write failure is never silent: audited without secrets and reported
   const entry = { kind: 'connection_test', connectionId: 'c1', modelId: 'm', ok: true, tokens: 8, cost: null, error: undefined };
   const failing = { recordSystemUsage() { throw Object.assign(new Error('disk full sk-secret-123456'), { code: 'SQLITE_FULL' }); } };
   const r = recordSystemCall({ store: failing, audit: (e, d) => audits.push([e, d]) }, entry);
-  assert.equal(r.recorded, false); assert.match(r.warning, /未能写入账本/); assert.match(r.warning, /不要当作零费用/);
+  assert.equal(r.recorded, false); assert.match(r.warning, /未能写入账本（已记录审计事件）/); assert.match(r.warning, /不要当作零费用/); assert.equal(r.audited, true);
   assert.deepEqual(audits, [['usage_ledger_write_failed', { kind: 'connection_test', connectionId: 'c1', modelId: 'm', ok: true, tokens: 8, cost: null, reason: 'SQLITE_FULL' }]]);
   assert.doesNotMatch(JSON.stringify(audits), /sk-secret/, 'error text (which may echo secrets) is not logged');
-  assert.equal(recordSystemCall({ store: null, audit: () => { throw new Error('audit down'); } }, entry).recorded, false, 'still flagged when audit also fails');
+  const both = recordSystemCall({ store: null, audit: () => { throw new Error('audit down'); } }, entry);
+  assert.equal(both.recorded, false, 'still flagged when audit also fails'); assert.equal(both.audited, false);
+  assert.match(both.warning, /审计事件也未能写入/); assert.doesNotMatch(both.warning, /已记录审计事件/, 'never claims an audit that failed');
   const ok = recordSystemCall({ store: { recordSystemUsage: d => ({ ...d, ledgerId: 'sys_1' }) } }, entry);
   assert.deepEqual(ok, { recorded: true, ledgerId: 'sys_1' });
+});
+
+test('API: a connection test whose usage cannot be recorded is reported and not cached as a full pass (local fixture)', async t => {
+  const { DatabaseSync } = require('node:sqlite');
+  const srv = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: '好' } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 7, completion_tokens: 1 } }) + '\n\ndata: [DONE]\n\n'); }); });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const S = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + srv.address().port } });
+  t.after(async () => { await S.stop(); srv.close(); });
+  const base = `http://127.0.0.1:${srv.address().port}/v1`;
+  const id = (await call(S.port, 'POST', '/api/models', { providerId: 'custom', baseUrl: base, apiKey: 'k', modelId: 'm', displayName: 'm' })).json.connection.connectionId;
+  // Make the system ledger unwritable from outside the server process.
+  const db = new DatabaseSync(path.join(S.dir, 'projects.sqlite')); db.exec('DROP TABLE system_usage'); db.close();
+  const r = (await call(S.port, 'POST', `/api/models/${id}/test`)).json;
+  assert.equal(r.ok, true, 'the model connection itself worked');
+  assert.equal(r.usageRecorded, false); assert.match(r.usageWarning, /已记录审计事件/);
+  assert.equal(r.connection.status, 'untested', 'not cached as a complete verification');
+  const v2run = await call(S.port, 'POST', '/api/v2/projects', { name: 'x', description: 'needs a fully verified model', roles: [{ roleId: 'a', name: 'A', duty: 'd', connectionId: id }], steps: [{ stepId: 's', roleId: 'a', title: 't' }] });
+  assert.equal((await call(S.port, 'POST', `/api/v2/projects/${v2run.json.project.projectId}/validate`, {})).json.ok, false, 'execution gate still requires a fully recorded test');
+  const audit = fs.readFileSync(path.join(S.dir, 'audit.log'), 'utf8');
+  assert.match(audit, /usage_ledger_write_failed/); assert.doesNotMatch(audit, /"k"/);
+  const probe = (await call(S.port, 'POST', '/api/models/probe', { providerId: 'custom', baseUrl: base, apiKey: 'k2', modelId: 'm2' })).json;
+  assert.equal(probe.ok, true); assert.equal(probe.usageRecorded, false);
+  const saved = (await call(S.port, 'POST', '/api/models', { providerId: 'custom', baseUrl: base, apiKey: 'k2', modelId: 'm2', displayName: 'm2' })).json.connection;
+  assert.notEqual(saved.status, 'available', 'an unrecorded pre-save probe is not reused as a passing test');
 });

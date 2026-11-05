@@ -956,7 +956,8 @@ async function api(req, res, url) {
     try {
       const r = await callModel(d.runtime, { role: '连接测试', task: '保存前试连', prompt: '只回复一个字：好', maxTokens: 32 });
       const led = recordProbeUsage(d.runtime, 'pre_save_probe', r);
-      rememberProbe(d.runtime, Date.now() - t0); // 保存同一组配置时沿用这次成功的测试结果，不再重复调用
+      // Only a fully accounted probe may be reused as the saved connection's passing test.
+      if (led.recorded) rememberProbe(d.runtime, Date.now() - t0); // 保存同一组配置时沿用这次成功的测试结果，不再重复调用
       return json(res, 200, { ok: true, ms: Date.now() - t0, reply: r.text.slice(0, 60), usageRecorded: led.recorded, ...(led.warning ? { usageWarning: led.warning } : {}) });
     } catch (e) { const led = recordProbeUsage(d.runtime, 'pre_save_probe', e.usageUnknown ? null : e, e.message); return json(res, 200, { ok: false, ms: Date.now() - t0, error: e.message, hint: diagnose(e.message), usageRecorded: led.recorded, ...(led.warning ? { usageWarning: led.warning } : {}) }); }
   }
