@@ -25,7 +25,8 @@
       templateId:state.templateId,description:state.description,context:state.context,audience:state.audience,
       deliveryExpectation:state.deliveryExpectation,referenceNotes:state.referenceNotes,
       answers:state.answers,selectedRoleIds:state.selectedRoleIds,selectedStepIds:state.selectedStepIds,
-      assignments:state.assignments,availableTools:state.availableTools,customRoles:state.customRoles,
+      assignments:state.assignments,availableTools:state.availableTools,availableModels:state.models,
+      budgetMode:state.freeOnly?'free_only':'user_review',customRoles:state.customRoles,
       customDeliverables:state.customDeliverables
     };
   }
