@@ -29,6 +29,7 @@ const { TeamRegistry } = require('./lib/teams');
 const { recommend } = require('./lib/matcher');
 const { AuthStore } = require('./lib/auth');
 const { createV2Api } = require('./lib/v2-api');
+const { recordSystemCall } = require('./lib/usage-ledger');
 let v2;
 
 const ROOT = __dirname;
@@ -682,14 +683,13 @@ function recallProbe(rt) {
 /* Connection tests are real model calls: record them in the system usage ledger.
  * There is no per-model USD price table for probes, so remote cost is recorded as unknown (null), never as zero. */
 function recordProbeUsage(rt, kind, result, error) {
-  try {
-    const local = legacyLocal(rt);
-    const known = result && Number.isSafeInteger(result.tokens);
-    v2?.store.recordSystemUsage({ kind, connectionId: models.has(rt.id) ? rt.id : null, modelId: rt.model, baseHost: (() => { try { return new URL(rt.baseUrl).host; } catch { return ''; } })(),
-      ok: !error, maxOutputTokens: 32, tokens: known ? result.tokens : null, inputTokens: result?.inTokens ?? null, outputTokens: result?.outTokens ?? null,
-      tokenSource: !known ? 'unknown' : result.estimated ? 'estimated' : 'provider', cost: local ? 0 : null, currency: 'USD',
-      costSource: local ? 'declared_local_target_no_api_cost' : 'unknown_no_price_table', ...(error ? { error: String(error).slice(0, 300) } : {}) });
-  } catch { /* Recording must not change the probe result. */ }
+  const local = legacyLocal(rt);
+  const known = result && Number.isSafeInteger(result.tokens);
+  return recordSystemCall({ store: v2?.store, audit: (event, detail) => auth.audit(event, detail) }, { kind, connectionId: models.has(rt.id) ? rt.id : null, modelId: rt.model,
+    baseHost: (() => { try { return new URL(rt.baseUrl).host; } catch { return ''; } })(),
+    ok: !error, maxOutputTokens: 32, tokens: known ? result.tokens : null, inputTokens: result?.inTokens ?? null, outputTokens: result?.outTokens ?? null,
+    tokenSource: !known ? 'unknown' : result.estimated ? 'estimated' : 'provider', cost: local ? 0 : null, currency: 'USD',
+    costSource: local ? 'declared_local_target_no_api_cost' : 'unknown_no_price_table', ...(error ? { error: SEC.scrubSecrets(String(error), [providerKey(rt)]).slice(0, 300) } : {}) });
 }
 async function testConnection(id) {
   const rt = models.runtime(id);
@@ -698,9 +698,9 @@ async function testConnection(id) {
   let out;
   try {
     const r = await callModel(rt, { role: '连接测试', task: '连接测试', prompt: '只回复一个字：好', maxTokens: 32 });
-    recordProbeUsage(rt, 'connection_test', r);
-    out = { ok: true, ms: Date.now() - t0, tokens: r.tokens, reply: r.text.slice(0, 60) };
-  } catch (e) { recordProbeUsage(rt, 'connection_test', e.usageUnknown ? null : e, e.message); out = { ok: false, ms: Date.now() - t0, error: e.message, hint: diagnose(e.message) }; }
+    const led = recordProbeUsage(rt, 'connection_test', r);
+    out = { ok: true, ms: Date.now() - t0, tokens: r.tokens, reply: r.text.slice(0, 60), usageRecorded: led.recorded, ...(led.warning ? { usageWarning: led.warning } : {}) };
+  } catch (e) { const led = recordProbeUsage(rt, 'connection_test', e.usageUnknown ? null : e, e.message); out = { ok: false, ms: Date.now() - t0, error: e.message, hint: diagnose(e.message), usageRecorded: led.recorded, ...(led.warning ? { usageWarning: led.warning } : {}) }; }
   const current = models.get(id);
   if (!current || current.updatedAt !== revision || probeKey(models.runtime(id)) !== targetKey) {
     return { ok: false, error: '连接配置在测试期间已改变；旧配置结果不会用于新配置，请重新测试', code: 'connection_changed', ...(current ? { connection: models.view(current) } : {}) };
@@ -955,10 +955,10 @@ async function api(req, res, url) {
     const t0 = Date.now();
     try {
       const r = await callModel(d.runtime, { role: '连接测试', task: '保存前试连', prompt: '只回复一个字：好', maxTokens: 32 });
-      recordProbeUsage(d.runtime, 'pre_save_probe', r);
+      const led = recordProbeUsage(d.runtime, 'pre_save_probe', r);
       rememberProbe(d.runtime, Date.now() - t0); // 保存同一组配置时沿用这次成功的测试结果，不再重复调用
-      return json(res, 200, { ok: true, ms: Date.now() - t0, reply: r.text.slice(0, 60) });
-    } catch (e) { recordProbeUsage(d.runtime, 'pre_save_probe', e.usageUnknown ? null : e, e.message); return json(res, 200, { ok: false, ms: Date.now() - t0, error: e.message, hint: diagnose(e.message) }); }
+      return json(res, 200, { ok: true, ms: Date.now() - t0, reply: r.text.slice(0, 60), usageRecorded: led.recorded, ...(led.warning ? { usageWarning: led.warning } : {}) });
+    } catch (e) { const led = recordProbeUsage(d.runtime, 'pre_save_probe', e.usageUnknown ? null : e, e.message); return json(res, 200, { ok: false, ms: Date.now() - t0, error: e.message, hint: diagnose(e.message), usageRecorded: led.recorded, ...(led.warning ? { usageWarning: led.warning } : {}) }); }
   }
   let mm;
   if ((mm = p.match(/^\/api\/models\/([\w-]{1,40})(?:\/(enable|disable|test|impact|capabilities))?$/))) {

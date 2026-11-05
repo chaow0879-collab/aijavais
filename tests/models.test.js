@@ -236,7 +236,8 @@ test('connection tests are recorded in the system usage ledger; remote cost with
   t.after(async () => { await S.stop(); local.close(); other.close(); });
   const add = async (host, port, modelId) => (await call(S.port, 'POST', '/api/models', { providerId: 'custom', baseUrl: `http://${host}:${port}/v1`, apiKey: 'k', modelId, displayName: modelId })).json.connection.connectionId;
   const a = await add('127.0.0.1', local.address().port, 'loop'), b = await add('127.0.0.2', other.address().port, 'remote-like'), c = await add('127.0.0.2', other.address().port, 'broken');
-  assert.equal((await call(S.port, 'POST', `/api/models/${a}/test`)).json.ok, true);
+  const first = (await call(S.port, 'POST', `/api/models/${a}/test`)).json;
+  assert.equal(first.ok, true); assert.equal(first.usageRecorded, true);
   assert.equal((await call(S.port, 'POST', `/api/models/${b}/test`, {})).status, 402, 'non-loopback probe still needs explicit consent');
   assert.equal((await call(S.port, 'POST', `/api/models/${b}/test`, { approvePaid: true })).json.ok, true);
   assert.equal((await call(S.port, 'POST', `/api/models/${c}/test`, { approvePaid: true })).json.ok, false);
@@ -246,4 +247,18 @@ test('connection tests are recorded in the system usage ledger; remote cost with
   assert.deepEqual([by(b).cost, by(b).costSource, by(b).tokens, by(b).maxOutputTokens], [null, 'unknown_no_price_table', 8, 32]);
   assert.equal(by(c).ok, false); assert.equal(by(c).cost, null); assert.equal(by(c).tokenSource, 'unknown'); assert.match(by(c).error, /HTTP 500/);
   assert.doesNotMatch(JSON.stringify(ledger), /"k"/, 'no key material in the ledger');
+});
+
+test('ledger write failure is never silent: audited without secrets and reported as not recorded', () => {
+  const { recordSystemCall } = require('../lib/usage-ledger');
+  const audits = [];
+  const entry = { kind: 'connection_test', connectionId: 'c1', modelId: 'm', ok: true, tokens: 8, cost: null, error: undefined };
+  const failing = { recordSystemUsage() { throw Object.assign(new Error('disk full sk-secret-123456'), { code: 'SQLITE_FULL' }); } };
+  const r = recordSystemCall({ store: failing, audit: (e, d) => audits.push([e, d]) }, entry);
+  assert.equal(r.recorded, false); assert.match(r.warning, /未能写入账本/); assert.match(r.warning, /不要当作零费用/);
+  assert.deepEqual(audits, [['usage_ledger_write_failed', { kind: 'connection_test', connectionId: 'c1', modelId: 'm', ok: true, tokens: 8, cost: null, reason: 'SQLITE_FULL' }]]);
+  assert.doesNotMatch(JSON.stringify(audits), /sk-secret/, 'error text (which may echo secrets) is not logged');
+  assert.equal(recordSystemCall({ store: null, audit: () => { throw new Error('audit down'); } }, entry).recorded, false, 'still flagged when audit also fails');
+  const ok = recordSystemCall({ store: { recordSystemUsage: d => ({ ...d, ledgerId: 'sys_1' }) } }, entry);
+  assert.deepEqual(ok, { recorded: true, ledgerId: 'sys_1' });
 });
