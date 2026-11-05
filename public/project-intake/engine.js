@@ -105,8 +105,19 @@
   }
   function buildPlan(catalog, input) {
     input = input || {};
-    const t = find(catalog, input.templateId);
-    if (!t) return { ok: false, errors: ['请先选择有效的项目类型'], warnings: [] };
+    const base = find(catalog, input.templateId);
+    if (!base) return { ok: false, errors: ['请先选择有效的项目类型'], warnings: [] };
+    const customRoles = (Array.isArray(input.customRoles) ? input.customRoles : []).slice(0, 12).map(r => ({
+      id: words(r.id).slice(0, 32), name: words(r.name).slice(0, 50), duty: words(r.duty).slice(0, 400),
+      standard: words(r.standard).slice(0, 400), required: false,
+      capabilities: Array.isArray(r.capabilities) ? r.capabilities.map(x => words(x)).slice(0, 10) : []
+    }));
+    const customSteps = customRoles.map(r => ({
+      id: 'step-' + r.id, title: '执行：' + r.name, roleId: r.id,
+      deliverable: words((input.customDeliverables || {})[r.id]) || '形成可审核的工作成果',
+      quality: r.standard, tools: []
+    }));
+    const t = { ...base, roles: [...base.roles, ...customRoles], steps: [...base.steps, ...customSteps] };
     const description = words(input.description);
     if (description.length < 8) return { ok: false, errors: ['请用至少 8 个字描述想解决的问题或期望成果'], warnings: [] };
     if (description.length > 20000) return { ok: false, errors: ['需求描述不能超过 20000 字符，请通过文件附件传递长材料'], warnings: [] };
@@ -121,6 +132,10 @@
     const roleIds = input.selectedRoleIds == null ? roleSuggestion.selectedRoleIds : uniq(input.selectedRoleIds.map(String));
     const stepIds = input.selectedStepIds == null ? null : uniq(input.selectedStepIds.map(String));
     const errors = [...quant.errors];
+    if (Array.isArray(input.customRoles) && input.customRoles.length > 12) errors.push('自定义岗位最多 12 个');
+    for (const r of customRoles) if (!/^custom-[a-z0-9-]{1,25}$/.test(r.id) || !r.name || !r.duty || !r.standard) errors.push('自定义岗位 ID、名称、职责或验收标准不完整');
+    if (new Set(t.roles.map(r => r.id)).size !== t.roles.length) errors.push('岗位 ID 重复');
+    if (new Set(t.steps.map(s => s.id)).size !== t.steps.length) errors.push('流程步骤 ID 重复');
     const warnings = [];
     if (!roleIds.length) errors.push('至少选择一个执行岗位');
     for (const id of roleIds) if (!t.roles.some(r => r.id === id)) errors.push('未知岗位 ' + id);
@@ -157,6 +172,7 @@
       requiredTools,
       missingTools,
       standards: roles.map(r => ({ roleId: r.id, roleName: r.name, duty: r.duty, acceptanceStandard: r.standard })),
+      customizedRoles: customRoles,
       warnings,
       readyForAutomatedExecution: !!steps.length && !!roles.length && !missingTools.length && assignments.length === roles.length,
       state: 'draft',
