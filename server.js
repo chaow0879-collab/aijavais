@@ -17,6 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const EV = require('./lib/events');
 const SEC = require('./lib/security');
+const MSG = require('./lib/messages');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
@@ -395,6 +396,14 @@ const SYS_DRAFT = '你是多 AI 协作平台中的通用助手。请直接完成
 const SYS_REVIEW = '你是严格的交叉审核者。请逐条指出上一份输出中的错误、遗漏、前后不一致之处，并给出可执行的修改建议。只给审核意见，不要重写全文。';
 const SYS_REVISE = '请根据审核意见修订你的原稿，直接输出最终版本；末尾单独一行列出“采纳 / 未采纳”的审核意见编号。';
 
+/* 消息总线：A→B→A 的交接以结构化消息完成。消息只保存在内存；“已交接”以投递事件为准（handoff 事件由消息投递驱动）。 */
+const bus = new MSG.MessageBus();
+bus.onTransition = ({ message: m, to }) => {
+  if (to !== 'delivered' || m.from === MSG.RESERVED.USER || m.to === MSG.RESERVED.USER || m.from === MSG.RESERVED.SCHEDULER) return;
+  ingest({ agent: m.from, to: m.to, role: m.type === 'review' ? '回交修订' : '交接审核', eventType: 'handoff', metadata: { messageId: m.messageId, messageType: m.type, round: m.round } },
+    { taskId: m.taskId, runId: m.runId });
+};
+
 async function runPipeline(run, A, B) {
   const steps = run.steps;
   const doStep = async (label, p, role, system, prompt) => {
@@ -407,26 +416,56 @@ async function runPipeline(run, A, B) {
     } catch (e) { Object.assign(s, { status: 'error', error: e.message }); throw e; }
   };
   const T = { taskId: run.id, runId: run.runId };
+  /* 同一个供应商自己审自己时没有“两个参与者”，不走消息总线，仍直接发 handoff 事件 */
+  const useBus = !(B && B.id === A.id) && bus.registerTask(run.id, { runId: run.runId, agents: B ? [A.id, B.id] : [A.id] }).ok;
+  const hop = (from, to, type, text, o = {}) => {
+    if (!useBus) {
+      if (from !== 'user' && to !== 'user') ingest({ agent: from, to, role: type === 'review' ? '回交修订' : '交接审核', eventType: 'handoff' }, T);
+      return { messageId: null, threadId: null, content: { text } };
+    }
+    const cut = text.length > MSG.MAX_TEXT;
+    const sent = bus.send({ taskId: run.id, from, to, type, round: o.round, replyTo: o.replyTo, threadId: o.threadId,
+      content: { format: 'text', text: cut ? text.slice(0, MSG.MAX_TEXT - 20) + '\n…[内容过长已截断]' : text }, metadata: cut ? { truncated: true } : undefined });
+    if (!sent.ok) throw new Error('消息发送失败：' + sent.error);
+    const id = sent.message.messageId;
+    if (!bus.queue(run.id, id).ok) throw new Error('消息入队失败');
+    const d = to === 'user' ? bus.deliver(run.id, id) : { ok: !!bus.next(run.id, to), message: bus.get(run.id, id) };
+    if (!d.ok) throw new Error('消息投递失败');
+    return d.message;
+  };
+  const take = m => { if (m.messageId) bus.consume(run.id, m.messageId); };
+
   ingest({ agent: A.id, label: A.label, task: run.title, eventType: 'task_start' }, T);
   try {
-    await pipelineBody();
+    const req = hop('user', A.id, 'request', run.task, { round: 1 }); take(req);
+    const draft = await doStep('起草', A, '起草', SYS_DRAFT, req.content.text);
+    if (run.mode === 'single') {
+      take(hop(A.id, 'user', 'proposal', draft, { round: 1, threadId: req.threadId }));
+    } else {
+      const m1 = hop(A.id, B.id, 'proposal', draft, { round: 1, threadId: req.threadId }); take(m1);
+      const review = await doStep('交叉审核', B, '审核', SYS_REVIEW, `【任务】\n${run.task}\n\n【待审核输出】\n${m1.content.text}`);
+      if (run.mode === 'review') {
+        take(hop(B.id, 'user', 'review', review, { round: 1, threadId: m1.threadId }));
+      } else {
+        const m2 = hop(B.id, A.id, 'review', review, { round: 1, replyTo: m1.messageId }); take(m2);
+        const final = await doStep('修订', A, '修订', SYS_REVISE, `【任务】\n${run.task}\n\n【你的原稿】\n${draft}\n\n【审核意见】\n${m2.content.text}`);
+        take(hop(A.id, 'user', 'revision', final, { round: 2, threadId: m2.threadId }));
+      }
+    }
     run.status = 'done';
+    if (useBus) bus.endTask(run.id, 'completed');
     ingest({ agent: A.id, task: run.title, eventType: 'task_done' }, T);
   } catch (e) {
     run.status = 'error'; run.error = e.message;
+    if (useBus) {
+      for (const m of bus.list(run.id)) if (m.status === 'delivered') bus.fail(run.id, m.messageId, '处理失败：' + String(e.message).slice(0, 100));
+      bus.endTask(run.id, 'failed');
+    }
     ingest({ agent: A.id, task: run.title, eventType: 'task_error', error: e.message }, T);
   }
+  if (useBus) run.messageStats = bus.stats(run.id); // 只保存统计，消息正文只在内存中
   run.endedAt = Date.now();
   flushTasks(); // 任务结束（成功 / 失败）立即落盘，不等防抖定时器
-  async function pipelineBody() {
-    const draft = await doStep('起草', A, '起草', SYS_DRAFT, run.task);
-    if (run.mode === 'single') return;
-    ingest({ agent: A.id, to: B.id, role: '交接审核', eventType: 'handoff' }, { taskId: run.id, runId: run.runId });
-    const review = await doStep('交叉审核', B, '审核', SYS_REVIEW, `【任务】\n${run.task}\n\n【待审核输出】\n${draft}`);
-    if (run.mode === 'review') return;
-    ingest({ agent: B.id, to: A.id, role: '回交修订', eventType: 'handoff' }, { taskId: run.id, runId: run.runId });
-    await doStep('修订', A, '修订', SYS_REVISE, `【任务】\n${run.task}\n\n【你的原稿】\n${draft}\n\n【审核意见】\n${review}`);
-  }
 }
 
 /* ------------------------------------------------------------------ 演示（无需任何 API Key） */
@@ -620,6 +659,10 @@ async function api(req, res, url) {
     persistTasks();
     runPipeline(run, A, B);
     return json(res, 200, { runId: id });
+  }
+  if ((mm = p.match(/^\/api\/runs\/(\w+)\/messages$/)) && m === 'GET') {
+    if (!tasks.has(mm[1])) return json(res, 404, { error: '不存在' });
+    return json(res, 200, { messages: bus.list(mm[1]), stats: bus.stats(mm[1]) }); // 仅内存；服务重启后为空
   }
   if ((mm = p.match(/^\/api\/runs\/(\w+)$/)) && m === 'GET') {
     const r = tasks.get(mm[1]);

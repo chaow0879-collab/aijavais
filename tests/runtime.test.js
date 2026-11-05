@@ -145,3 +145,60 @@ test('重启：运行中的任务在停止时标记为 interrupted 并落盘，�
   const r = (await call(S.port, 'GET', '/api/runs/' + id)).json;
   assert.equal(r.status, 'interrupted'); assert.ok(r.error);
 });
+
+test('A→B→A 经消息总线：消息状态、线程、回复关系、投递驱动 handoff、任务间隔离', async t => {
+  const seen = [];
+  const m = await mockProvider(prompt => { seen.push(prompt); return { text: prompt.includes('待审核输出') ? '审核意见X' : '草稿Y', usage: true }; });
+  const S = await boot([m.port]);
+  t.after(async () => { await S.kill(); m.srv.close(); fs.rmSync(S.dir, { recursive: true, force: true }); });
+  const a = await addProvider(S, 'A', m.port), b = await addProvider(S, 'B', m.port);
+  const id = (await call(S.port, 'POST', '/api/run', { task: '协作任务一', a, b, mode: 'full' })).json.runId;
+  const id2 = (await call(S.port, 'POST', '/api/run', { task: '协作任务二', a, b, mode: 'single' })).json.runId;
+  const run = await waitRun(S, id); await waitRun(S, id2);
+  assert.equal(run.status, 'done');
+  assert.ok(seen.some(p => p.includes('待审核输出') && p.includes('草稿Y')), 'B 收到的是 A 的草稿');
+  assert.ok(seen.some(p => p.includes('审核意见') && p.includes('审核意见X')), 'A 修订时收到 B 的审核意见');
+
+  const { json: bm } = await call(S.port, 'GET', `/api/runs/${id}/messages`);
+  assert.deepEqual(bm.messages.map(x => [x.from === a ? 'A' : x.from === b ? 'B' : x.from, x.type, x.status]),
+    [['user', 'request', 'consumed'], ['A', 'proposal', 'consumed'], ['B', 'review', 'consumed'], ['A', 'revision', 'consumed']]);
+  assert.equal(new Set(bm.messages.map(x => x.threadId)).size, 1, '同一线程');
+  assert.equal(bm.messages[2].replyTo, bm.messages[1].messageId);
+  assert.ok(bm.messages.every(x => x.taskId === id && x.runId === run.runId));
+  assert.equal(bm.stats.state, 'completed');
+  // 另一个任务的消息互不可见
+  const other = (await call(S.port, 'GET', `/api/runs/${id2}/messages`)).json;
+  assert.equal(other.messages.length, 2);
+  assert.ok(other.messages.every(x => x.taskId === id2));
+  assert.equal((await call(S.port, 'GET', '/api/runs/nope/messages')).status, 404);
+
+  // handoff 事件由消息投递驱动，并带 messageId
+  const handoffs = run.events.filter(e => e.eventType === 'handoff');
+  assert.equal(handoffs.length, 2);
+  const mids = new Set(bm.messages.map(x => x.messageId));
+  assert.ok(handoffs.every(h => mids.has(h.metadata.messageId) && h.source === 'server'));
+  assert.deepEqual(handoffs.map(h => h.metadata.messageType), ['proposal', 'review']);
+  assert.equal(run.messageStats.total, 4); assert.ok(!fs.readFileSync(path.join(S.dir, 'tasks.json'), 'utf8').includes('threadId'), '消息信封不落盘（只保存统计）');
+});
+
+test('消息总线：失败时在途消息标记 failed、任务终止后不再接收；同一供应商自审走直连 handoff', async t => {
+  let n = 0;
+  const m = await mockProvider(() => (++n === 2 ? { status: 500 } : { text: '内容', usage: true }));
+  const S = await boot([m.port]);
+  t.after(async () => { await S.kill(); m.srv.close(); fs.rmSync(S.dir, { recursive: true, force: true }); });
+  const a = await addProvider(S, 'A', m.port), b = await addProvider(S, 'B', m.port);
+  const id = (await call(S.port, 'POST', '/api/run', { task: '审核会失败', a, b, mode: 'full' })).json.runId;
+  const run = await waitRun(S, id);
+  assert.equal(run.status, 'error');
+  const bm = (await call(S.port, 'GET', `/api/runs/${id}/messages`)).json;
+  assert.equal(bm.stats.state, 'failed');
+  const proposal = bm.messages.find(x => x.type === 'proposal');
+  assert.ok(['consumed', 'failed'].includes(proposal.status));
+  assert.ok(!bm.messages.some(x => x.type === 'review' || x.type === 'revision'), '失败后不再产生后续消息');
+
+  const id2 = (await call(S.port, 'POST', '/api/run', { task: '自审', a, b: a, mode: 'review' })).json.runId;
+  const r2 = await waitRun(S, id2);
+  assert.equal(r2.status, 'done');
+  assert.equal(r2.events.filter(e => e.eventType === 'handoff').length, 1);
+  assert.equal((await call(S.port, 'GET', `/api/runs/${id2}/messages`)).json.messages.length, 0, '同一供应商不走消息总线');
+});
