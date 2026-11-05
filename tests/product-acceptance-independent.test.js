@@ -65,6 +65,8 @@ async function fixture(t,c) {
   assert.equal(a.status,200,a.text);
   const mid=a.json.connection.connectionId;
   const verified=await app.call('POST','/api/models/'+mid+'/test',{});assert.equal(verified.json.ok,true,verified.text);
+  // Connection-probe traffic is not a project role execution.
+  state.stepCalls=0;state.prompts=[];
   const req=(id,extra={})=>({description:c.description,connectionId:mid,maxTokens:64000,maxOutputTokens:4096,maxCost:0,requestId:id,...extra});
   return {state,mid,req,get app(){return app;},async restart(){const dir=app.dir;await app.kill();app=await H.boot({dir,env:{LOCAL_MODEL_TARGETS:'127.0.0.1:'+provider.address().port}});}};
 }
