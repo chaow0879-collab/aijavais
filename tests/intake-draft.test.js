@@ -165,3 +165,22 @@ test('AUD-AB-001: cancel after dispatch with failed settlement keeps cost unknow
   assert.throws(() => f.service.generate(input), e => e.code === 'duplicate_request'); assert.equal(f.calls.length, 1, 'no automatic second call');
   void release;
 });
+
+test('#5-F: ledger failure before dispatch is cost 0; verified local target is cost 0; only a dispatched remote call is unknown (MOCK)', async t => {
+  const remote = fixture(t, { pricing: 'paid_api' });
+  remote.store.settleSystemUsage = () => { throw new Error('MOCK settlement failure'); };
+  const ctl = new AbortController();
+  // Abort after the reservation is written but before callModel is invoked: settlement then fails too.
+  const origReserve = remote.store.recordSystemUsage.bind(remote.store);
+  remote.store.recordSystemUsage = d => { const r = origReserve(d); ctl.abort(); return r; };
+  const r = await remote.service.generate(remote.input, { signal: ctl.signal });
+  assert.equal(r.body.requestSent, false); assert.equal(remote.calls.length, 0);
+  assert.equal(r.body.usage.cost, 0, 'not dispatched => no model cost'); assert.equal(r.body.usage.costSource, 'not_dispatched');
+  assert.equal(r.body.reconciliationRequired, false); assert.equal(r.body.financiallyComplete, false, 'ledger still not written');
+  const local = fixture(t);
+  local.store.settleSystemUsage = () => { throw new Error('MOCK settlement failure'); };
+  const l = await local.service.generate(local.input);
+  assert.equal(l.status, 202); assert.equal(l.body.requestSent, true); assert.equal(l.body.usage.cost, 0, 'verified local free target is never shown as unknown');
+  assert.equal(l.body.draftStatus, 'generated');
+  // Note: same-requestId de-duplication covered here is in-process only; cross-restart idempotency is Issue #6.
+});

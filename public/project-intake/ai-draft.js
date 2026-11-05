@@ -66,7 +66,7 @@
       const result=await api('/api/v2/intake/ai-draft',input,controller.signal);
       if(state!==currentState)return;
       state.result=result;state.draft=result.draft;state.saveConsent=false;
-      message(result.financiallyComplete===false?'草案可查看，但费用账本未完成：费用未知，需要人工核对。'+(result.usageWarning?' '+result.usageWarning:'')+' '+(result.retryWarning||''):'AI草案已生成，尚未保存。请逐项编辑与人工确认。');
+      message(result.financiallyComplete===false?'草案已生成，可编辑，确认后才会保存（不会自动执行或授权工具）；但费用账本未完成，'+(result.usage&&result.usage.cost===null?'费用未知，':'')+'需要人工核对。'+(result.usageWarning?' '+result.usageWarning:'')+' '+(result.retryWarning||''):'AI草案已生成，尚未保存。请逐项编辑与人工确认。');
     }catch(e){
       if(state!==currentState)return;
       const data=e.data;
@@ -158,7 +158,7 @@
       el('button',{id:'ai-generate',type:'button',className:'btn primary',text:'生成可编辑团队草案',disabled:!eligible(),onclick:generate}),
       el('button',{id:'ai-cancel',type:'button',className:'btn',text:'取消本次请求',disabled:!state.busy,onclick:cancel}),
       el('p',{id:'ai-message',role:'status',className:'note',text:state.message}));
-    if(state.result?.usage){const u=state.result.usage;card.append(el('p',{id:'ai-usage',className:'hint',text:`本次用量：${u.tokens??'未知'} Token（${u.tokenSource}）；费用：${u.cost===null?'未知，不能视为零':('$'+u.cost+' USD')}；${state.result.financiallyComplete===true?'已记录账本':'账本未完成：费用未知，需要人工核对；请勿为补记账重新生成。'}`}));}
+    if(state.result?.usage){const u=state.result.usage;card.append(el('p',{id:'ai-usage',className:'hint',text:`本次用量：${u.tokens??'未知'} Token（${u.tokenSource}）；费用：${u.cost===null?'未知，不能视为零':('$'+u.cost+' USD')}；${state.result.financiallyComplete===true?'已记录账本':(u.cost===null?'账本未完成：费用未知，需要人工核对；请勿为补记账重新生成。':'账本未写入（本次费用已确定为 $'+u.cost+' USD），需要人工核对记录。')}`}));}
     if(state.draft)editor(card);root.append(card);
   }
   window.AIJIntakeDraft={mount(container,options){root=container;models=options.models||[];if(source!==options.description){source=options.description;state.description=source;invalidate();}render();},

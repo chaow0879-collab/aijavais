@@ -15,6 +15,8 @@ const sample = require('../fixtures/ai-draft.cjs');
       if(isDraft)calls++;
       res.writeHead(200,{'content-type':'text/event-stream'});
       if(isDraft&&mode==='hang'){res.write(': waiting\n\n');return;}
+      // Make the real server's settlement fail: the reserved ledger row is changed in the test database before the reply arrives.
+      if(isDraft&&mode==='unsettled'){const db=new (require('node:sqlite').DatabaseSync)(require('node:path').join(app.dir,'projects.sqlite'));db.exec("UPDATE system_usage SET doc=json_set(doc,'$.status','changed_by_e2e') WHERE json_extract(doc,'$.kind')='intake_draft' AND json_extract(doc,'$.status')='reserved'");db.close();}
       const draft=sample();draft.roles[0].name='<img src=x onerror="window.__draftUnsafe=1">';
       const content=!isDraft?'好':mode==='invalid'?'MOCK invalid JSON':JSON.stringify(draft);
       res.end('data: '+JSON.stringify({choices:[{delta:{content}}]})+'\n\ndata: '+JSON.stringify({choices:[],usage:{prompt_tokens:10,completion_tokens:20}})+'\n\ndata: [DONE]\n\n');
@@ -87,6 +89,19 @@ const sample = require('../fixtures/ai-draft.cjs');
     assert.equal(await page.locator('.ai-role-name').count(),1,'invalid JSON offers a manual fallback');
     assert.equal((await app.call('GET','/api/v2/projects')).json.projects.length,1,'failed generation never creates a project');
     assert.equal(calls,3);assert.deepEqual(errors,[]);
+    // #5-F: ledger settlement failure through real HTTP + Chromium (local MOCK model priced as paid, test database).
+    mode='unsettled';await open();await quote();await page.check('#ai-consent');
+    const draftResp=page.waitForResponse(r=>r.url().endsWith('/api/v2/intake/ai-draft')&&r.request().method()==='POST');
+    await page.click('#ai-generate');const rr=await draftResp;
+    assert.equal(rr.status(),202,'unsettled draft is not HTTP 200');const rb=await rr.json();
+    assert.equal(rb.ok,false);assert.equal(rb.code,'usage_unsettled');assert.equal(rb.requestSent,true);assert.equal(rb.usage.cost,null,'dispatched remote cost unknown');
+    await page.waitForSelector('#ai-roles .ai-role-name');assert.ok(await page.locator('.ai-role-name').count()>=1,'draft still viewable and editable');
+    await page.waitForFunction(()=>document.querySelector('#ai-message').textContent.includes('人工核对'));
+    assert.match(await page.textContent('#ai-usage'),/费用未知，需要人工核对/);assert.doesNotMatch(await page.textContent('#ai-usage'),/\$0 USD/);
+    await H.sleep(500);assert.equal(calls,4,'no automatic second model call');
+    const after=(await app.call('GET','/api/v2/projects')).json.projects;
+    assert.equal(after.length,1,'not auto-saved');for(const p of after)assert.deepEqual((await app.call('GET','/api/v2/projects/'+p.projectId)).json.runs,[],'nothing auto-started');
+    assert.equal(await page.isChecked('#ai-save-confirm'),false,'saving still requires explicit confirmation');assert.deepEqual(errors,[]);
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile form does not overflow');
     console.log('PASS AI draft E2E: original templates, explicit single-call consent, no-call estimates, budget limits, actual local MOCK requests, editable/add/remove roles and steps, XSS-safe rendering, confirmed save without run, cancellation/unknown fees and invalid-JSON manual fallback. No paid API or tools executed.');
