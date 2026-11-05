@@ -93,7 +93,11 @@ test('工具缺失必须阻止被标记成可以自动执行', () => {
 test('所有工具已验证且岗位有模型分配时，立项仅标为“初步可执行”，不代表已执行任务', () => {
   const req=['file_read','pptx_generation','chart_generation'];
   const p=E.buildPlan(catalog,{...base('ppt-production'),answers:{risk:'low',rigor:'lean'},selectedRoleIds:['storyline','slide-maker'],
-    assignments:{'storyline':'a','slide-maker':'b'},availableTools:req.map(id=>({id,available:true,verified:true}))});
+    assignments:{'storyline':'a','slide-maker':'b'},availableTools:req.map(id=>({id,available:true,verified:true})),
+    budgetMode:'free_only',availableModels:[
+      {connectionId:'a',enabled:true,ready:true,pricingMode:'free_tier',freeEligibilityVerified:true,verifiedCapabilities:['writing','reasoning']},
+      {connectionId:'b',enabled:true,ready:true,pricingMode:'local',localityVerified:true,verifiedCapabilities:['writing','tool_calling']}
+    ]});
   assert.equal(p.ok,true);
   assert.equal(p.plan.readyForAutomatedExecution,true);
   assert.equal(p.plan.state,'draft');
@@ -114,4 +118,26 @@ test('工程高风险明确提示专业签审，研究任务强调真实来源',
   const prompt=E.formatPrompt(research.plan);
   assert.match(prompt,/来源/);
   assert.match(prompt,/不编造工具调用/);
+});
+
+test('收费/免费资格未知时，即使工具齐全也不能被标记为可自动执行', () => {
+  const p=E.buildPlan(catalog,{...base('ppt-production'),answers:{risk:'low',rigor:'lean'},selectedRoleIds:['storyline','slide-maker'],
+    assignments:{'storyline':'a','slide-maker':'b'},
+    availableTools:['file_read','pptx_generation','chart_generation'].map(id=>({id,available:true,verified:true})),
+    budgetMode:'free_only',availableModels:[
+      {connectionId:'a',enabled:true,ready:true,pricingMode:'paid_api',verifiedCapabilities:['writing','reasoning']},
+      {connectionId:'b',enabled:true,ready:true,pricingMode:'free_tier',freeEligibilityVerified:false,verifiedCapabilities:['writing','tool_calling']}
+    ]});
+  assert.equal(p.ok,true);
+  assert.equal(p.plan.readyForAutomatedExecution,false);
+  assert.ok(p.plan.modelIssues.some(x=>x.includes('免费资格')));
+});
+
+test('真实模型能力没验证，不能以填入模型ID作为质量证明', () => {
+  const p=E.buildPlan(catalog,{...base('ppt-production'),selectedRoleIds:['storyline','slide-maker'],
+    assignments:{'storyline':'a','slide-maker':'b'},availableTools:['file_read','pptx_generation','chart_generation','slide_render'].map(id=>({id,available:true,verified:true})),
+    availableModels:[{connectionId:'a',enabled:true,ready:true,pricingMode:'paid_api',capabilities:['writing','reasoning']},{connectionId:'b',enabled:true,ready:true,pricingMode:'paid_api',capabilities:['writing','tool_calling']}]
+  });
+  assert.equal(p.plan.readyForAutomatedExecution,false);
+  assert.ok(p.plan.modelIssues.some(x=>x.includes('必要能力尚未实测')));
 });
