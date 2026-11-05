@@ -44,7 +44,7 @@ const VIEW_TOKEN = process.env.VIEW_TOKEN && process.env.VIEW_TOKEN.length >= 12
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const ANON_VIEW = process.env.ANON_VIEW !== '0';
 const authThrottle = new SEC.AuthThrottle(); // 每个来源 IP：1 分钟内 8 次无效凭证后锁定 5 分钟
-/* 限流：按主体分别计数（外部上报每秒 100 条、突发 200；新建任务每秒 2 个、突发 5） */
+/* 限流：按主体分别计数（外部上报每秒 100 条、突发 200；远程新建任务每秒 2 个、突发 10，本机不限） */
 const limiters = new Map();
 function rateOk(kind, key, perSec, burst) {
   const k = kind + '\u0000' + key;
@@ -850,7 +850,7 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true });
   }
   if (p === '/api/run' && m === 'POST') {
-    if (!rateOk('run', who.id, 2, 5)) return json(res, 429, { error: '提交任务过于频繁' });
+    if (who.kind !== 'local' && !rateOk('run', who.id, 2, 10)) return json(res, 429, { error: '提交任务过于频繁' }); // 本机管理不限流
     const b = await readBody(req);
     const task = typeof b.task === 'string' ? b.task.trim() : '';
     if (!task) return json(res, 400, { error: '任务内容为空' });

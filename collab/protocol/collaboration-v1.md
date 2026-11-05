@@ -34,3 +34,23 @@
 ## 事件信封要点（详见 `lib/events.js`）
 `eventType` 与 `status` 同时存在；带 `eventType` 的事件 `status` 由服务端派生，不一致则拒绝；旧版只带 `status` 的事件继续兼容。
 `source`（server/external/demo）→ `verification`（observed/reported/simulated）由服务端决定；`tokenUsage.source`（provider/estimated/external/unknown）区分真实用量与估算。
+
+## 第三阶段补充（兼容 v1，只增不改）
+
+### 身份三层解耦
+| 字段 | 含义 | 例子 |
+|---|---|---|
+| `connectionId` | 用户配置的模型连接（服务商 + 模型 + 凭证）。事件 `agentId` = connectionId，大屏按它显示 | `mc_9b553e`、迁移来的 `claude` |
+| `roleId` | 岗位（来自团队或默认的 drafter / reviewer） | `writer`、`reviewer` |
+| `agentInstanceId` | 本次任务里承担某岗位的实例；消息的 `from` / `to` 用它 | `ai_1a2b3c4d_writer` |
+
+同一个连接承担多个岗位时，各岗位是不同实例，照常经过消息总线。事件新增可选字段 `agentInstanceId`、`roleId`；handoff 事件的 `metadata` 带 `toAgentInstanceId`、`toRoleId`。
+
+### 长内容
+超过 20000 字符的消息正文完整存为任务内成果（`artifactRefs` + `metadata.fullTextArtifact/chars/sha256`），消息只带预览；接收方读取成果全文，成果缺失或长度不符则任务失败。不截断。任务输入上限 200000 字符，超出直接拒绝。
+
+### 外部上报归属
+外部事件的 `owner` = 上报主体（local / admin / ingest:<名称>）。内部任务拒绝写入（403）；外部任务属于首次创建它的主体；agentId 绑定来源 + 主体。
+
+### 可见级别
+事件流按 2 / 1 / 0 级输出，字段允许列表见 `lib/access.js`。

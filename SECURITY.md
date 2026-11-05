@@ -29,7 +29,7 @@
 
 ## 事件真实性
 - 事件的 `source`（server / external / demo）与 `verification`（observed / reported / simulated）只由服务端按来源赋值，不读取客户端传来的值。
-- 外部上报不能使用供应商 ID 或 `demo-` 前缀的 `agentId`，也不能与已存在的不同来源 agent 同名；支持 `clientEventId` 去重。
+- 外部上报不能使用模型连接 ID 或 `demo-` 前缀的 `agentId`，也不能与已存在的不同来源 agent 同名；支持 `clientEventId` 去重。
 - 只有 `source=server` 的真实模型调用计入 `totals.calls / tokens / errors`；外部与演示事件只计事件数；厂商返回的用量与估算值（`estimatedTokens`）分开统计。
 
 ## 访问控制（第三阶段 A）
@@ -43,7 +43,7 @@
 
 - 脱敏采用**字段允许列表**（`lib/access.js`）：新增字段默认不会外泄给观看者 / 匿名。
 - 外部上报：内部任务一律拒绝写入（403）；外部任务归属第一次创建它的上报主体；agentId 绑定来源与主体；凭证可限定 agentId。
-- 防爆破：同一 IP 1 分钟内 8 次无效凭证后锁定 5 分钟（本机访问不受影响）。限流：上报每主体每秒 100 条（突发 200），新建任务每秒 2 个（突发 5）。
+- 防爆破：同一 IP 1 分钟内 8 次无效凭证后锁定 5 分钟（本机访问不受影响）。限流：上报每主体每秒 100 条（突发 200），远程新建任务每秒 2 个（突发 10，本机不限）。
 - 反向代理后部署需设 `TRUST_PROXY=1` 才按 `X-Forwarded-For` 识别 IP；否则不要设置（防伪造）。
 - 人工团队角色（系统管理员、团队管理员、项目负责人、普通员工、审核人员、访客）的权限矩阵已在 `lib/permissions.js` 定义；目前只有单管理员部署，多用户登录尚未实现。
 
@@ -55,10 +55,11 @@
 ## 密钥
 | 规则 | 说明 |
 |---|---|
-| 优先级 | 供应商里显式保存的 `apiKey` **优先于**环境变量 `envKey` |
+| 存放 | 模型注册信息在 `data/models.json`（不含密钥）；API Key 在 `data/credentials.json`（0600）。任何接口都不返回明文，只返回尾号 |
+| 优先级 | 模型连接里显式保存的 `apiKey` **优先于**环境变量 `envKey` |
 | 环境变量白名单 | `envKey` 只能是 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `MOONSHOT_API_KEY` / `DEEPSEEK_API_KEY`，或 `AIJ_*_KEY` |
 | 官方变量绑定 | 官方变量与官方主机**严格一一绑定**（无任何例外）：`OPENAI_API_KEY`→`api.openai.com`，`ANTHROPIC_API_KEY`→`api.anthropic.com`，`MOONSHOT_API_KEY`→`api.moonshot.cn`，`DEEPSEEK_API_KEY`→`api.deepseek.com`。第三方接口请填写 API Key 或使用 `AIJ_*_KEY` |
-| 换主机 | 已保存 API Key 的供应商更换 Base URL 主机时，必须重新填写 Key，不会自动转发到新主机 |
+| 换主机 | 已保存 API Key 的模型连接更换 Base URL 主机时，必须重新填写 Key，不会自动转发到新主机 |
 | 不回传 | `/api/config` 不返回管理令牌与完整密钥 |
 | 脱敏 | 写入事件、任务记录、接口响应的错误文本，先去掉已知密钥与常见密钥形态 |
 | 保存顺序 | `/api/providers` 先校验、通过后才修改配置，校验失败不留下半成品 |
