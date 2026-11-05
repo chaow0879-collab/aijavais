@@ -28,6 +28,11 @@ function mockProvider(behavior = () => ({})) {
       const prompt = j.messages[j.messages.length - 1].content;
       const o = behavior(prompt) || {};
       if (o.status) { res.writeHead(o.status, { 'content-type': 'application/json' }); return res.end('{"error":"boom"}'); }
+      if (o.endless) { res.writeHead(200, { 'content-type': 'text/event-stream' }); const iv = setInterval(() => res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: 'x'.repeat(500) } }] })}\n\n`), 5); res.on('close', () => clearInterval(iv)); return; }
+      if (o.multiline) {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: {"choices":[{"delta":\ndata: {"content":"多行事件正常"}}]}\n\n: 心跳\n\ndata: [DONE]\n\n'); return res.end();
+      }
       if (o.hang) { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write(': open\n\n'); return; }
       setTimeout(() => {
         res.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -39,10 +44,10 @@ function mockProvider(behavior = () => ({})) {
   });
   return new Promise(r => srv.listen(0, '127.0.0.1', () => r({ srv, port: srv.address().port })));
 }
-async function boot(localPorts, dir) {
+async function boot(localPorts, dir, extraEnv = {}) {
   const port = await freePort();
   dir = dir || fs.mkdtempSync(path.join(os.tmpdir(), 'aij-rt-'));
-  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', AIJ_DATA_DIR: dir, LOCAL_MODEL_TARGETS: localPorts.map(p => '127.0.0.1:' + p).join(',') };
+  const env = { ...process.env, PORT: String(port), HOST: '127.0.0.1', AIJ_DATA_DIR: dir, LOCAL_MODEL_TARGETS: localPorts.map(p => '127.0.0.1:' + p).join(','), ...extraEnv };
   for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'ADMIN_TOKEN']) delete env[k];
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], { env, stdio: 'ignore' });
   for (let i = 0; i < 50; i++) { try { if ((await call(port, 'GET', '/api/state')).status === 200) break; } catch { /* 等待 */ } await sleep(100); }
@@ -201,4 +206,32 @@ test('消息总线：失败时在途消息标记 failed、任务终止后不再�
   assert.equal(r2.status, 'done');
   assert.equal(r2.events.filter(e => e.eventType === 'handoff').length, 1);
   assert.equal((await call(S.port, 'GET', `/api/runs/${id2}/messages`)).json.messages.length, 0, '同一供应商不走消息总线');
+});
+
+test('超时 / 流量上限 / 多行 SSE / 客户端断开：失败路径不泄漏状态', async t => {
+  const m = await mockProvider(p => (p.includes('挂住') ? { hang: true } : p.includes('无限') ? { endless: true } : p.includes('多行') ? { multiline: true } : {}));
+  const S = await boot([m.port], undefined, { AIJ_TEST_TIMEOUT_MS: '700', AIJ_TEST_MAX_CALL_BYTES: '6000' });
+  t.after(async () => { await S.kill(); m.srv.close(); m.srv.closeAllConnections(); fs.rmSync(S.dir, { recursive: true, force: true }); });
+  const pid = await addProvider(S, 'T', m.port);
+  const run = async task => waitRun(S, (await call(S.port, 'POST', '/api/run', { task, a: pid, mode: 'single' })).json.runId, 6000);
+
+  const hung = await run('挂住的请求');
+  assert.equal(hung.status, 'error'); assert.match(hung.error, /超时/);
+  assert.ok(hung.events.some(e => e.eventType === 'model_error'));
+  const big = await run('无限输出');
+  assert.equal(big.status, 'error'); assert.match(big.error, /上限/);
+  const ml = await run('多行事件');
+  assert.equal(ml.status, 'done', ml.error);
+  assert.equal(ml.steps[0].text, '多行事件正常', '多行 data 合并后正确解析');
+
+  await sleep(100);
+  const st = await state(S);
+  assert.equal(agentOf(st, pid).active, undefined, '快照不暴露内部字段');
+  assert.equal(agentOf(st, pid).status, 'idle', '失败后不残留 working');
+  assert.equal(st.totals.errors, 2);
+
+  // 客户端中途断开 SSE 不影响服务
+  await new Promise(r => { const rq = http.get({ host: '127.0.0.1', port: S.port, path: '/api/events' }, res => { res.once('data', () => { rq.destroy(); r(); }); }); });
+  assert.equal((await call(S.port, 'POST', '/api/event', { agent: 'after-disconnect', status: 'info' })).status, 200);
+  assert.equal((await call(S.port, 'GET', '/api/state')).status, 200);
 });
