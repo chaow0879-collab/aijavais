@@ -120,3 +120,48 @@ test('AI draft: request deduplication, pre-cancel and shutdown do not create hid
   assert.equal(f.calls.length, 1);
   const row = f.store.listSystemUsage()[0]; assert.throws(() => f.store.settleSystemUsage(row.ledgerId, {}), e => e.code === 'usage_settled');
 });
+
+test('AUD-AB-001: draft success with unsettled ledger is never full success; cost unknown; no second charge (MOCK)', async t => {
+  const f = fixture(t, { pricing: 'paid_api' });
+  f.store.settleSystemUsage = () => { throw new Error('MOCK settlement failure'); };
+  const input = { ...f.input, requestId: 'unsettled-1' };
+  const r = await f.service.generate(input);
+  assert.equal(r.status, 202, 'not HTTP 200'); assert.equal(r.body.ok, false); assert.equal(r.body.code, 'usage_unsettled');
+  assert.equal(r.body.draftStatus, 'generated'); assert.ok(r.body.draft, 'draft stays viewable'); assert.equal(r.body.billingStatus, 'unrecorded');
+  assert.equal(r.body.financiallyComplete, false); assert.equal(r.body.reconciliationRequired, true); assert.equal(r.body.requestSent, true);
+  assert.equal(r.body.usage.cost, null, 'remote cost shown as unknown, never 0'); assert.ok(r.body.usage.unbookedComputedCost > 0); assert.ok(r.body.usage.costUpperBound > 0);
+  assert.match(r.body.retryWarning, /新的收费请求/); assert.equal(r.body.usageAudited, false, 'fixture audit sink did not confirm, so not claimed');
+  assert.match(r.body.usageWarning, /审计事件也未能写入/);
+  assert.equal(f.store.listSystemUsage()[0].status, 'reserved', 'reservation kept as evidence'); assert.equal(f.store.listProjects().length, 0);
+  // Repeated click / refresh resubmitting the same request ID never sends a second paid call.
+  assert.throws(() => f.service.generate(input), e => e.code === 'duplicate_request'); assert.equal(f.calls.length, 1);
+  assert.equal(f.audits.filter(a => a.event === 'usage_ledger_write_failed').length, 1); assert.doesNotMatch(JSON.stringify(f.audits), /secret-fixture-key|请为一个全新/);
+});
+
+test('AUD-AB-001: audit sink that confirms is reported truthfully; settled call is the only full success (MOCK)', async t => {
+  const f = fixture(t, { pricing: 'paid_api' });
+  f.service.audit = () => true;
+  const settle = f.store.settleSystemUsage.bind(f.store); f.store.settleSystemUsage = () => { throw new Error('MOCK'); };
+  const unsettled = await f.service.generate(f.input);
+  assert.equal(unsettled.body.usageAudited, true); assert.match(unsettled.body.usageWarning, /已记录审计事件/); assert.equal(unsettled.body.ok, false);
+  f.store.settleSystemUsage = settle;
+  const ok = await f.service.generate(f.input);
+  assert.equal(ok.status, 200); assert.equal(ok.body.ok, true); assert.equal(ok.body.billingStatus, 'settled'); assert.equal(ok.body.financiallyComplete, true);
+  assert.ok(ok.body.usage.cost > 0, 'known provider usage x user rates'); assert.equal(f.calls.length, 2);
+});
+
+test('AUD-AB-001: cancel after dispatch with failed settlement keeps cost unknown and does not retry (MOCK)', async t => {
+  let release;
+  const f = fixture(t, { pricing: 'paid_api', invoke: (rt, opts) => new Promise((resolve, reject) => { release = resolve; opts.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { usageUnknown: true }))); }) });
+  f.store.settleSystemUsage = () => { throw new Error('MOCK settlement failure'); };
+  const input = { ...f.input, requestId: 'cancel-then-fail' };
+  const pending = f.service.generate(input, { ownerId: 'admin' });
+  await new Promise(r => setImmediate(r));
+  assert.equal(f.service.cancel('admin', 'cancel-then-fail'), true);
+  const r = await pending;
+  assert.equal(r.status, 409); assert.equal(r.body.code, 'cancelled'); assert.equal(r.body.draftStatus, 'failed');
+  assert.equal(r.body.requestSent, true); assert.equal(r.body.billingStatus, 'unrecorded'); assert.equal(r.body.financiallyComplete, false);
+  assert.equal(r.body.usage.cost, null); assert.equal(r.body.reconciliationRequired, true);
+  assert.throws(() => f.service.generate(input), e => e.code === 'duplicate_request'); assert.equal(f.calls.length, 1, 'no automatic second call');
+  void release;
+});

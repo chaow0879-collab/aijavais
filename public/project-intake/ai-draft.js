@@ -66,11 +66,11 @@
       const result=await api('/api/v2/intake/ai-draft',input,controller.signal);
       if(state!==currentState)return;
       state.result=result;state.draft=result.draft;state.saveConsent=false;
-      message('AI草案已生成，尚未保存。请逐项编辑与人工确认。'+(result.usageRecorded?'':(' '+result.usageWarning)));
+      message(result.financiallyComplete===false?'草案可查看，但费用账本未完成：费用未知，需要人工核对。'+(result.usageWarning?' '+result.usageWarning:'')+' '+(result.retryWarning||''):'AI草案已生成，尚未保存。请逐项编辑与人工确认。');
     }catch(e){
       if(state!==currentState)return;
       const data=e.data;
-      if(data?.usage)state.result={...(state.result||{}),usage:data.usage,usageRecorded:data.usageRecorded,usageWarning:data.usageWarning};
+      if(data?.usage)state.result={...(state.result||{}),usage:data.usage,usageRecorded:data.usageRecorded,usageWarning:data.usageWarning,financiallyComplete:data.financiallyComplete,billingStatus:data.billingStatus};
       if(!state.draft&&data?.fallbackDraft)state.draft=data.fallbackDraft;
       message(e.name==='AbortError'||data?.code==='cancelled'?'已取消。已发送的模型请求仍可能产生费用，请查看系统用量账本。':e.message+'；已回退手工方案，也可继续使用原模板。'+(data?.usageWarning?' '+data.usageWarning:''));
     }finally{if(state===currentState){state.busy=false;render();}if(controller===active)controller=null;}
@@ -158,7 +158,7 @@
       el('button',{id:'ai-generate',type:'button',className:'btn primary',text:'生成可编辑团队草案',disabled:!eligible(),onclick:generate}),
       el('button',{id:'ai-cancel',type:'button',className:'btn',text:'取消本次请求',disabled:!state.busy,onclick:cancel}),
       el('p',{id:'ai-message',role:'status',className:'note',text:state.message}));
-    if(state.result?.usage){const u=state.result.usage;card.append(el('p',{id:'ai-usage',className:'hint',text:`本次用量：${u.tokens??'未知'} Token（${u.tokenSource}）；费用：${u.cost===null?'未知，不能视为零':('$'+u.cost+' USD')}；${state.result.usageRecorded?'已记录账本':'未完整记账，请检查系统用量。'}`}));}
+    if(state.result?.usage){const u=state.result.usage;card.append(el('p',{id:'ai-usage',className:'hint',text:`本次用量：${u.tokens??'未知'} Token（${u.tokenSource}）；费用：${u.cost===null?'未知，不能视为零':('$'+u.cost+' USD')}；${state.result.financiallyComplete===true?'已记录账本':'账本未完成：费用未知，需要人工核对；请勿为补记账重新生成。'}`}));}
     if(state.draft)editor(card);root.append(card);
   }
   window.AIJIntakeDraft={mount(container,options){root=container;models=options.models||[];if(source!==options.description){source=options.description;state.description=source;invalidate();}render();},
