@@ -1,0 +1,134 @@
+{
+ "baseSha": "17ec74c1f43afd1f19e3695568a24adf5cad40d3",
+ "note": "Prior P1/ledger tests (#5/#6/#8) captured at the audited base. They must keep existing and not lose assertions.",
+ "files": {
+  "intake-draft.test.js": {
+   "titles": [
+    "AI draft: unapproved remote, unknown-free and disguised remo",
+    "AI draft: valid proposal is editable normalized data, server",
+    "AI draft: invalid JSON and invalid/duplicate role or step re",
+    "AI draft: token, amount, output and rate preflight stop befo",
+    "AI draft: failure with provider usage charges known cost, fa",
+    "AI draft: timeout and explicit owner-scoped cancellation ret",
+    "AI draft: model-supplied budget/permissions/connection IDs/c",
+    "AI draft: partial usage and provider overrun cannot masquera",
+    "AI draft: ledger prewrite failure sends no call; settlement ",
+    "AI draft: request deduplication, pre-cancel and shutdown do ",
+    "AUD-AB-001: draft success with unsettled ledger is never ful",
+    "AUD-AB-001: audit sink that confirms is reported truthfully;",
+    "AUD-AB-001: cancel after dispatch with failed settlement kee",
+    "#5-F: ledger failure before dispatch is cost 0; verified loc"
+   ],
+   "baseAssertCount": 132
+  },
+  "intake-draft-api.test.js": {
+   "titles": [
+    "draft HTTP: admin/CSRF gates, free estimate, consent, actual",
+    "durable draft HTTP: concurrent duplicates, changed payload a",
+    "durable draft HTTP: actual server SIGKILL after Mock dispatc",
+    "durable draft HTTP: reservation insert rollback returns503 a",
+    "durable exceptions HTTP: authentication, forced owner isolat",
+    "draft HTTP: explicit cancel aborts an in-flight local protoc"
+   ],
+   "baseAssertCount": 76
+  },
+  "intake-draft-idempotency.test.js": {
+   "titles": [
+    "durable draft: concurrent same ID and normalized parameters ",
+    "durable draft: successful, failed and unsettled IDs cannot d",
+    "durable draft: params digest binds target snapshot, budget a",
+    "durable draft: two owners can use same ID without overwritin",
+    "durable draft: failed atomic claim rolls back and permits sa",
+    "durable draft: failed dispatch marker sends nothing; settled",
+    "durable draft: 1001 later completed Mock calls never evict a",
+    "durable draft: idempotency lookup disk failure returns503 wi"
+   ],
+   "baseAssertCount": 47
+  },
+  "model-request-recovery.test.js": {
+   "titles": [
+    "request ledger: atomic unique claims bind owner, parameters ",
+    "request ledger: failure inserting request rolls reservation ",
+    "request ledger: pre-reservation disk failure inserts neither",
+    "request ledger: dispatch marker is conditional; settlement e",
+    "request ledger: failed settlement rolls back both state and ",
+    "request ledger: every terminal state retains its key across ",
+    "request ledger: a separate process cannot open live DATA or ",
+    "request crash: SIGKILL ",
+    "schema v4: legacy reserved/duplicate/completed/failed IDs an",
+    "schema v4: migration SQL failure rolls all changes back and ",
+    "schema v4: consistent backup failure aborts before schema or",
+    "schema v4: corrupt and future databases fail closed, preserv",
+    "request exceptions: owner isolation, terminal unknown bills "
+   ],
+   "baseAssertCount": 102
+  },
+  "migration-backup-security.test.js": {
+   "titles": [
+    "backup security: existing DATA0755 and umask022 remain prote",
+    "backup security: SIGKILL ",
+    "backup security: chmod failure leaves full backup behind0700",
+    "backup security: publication failure retains private0600 bac",
+    "backup security: ineffective chmod cannot publish a0644 file",
+    "backup security: cleanup failure after publication preserves",
+    "backup security: existing formal backup is never overwritten",
+    "backup security: SQL migration failure rolls v3 back and pre",
+    "backup security: insecure staging directory fails closed bef"
+   ],
+   "baseAssertCount": 73
+  },
+  "projects-v2.test.js": {
+   "titles": [
+    "V2 SQLite persistence: optimistic versions, real artifact by",
+    "V2 actual scheduler passes one role output to another and pr",
+    "V2 paid and unverified-free labels cannot bypass explicit ap",
+    "V2 authorized paid MOCK adapter records provider usage and u",
+    "V2 changing model configuration after approval blocks later ",
+    "V2 review and bounded rework need explicit human action; qua",
+    "V2 tool permission, real adapter evidence, skill before/afte",
+    "V2 cancellation aborts model adapter, stops after-skill tool",
+    "V2 restart marks pending work interrupted and commits uncert",
+    "V2 independent live store instance is denied without mutatin",
+    "V2 dead-PID lock can be recovered; future database schema fa",
+    "V2 cancelled but in-flight model call prevents cascade delet",
+    "V2 known failed provider usage is charged; invalid negative ",
+    "V2 partial provider usage does not turn unknown input billin",
+    "V2 model/tool readiness and project schema are checked on th",
+    "V2 handoff: a step can receive all earlier role outputs, lab",
+    "V2 runs: external (MCP) or code-executing tools need a separ"
+   ],
+   "baseAssertCount": 131
+  },
+  "budget.test.js": {
+   "titles": [
+    "shared budget: local is exact allowlisted loopback plus loca",
+    "shared budget: conservative UTF-8 preflight, target snapshot",
+    "shared budget: complete provider usage, zero usage, failed a",
+    "shared budget: round accounting, currency/input limits and o"
+   ],
+   "baseAssertCount": 25
+  }
+ },
+ "envAllowlist": [
+  "process.env.ADMIN_TOKEN",
+  "process.env.AIJ_ALLOW_INSECURE_LAN",
+  "process.env.AIJ_DATA_DIR",
+  "process.env.AIJ_ENABLE_CODE_EXECUTION",
+  "process.env.AIJ_ENV",
+  "process.env.AIJ_LOCAL_INGEST",
+  "process.env.AIJ_MCP_SERVERS_FILE",
+  "process.env.AIJ_PDFTOTEXT",
+  "process.env.AIJ_TEST_MAX_CALL_BYTES",
+  "process.env.AIJ_TEST_TIMEOUT_MS",
+  "process.env.HOST",
+  "process.env.INGEST_AGENTS",
+  "process.env.INGEST_TOKEN",
+  "process.env.PATH",
+  "process.env.PORT",
+  "process.env.SESSION_IDLE_MIN",
+  "process.env.SESSION_MAX_DAYS",
+  "process.env.TLS_CERT_FILE",
+  "process.env.TLS_KEY_FILE",
+  "process.env.TRUST_PROXY"
+ ]
+}

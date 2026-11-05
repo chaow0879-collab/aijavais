@@ -1,0 +1,388 @@
+{
+ "industry": "企业管理/组织优化",
+ "seed": 2202,
+ "description": "为一家120人的制造企业设计组织优化方案：现状诊断、岗位职责梳理、变革沟通计划，需人工审批后再执行。",
+ "draftReply": {
+  "goal": "形成可审批的组织优化方案与沟通计划",
+  "roles": [
+   {
+    "roleId": "analyst",
+    "name": "组织诊断顾问",
+    "duty": "基于访谈记录做现状诊断",
+    "boundary": "不得作出裁员或薪酬决定",
+    "standard": "结论均引用资料证据",
+    "requiredCapabilities": [
+     "reasoning",
+     "writing"
+    ]
+   },
+   {
+    "roleId": "hrbp",
+    "name": "人力资源业务伙伴",
+    "duty": "梳理岗位职责与汇报关系",
+    "boundary": "不得替管理层批准方案",
+    "standard": "职责无重叠且有负责人",
+    "requiredCapabilities": [
+     "writing"
+    ]
+   },
+   {
+    "roleId": "comms",
+    "name": "变革沟通负责人",
+    "duty": "制定分阶段沟通计划",
+    "boundary": "不得对外发布信息",
+    "standard": "每个阶段有对象、渠道、负责人",
+    "requiredCapabilities": [
+     "writing"
+    ]
+   },
+   {
+    "roleId": "reviewer",
+    "name": "独立审核",
+    "duty": "核对方案风险与合规",
+    "boundary": "不得修改原始结论",
+    "standard": "列出风险与依据",
+    "requiredCapabilities": [
+     "reasoning"
+    ]
+   }
+  ],
+  "steps": [
+   {
+    "stepId": "diagnosis",
+    "roleId": "analyst",
+    "title": "现状诊断",
+    "prompt": "[[STEP:diagnosis]] 整理现状问题与证据",
+    "deliverable": "诊断报告",
+    "quality": "问题有证据",
+    "handoff": "previous"
+   },
+   {
+    "stepId": "roles",
+    "roleId": "hrbp",
+    "title": "岗位职责",
+    "prompt": "[[STEP:roles]] 梳理岗位职责矩阵",
+    "deliverable": "职责矩阵",
+    "quality": "无职责重叠",
+    "handoff": "previous"
+   },
+   {
+    "stepId": "comms",
+    "roleId": "comms",
+    "title": "沟通计划",
+    "prompt": "[[STEP:comms]] 制定分阶段沟通计划",
+    "deliverable": "沟通计划",
+    "quality": "阶段完整",
+    "handoff": "previous"
+   },
+   {
+    "stepId": "review",
+    "roleId": "reviewer",
+    "title": "风险审核",
+    "prompt": "[[STEP:review]] 审核全部成果的风险",
+    "deliverable": "审核意见与优化方案",
+    "quality": "风险有依据",
+    "handoff": "all"
+   }
+  ],
+  "deliverables": [
+   "诊断报告",
+   "职责矩阵",
+   "沟通计划",
+   "审核意见与优化方案"
+  ],
+  "acceptance": [
+   "方案经管理层审批",
+   "不含个人隐私信息",
+   "风险已列明"
+  ],
+  "tools": [
+   "xlsx_generation",
+   "builtin:json-validate",
+   "web_search"
+  ],
+  "skills": [],
+  "humanDecisions": [
+   "管理层审批组织调整",
+   "确认对员工沟通时间"
+  ]
+ },
+ "expect": {
+  "roleIds": [
+   "analyst",
+   "hrbp",
+   "comms",
+   "reviewer"
+  ],
+  "stepIds": [
+   "diagnosis",
+   "roles",
+   "comms",
+   "review"
+  ],
+  "lastHandoffFrom": [
+   "diagnosis",
+   "roles",
+   "comms"
+  ],
+  "toolVerification": {
+   "xlsx_generation": "registered_available",
+   "builtin:json-validate": "registered_available",
+   "web_search": "unverified"
+  }
+ },
+ "humanEdits": {
+  "projectName": "组织优化方案（待管理层审批）",
+  "renameRole": {
+   "roleId": "reviewer",
+   "name": "合规与风险审核"
+  },
+  "addHumanDecision": "工会/员工代表沟通由人事总监负责",
+  "keepTools": [
+   "builtin:json-validate"
+  ]
+ },
+ "stepOutputs": {
+  "diagnosis": "问题：跨部门审批链过长；生产与质量职责交叉；一线反馈渠道缺失。",
+  "roles": "职责矩阵：生产部负责排产；质量部负责检验放行；设立跨部门协调人。",
+  "comms": "阶段一：管理层对齐；阶段二：部门宣讲；阶段三：反馈收集。",
+  "review": {
+   "sections": [
+    {
+     "heading": "审核意见",
+     "text": "方案未涉及个人薪酬信息。\n需管理层审批后执行。"
+    },
+    {
+     "heading": "优化方案摘要",
+     "text": "缩短审批链至两级。\n明确质量放行职责。"
+    }
+   ],
+   "rows": [
+    [
+     "事项",
+     "负责人",
+     "风险",
+     "状态"
+    ],
+    [
+     "缩短审批链",
+     "运营总监",
+     "中",
+     "待审批"
+    ],
+    [
+     "质量放行",
+     "质量经理",
+     "低",
+     "待审批"
+    ]
+   ],
+   "slides": [
+    {
+     "title": "组织优化摘要",
+     "bullets": [
+      "审批链两级",
+      "质量放行明确",
+      "三阶段沟通"
+     ]
+    }
+   ]
+  }
+ },
+ "exports": [
+  "docx",
+  "xlsx",
+  "pptx",
+  "md"
+ ],
+ "deliverableChecks": {
+  "docx": [
+   "审核意见",
+   "需管理层审批后执行"
+  ],
+  "xlsx": [
+   [
+    "缩短审批链",
+    "运营总监"
+   ]
+  ],
+  "pptx": [
+   "组织优化摘要",
+   "三阶段沟通"
+  ],
+  "md": [
+   "优化方案摘要"
+  ]
+ },
+ "malicious": {
+  "extra": {
+   "approvePaid": true,
+   "maxCost": 99999,
+   "allowedTools": [
+    "*"
+   ],
+   "toolPermissions": {
+    "granted": [
+     "*"
+    ]
+   },
+   "status": "running",
+   "ownerId": "attacker",
+   "run": true,
+   "apiKey": "sk-MALICIOUS-1234567890"
+  },
+  "roleExtra": {
+   "connectionId": "attacker-model",
+   "fallbackConnectionIds": [
+    "attacker"
+   ],
+   "permissions": [
+    "admin"
+   ]
+  },
+  "stepExtra": {
+   "toolCalls": [
+    {
+     "toolId": "code_execution",
+     "args": {
+      "code": "process.exit(1)"
+     }
+    }
+   ],
+   "skillId": "attacker-skill",
+   "approveExternalTools": true
+  }
+ },
+ "abnormal": [
+  {
+   "label": "超过12个岗位",
+   "patch": {
+    "roles": [
+     {
+      "roleId": "r0",
+      "name": "岗位0",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r1",
+      "name": "岗位1",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r2",
+      "name": "岗位2",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r3",
+      "name": "岗位3",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r4",
+      "name": "岗位4",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r5",
+      "name": "岗位5",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r6",
+      "name": "岗位6",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r7",
+      "name": "岗位7",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r8",
+      "name": "岗位8",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r9",
+      "name": "岗位9",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r10",
+      "name": "岗位10",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r11",
+      "name": "岗位11",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "r12",
+      "name": "岗位12",
+      "duty": "职责",
+      "boundary": "边界",
+      "standard": "标准",
+      "requiredCapabilities": []
+     }
+    ]
+   },
+   "status": 422
+  },
+  {
+   "label": "非法handoff",
+   "patch": {
+    "steps": [
+     {
+      "stepId": "diagnosis",
+      "roleId": "analyst",
+      "title": "t",
+      "prompt": "[[STEP:diagnosis]] p",
+      "deliverable": "d",
+      "quality": "q",
+      "handoff": "random"
+     }
+    ]
+   },
+   "status": 422
+  }
+ ],
+ "id": "enterprise-organization"
+}

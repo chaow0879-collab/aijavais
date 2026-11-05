@@ -25,7 +25,15 @@ jobs:
       - name: Report optional programs
         run: pdftotext -v; soffice --version
       - name: Unit and HTTP integration tests (local protocol fixtures; no paid APIs)
+        env:
+          INDUSTRY_E2E_OUT: ${{ runner.temp }}/industry-e2e
         run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: industry-mock-e2e-evidence
+          path: ${{ runner.temp }}/industry-e2e
+          if-no-files-found: ignore
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -56,6 +64,12 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
           UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
         run: npm run test:intake
+      - name: Three-industry MOCK walkthrough (software / organization / research)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:industry
       - uses: actions/upload-artifact@v4
         if: always()
         with:

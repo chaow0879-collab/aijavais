@@ -9,6 +9,7 @@
     "test:ui": "node tests/ui/admin.e2e.js",
     "test:workspace": "node tests/ui/workspace.e2e.js",
     "test:intake": "node tests/ui/intake-draft.e2e.js",
+    "test:industry": "node tests/ui/industry.e2e.js",
     "db:backup": "node tools/database.js backup",
     "db:info": "node tools/database.js info",
     "db:backup-inventory": "node tools/backup-inventory.js"

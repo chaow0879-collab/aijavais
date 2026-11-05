@@ -20,6 +20,22 @@ npm run test:workspace
 - **浏览器：真实Chromium、登录会话、模型/团队管理及V2保存/运行/审核/DOCX下载/XSS检查**；模型仍是本地Mock。
 - **部署：真实Docker构建/非root/健康/持久卷重启**，Caddy配置校验；未执行公网ACME、Render部署或完整故障灾备恢复。
 
+## 第十七轮 #14 五包新增套件（Claude Code，2026-11-05）
+
+| 套件 | 包 | 类型 |
+|---|---|---|
+| `tests/intake-draft-cancel-lifecycle.test.js` | #7 M1 | 服务级Mock真值计数器 + 本地真实HTTP断连 + SQLite重启 |
+| `tests/intake-draft-api.test.js`（新增#7用例） | #7 M1 | 真实server.js生产适配器套接字关闭 |
+| `tests/capability-truth.test.js` | #9 M2 | 真实ModelRegistry/v2处理器/SQLite/HTTP |
+| `tests/cost-facts-matrix.test.js` | #9 M3 | 真实server.js端到端费用事实矩阵 |
+| `tests/backup-operations-security.test.js` | M4 | 临时SQLite、注入fs故障、子进程umask/SIGKILL遗留物 |
+| `tests/industry-mock-e2e.test.js` | M5 | 三行业真实server.js + 文件导出 + python独立解析 |
+| `tests/fault-regression.test.js` | M5 | 固定种子故障注入（20×70） |
+| `tests/regression-guard.test.js` | M5 | 旧P1测试存在性/断言数、生产代码环境钩子白名单 |
+| `npm run test:industry`（`tests/ui/industry.e2e.js`） | M5 | Chromium三行业人工审批流程 |
+
+重跑说明与产物见 [INDUSTRY-MOCK-RUNBOOK.md](INDUSTRY-MOCK-RUNBOOK.md)；备份运维见 [BACKUP-OPERATIONS.md](BACKUP-OPERATIONS.md)。全部为本地Mock，真实厂商/生产 NOT_RUN。
+
 ## 第十轮 #6 + #8 本地验证（Codex，2026-11-05）
 
 分支`feat/codex-v2-p1-ledger-recovery`，起点`b71faaa65bb66e04ea2a015c9238a3a129bdb68e`。最终代码本地`npm test` **238/238通过，0失败，0跳过**（Node v24.22.1，实际子测试计数）；`test:ui`、`test:workspace`、`test:intake`均通过。GitHub Actions结果见Issue #6/#8最终同SHA报告，不能用本地结果代替CI。
