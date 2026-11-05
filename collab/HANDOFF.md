@@ -1,3 +1,42 @@
+# AIJAVAIS V2.0 · 当前交接（Claude Code 接力开发中）
+
+- 开发分支：`feat/claude-v2-followup`（基于 Codex 交接提交 `29630a2`，代码检查点 `3623247`）。最新提交以 `git log origin/feat/claude-v2-followup -1` 为准。
+- 当前开发者：Claude Code（唯一写入者，见 `collab/ACTIVE-DEVELOPMENT.md`）。未合并 `main`；未调用收费 API；未在负责人服务器上部署。
+- 产品定位：全行业通用 AI 工作操作系统；默认文案、示例、模板排序已去除职业偏向，并有回归测试。
+
+## 本轮完成（均有测试，已推送）
+
+1. 测试基线：浏览器测试收尾竞态、UTF-8 下载文件名；CI 拆分并安装 poppler、LibreOffice、Python 解析器。
+2. Anthropic 模型列表发现缺陷修复（请求 URL 可带查询参数，Base URL 仍禁止）。
+3. 去职业偏向 + 5 个通用团队模板（共 11 个）。
+4. 项目资料：上传、类型核验、零依赖解析 DOCX/XLSX/PPTX/文本，PDF 经 pdftotext；SQLite schema v2（迁移前自动备份）；资料按预算交给岗位并记录证据；工作台资料卡片。
+5. 能力中心 `/capabilities.html`：系统就绪检查 + 《缺失配置清单》、全部能力分类、MCP 管理。
+6. 内置工具：`project_file_read`、`data_analysis`、`chart_generation`（SVG）、`document_convert`（LibreOffice→PDF）、`document_render`（PNG + 空白页检查）。
+7. MCP：远程 Streamable HTTP（静态令牌）、启停、连接/调用测试、诊断、运行日志、移除；审核目录 `catalog/mcp-servers.v1.json`。
+8. 立项向导结果页显示服务端实时工具检查；立项工具 ID 映射到真实工具。
+9. 文档：`docs/USER-GUIDE.md`（普通用户）、`docs/DEPLOYMENT-PARALLEL.md`（与第一代并行部署）、FEATURE-STATUS / ARCHITECTURE / TESTING 更新。
+
+## 测试
+
+`npm test` 182/182（本地 0 跳过）；`test:ui`、`test:workspace` 通过。全部为本地 Mock 模型、本地 MCP fixture、真实文件与系统程序；真实厂商 API 与第三方生产 MCP 未测。
+
+## 尚未完成（按建议顺序）
+
+1. 受控代码执行（需隔离运行环境，默认关闭、每次授权）——尚未实现。
+2. 多步交接：后续岗位可选择接收全部前序成果；团队备用模型自动切换（需纳入批准与价表）；32-token 试连费用入账。
+3. 图表嵌入 Word/PPT；流程图/结构图；已上传 Office 文件的编辑（替换文字后重新生成）。
+4. 由模型提出团队/流程草案（需走同一预算批准）以支持模板外的全新项目类型。
+5. 负责人提供服务器后，按 `docs/DEPLOYMENT-PARALLEL.md` 只读检查 → 备份 → 并行部署 → 12 项测试 → 报告；未经批准不切换生产流量。
+6. 真实厂商 API / 第三方 MCP 端到端验收（需负责人批准额度）。
+
+## 约束提醒
+
+见 `CLAUDE.md`“不得破坏的约束”。零 npm 生产依赖；可选系统程序缺失时如实显示“需要配置”。Mock、fixture、真实文件、真实 API 分开报告。
+
+---
+
+以下为 Codex 交接原文（历史记录）。
+
 # AIJAVAIS V2.0 · Codex → Claude Code 完整开发交接报告
 
 状态：**WIP / 安全检查点交接，停止扩展功能**。用户已要求由Claude Code接管；Codex完成提交推送与SHA核对后停止写入此分支。
