@@ -1,0 +1,120 @@
+name: R41 Independent CodeAudit V1 gate (offline, SHA pinned)
+on:
+  push:
+    branches:
+      - audit/r41-v1gate-d54b29e-independent
+    paths:
+      - .github/workflows/r41-independent-v1gate.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r41-independent-v1gate-once
+  cancel-in-progress: false
+
+jobs:
+  independent-v1-gate:
+    name: independent-v1-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      REVIEW_SHA: d54b29e11716a01f0812b3e8576982b9f5b9b234
+      REJECTED_BASE_SHA: 1e7b09294e55210f04089bb6c1ac93782d2ae462
+    steps:
+      - name: Checkout immutable reviewed SHA
+        uses: actions/checkout@v4
+        with:
+          ref: d54b29e11716a01f0812b3e8576982b9f5b9b234
+          path: reviewed
+          persist-credentials: false
+      - name: Checkout old rejected SHA for sensitivity control
+        uses: actions/checkout@v4
+        with:
+          ref: 1e7b09294e55210f04089bb6c1ac93782d2ae462
+          path: old-core
+          persist-credentials: false
+      - name: Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Assert fixed source identity and defaults
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C reviewed rev-parse HEAD)" = "$REVIEW_SHA"
+          test "$(git -C old-core rev-parse HEAD)" = "$REJECTED_BASE_SHA"
+          printf 'AUDIT_WORKFLOW_SHA=%s\nREVIEW_SHA=%s\nREJECTED_BASE_SHA=%s\n' "$GITHUB_SHA" "$REVIEW_SHA" "$REJECTED_BASE_SHA"
+          printf 'review_tree=%s\n' "$(git -C reviewed rev-parse 'HEAD^{tree}')"
+          node reviewed/tools/agent-scheduler/cli.js > disabled.json
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('disabled.json','utf8'));if(x.state!=='DISABLED'||x.actual_dispatch!==false||x.would_dispatch?.length)process.exit(1);console.log('DEFAULT_DISABLED_AND_NO_DISPATCH=PASS');"
+      - name: Run all 220 scheduler tests including real subprocess races
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd reviewed
+          node --test --test-concurrency=1 tests/agent-scheduler/*.test.js
+      - name: Independent minimal P1-P1-P2 negatives and legal positives
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          'use strict';
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+          const F=require('./reviewed/tests/agent-scheduler/fixtures.cjs');
+          const {evaluate}=require('./reviewed/tools/agent-scheduler/state');
+          const {PlanStore}=require('./reviewed/tools/agent-scheduler/lease');
+          const block=(label,s)=>{const r=evaluate(s,F.config);assert.notEqual(r.state,'READY_FOR_HUMAN_GATE',label);assert.equal(r.actual_dispatch,false);assert.deepEqual(r.would_dispatch,[]);console.log(label+': PASS_BLOCKED / '+r.missing_gates[0]);};
+          const a=F.positive();
+          a.issues[10].comments=a.issues[10].comments.filter(c=>!c.body.includes('authorized_role: codex\n'));
+          a.issues[10].comments.push(F.comment('planner',{authorized_role:'codex',issue:15,branch:'codex',approved:true,candidate_sha:F.sha(9),base_sha:F.BASE},'PLANNER_DECISION_V1'));
+          block('AUD-33-SCH-01 wrong candidate shared base',a);
+          const good=F.positive();
+          assert.equal(evaluate(good,F.config).state,'READY_FOR_HUMAN_GATE');
+          assert.equal(evaluate(good,F.config).actual_dispatch,false);
+          console.log('AUTHORIZATION_POSITIVE: PASS');
+          const b=F.positive();
+          b.runs[0].jobs[0].id=501;
+          b.runs[0].jobs.push({...structuredClone(b.runs[0].jobs[0]),id:502,conclusion:'skipped',steps:[]});
+          block('AUD-33-SCH-02 success plus skipped same-name mandatory job',b);
+          const matrix=F.positive();
+          matrix.runs[0].jobs[0].id=501;
+          matrix.runs[0].jobs.push({...structuredClone(matrix.runs[0].jobs[0]),id:502});
+          assert.equal(evaluate(matrix,F.config).state,'READY_FOR_HUMAN_GATE');
+          console.log('MATRIX_ALL_GREEN_POSITIVE: PASS');
+          const p={issue:2,role:'audit',phase:'audit',sha:'3'.repeat(40)};
+          const d=fs.mkdtempSync(path.join(os.tmpdir(),'r41-independent-'));
+          try{
+            const first=new PlanStore(d).claim(p);
+            assert.equal(first.would_dispatch,true);
+            assert.equal(first.actual_dispatch,false);
+            const file=path.join(d,'plans.json'),old=fs.readFileSync(file,'utf8');
+            const corrupt=old.slice(0,-1)+',"plans":{}}';
+            fs.writeFileSync(file,corrupt,{mode:0o600});
+            assert.throws(()=>new PlanStore(d).claim(p),/CORRUPT_SIMULATION_SNAPSHOT/);
+            assert.equal(fs.readFileSync(file,'utf8'),corrupt);
+            assert.equal(fs.existsSync(path.join(d,'lease.lock')),false);
+            console.log('AUD-33-SCH-03 duplicate JSON ledger preserves bytes and refuses redispatch: PASS');
+          }finally{fs.rmSync(d,{recursive:true,force:true});}
+          NODE
+      - name: Sensitivity control - R33 regression must fail against previous rejected core
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp reviewed/tests/agent-scheduler/audit-r33-regression.test.js old-core/tests/agent-scheduler/audit-r33-regression.test.js
+          set +e
+          (cd old-core && node --test --test-concurrency=1 tests/agent-scheduler/audit-r33-regression.test.js) > old-core-control.log 2>&1
+          rc=$?
+          set -e
+          tail -n 22 old-core-control.log
+          test "$rc" -ne 0
+          grep -q '^# tests 80$' old-core-control.log
+          grep -Eq '^# fail [1-9][0-9]*$' old-core-control.log
+          echo 'OLD_REJECTED_CORE_SENSITIVITY=PASS (expected failures observed)'
+      - name: Evidence summary
+        if: always()
+        shell: bash
+        run: |
+          printf '### Independent R41 offline CodeAudit run\n\n' >> "$GITHUB_STEP_SUMMARY"
+          printf -- '- reviewed SHA: `%s`\n- old rejected SHA: `%s`\n- workflow commit (not the reviewed source): `%s`\n- default dispatch: disabled\n- permissions: contents:read\n- real agents/paid APIs/production: NOT_RUN\n- authoritative audit verdict: PENDING_INDEPENDENT_CODEAUDIT_SIGNATURE\n' "$REVIEW_SHA" "$REJECTED_BASE_SHA" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
