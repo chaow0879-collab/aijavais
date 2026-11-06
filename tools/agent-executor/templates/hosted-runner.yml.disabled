@@ -1,0 +1,40 @@
+# DESIGN ONLY. Not under .github/workflows; never registered in this revision.
+name: Future approved executor (OFF)
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['approved-integration-gates']
+    types: [completed]
+  schedule:
+    - cron: '*/10 * * * *'
+permissions:
+  contents: read
+jobs:
+  approved-execution:
+    # An environment and variables must be separately approved and configured.
+    # Never checkout an event-provided or PR-provided executor implementation.
+    if: >-
+      vars.AIJAVAIS_AUTOMATION_ENABLED == 'true' &&
+      vars.AIJAVAIS_DISPATCH_ENABLED == 'true' &&
+      vars.AUDITED_EXECUTOR_SHA != '' &&
+      github.repository == 'chaow0879-collab/aijavais' &&
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.event != 'pull_request_target'))
+    environment: approved-agent-execution
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ vars.AUDITED_EXECUTOR_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check source, signatures, credentials, native limits, and fixed Gate
+        run: node tools/agent-executor/runner-entry.js
+        # Current source rejects LIVE_BUILD_DISABLED. It never starts an Agent.
+        # No secrets configured here. Future credential broker/environment setup
+        # requires separate approval and an audited replacement of this OFF build.

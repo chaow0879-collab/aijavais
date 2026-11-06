@@ -1,3 +1,15 @@
+# 第42轮 #22 当前集成交付（覆盖以下历史状态）
+
+- 唯一写入者Codex，原隔离checkout `/workspace/aijavais-autoexec`，分支 `feat/codex-v2-autoexec-v2-stub`。原WIP `4b8bc6929833a06d1186df1d62a95300398daa45`完整保留，未重写历史。
+- 正式#22#6686129504及独立#2#6685927910解除V1代码依赖；merge `adbe5598b7497e43e31fb2c69b5a0a2e6d2012f6`父链为4b8bc692… + 获认可的精确V1 `d54b29e11716a01f0812b3e8576982b9f5b9b234`。无冲突，未修改Claude冻结分支或main。
+- AUD-41-COMPAT-01只增加Independent-CodeAudit精确别名，旧别名/可信身份/最新否决/SHA/branch/授权检查保留；新增40项V1及8项V2回归，两条旧V2夹具只补时间戳而不改断言。
+- 本地V1 260/260、V1+V2 383/383、业务276/276（umask022）及四组Chromium通过；初次集成夹具失败、历史umask077失败均如实保留在docs/AGENT-EXECUTOR-V2-R42.md。容器/准确CI与最终40位SHA见Issue #22第42轮AGENT_REPORT_V1。
+- 产品仍为通用跨行业虚拟AI公司；当前工程优先为自动接力。仅代码候选READY_FOR_REVIEW，不代表新V2独立审计/产品QA通过；实际Agent启动0、成本NOT_VERIFIED。真实入口/远端写入编译期OFF，开关全部false、dry_run=true、cron/webhook关闭，无Secrets/付费API/生产改动。
+- 下一步由GPT核候选SHA/CI，再独立CodeAudit和必要#4 QA。真实Planner自由格式决议需负责人按精确SHA和独立账号重新发布结构化协议，开发者未代签/伪造。真实认证/费用/窗口及实际接力须另获负责人明确授权，勿因解除V1代码依赖自动启用。
+
+---
+
+
 # 最新：第十七轮 #14 五包交付（Claude Code → 集中独立审计 #2）
 
 - **M1 #7 P1**：基线动态复现非合作取消后第4个请求被派发（`peakUnderlyingInFlight=4`）。整改：容量按底层真实结束释放；取消/超时/断连在短宽限后返回`dispatch_outstanding`（cost null、上界、ledgerId），底层结束时同一ledgerId迟到结算一次；引用型超时计时器；有界`close()`不释放仍在途名额、关闭后不写库；只读`GET /api/v2/intake/ai-draft/status`。见docs/AI-DRAFT.md。

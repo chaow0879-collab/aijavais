@@ -1,0 +1,23 @@
+name: Agent scheduler V1 readonly validation
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/agent-scheduler/**'
+      - 'tests/agent-scheduler/**'
+      - 'docs/AGENT-SCHEDULER-V1.md'
+      - '.github/workflows/agent-scheduler-v1.yml'
+permissions:
+  contents: read
+jobs:
+  scheduler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/agent-scheduler/*.test.js
+      - name: Default entry stays off without GitHub calls
+        run: node tools/agent-scheduler/cli.js
