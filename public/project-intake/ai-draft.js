@@ -4,8 +4,10 @@
   'use strict';
   let root, models = [], source = '', controller;
   const fresh = () => ({ open:false, description:'', connectionId:'', maxTokens:32000, maxOutputTokens:2048, maxCost:0,
-    inputRate:'', outputRate:'', consent:false, estimate:null, busy:false, result:null, draft:null, saveConsent:false, message:'' });
+    inputRate:'', outputRate:'', consent:false, estimate:null, busy:false, result:null, draft:null, saveConsent:false, message:'', current:null });
   let state = fresh();
+  const NOT_DISPATCHED=new Set(['draft_busy','paid_approval_required','budget_required','price_required','token_budget_exceeded','cost_budget_exceeded','model_not_ready','model_changed','invalid_input','service_closing','usage_ledger_unavailable']);
+  const shortId=id=>String(id||'').slice(0,8);
   const $ = id => document.getElementById(id);
   const lines = text => text.split('\n').map(s=>s.trim()).filter(Boolean);
   function el(tag, props = {}, children = []) {
@@ -61,16 +63,23 @@
     const currentState=state;
     const input={...payload(),approvePaid:state.consent,requestId:crypto.randomUUID()};
     controller=new AbortController();controller.requestId=input.requestId;const active=controller;
+    // #19: every cost fact is attributed to the request it was answered for. A new request starts
+    // with no usage of its own; any earlier usage stays visible only as an explicitly labelled previous request.
+    state.current={requestId:input.requestId,status:'pending',sent:null,code:null};
     state.busy=true;state.consent=false;message('正在请求团队草案；不会执行项目或调用工具。');render();
     try{
       const result=await api('/api/v2/intake/ai-draft',input,controller.signal);
       if(state!==currentState)return;
-      state.result=result;state.draft=result.draft;state.saveConsent=false;
+      state.result={...result,usageRequestId:input.requestId};state.draft=result.draft;state.saveConsent=false;
+      state.current={requestId:input.requestId,status:'answered',sent:result.requestSent===true,code:result.code||null};
       message(result.financiallyComplete===false?'草案已生成，可编辑，确认后才会保存（不会自动执行或授权工具）；但费用账本未完成，'+(result.usage&&result.usage.cost===null?'费用未知，':'')+'需要人工核对。'+(result.usageWarning?' '+result.usageWarning:'')+' '+(result.retryWarning||''):'AI草案已生成，尚未保存。请逐项编辑与人工确认。');
     }catch(e){
       if(state!==currentState)return;
       const data=e.data;
-      if(data?.usage)state.result={...(state.result||{}),usage:data.usage,usageRecorded:data.usageRecorded,usageWarning:data.usageWarning,financiallyComplete:data.financiallyComplete,billingStatus:data.billingStatus,ledgerId:data.ledgerId};
+      if(data?.usage)state.result={...(state.result||{}),usage:data.usage,usageRequestId:input.requestId,usageRecorded:data.usageRecorded,usageWarning:data.usageWarning,financiallyComplete:data.financiallyComplete,billingStatus:data.billingStatus,ledgerId:data.ledgerId};
+      // Refused before any claim/dispatch (capacity, approval, budget, readiness): provably not sent, cost 0 for THIS request.
+      const notSent=data?.requestSent===false||NOT_DISPATCHED.has(data?.code);
+      state.current={requestId:input.requestId,status:'answered',sent:data?.usage?data.requestSent===true:notSent?false:null,code:data?.code||(e.name==='AbortError'?'aborted':null)};
       if(!state.draft&&data?.fallbackDraft)state.draft=data.fallbackDraft;
       // The user's request ending is not the provider call ending: say so plainly.
       const outstanding=data?.billingStatus==='dispatch_outstanding';
@@ -165,7 +174,12 @@
       el('button',{id:'ai-generate',type:'button',className:'btn primary',text:'生成可编辑团队草案',disabled:!eligible(),onclick:generate}),
       el('button',{id:'ai-cancel',type:'button',className:'btn',text:'取消本次请求',disabled:!state.busy,onclick:cancel}),
       el('p',{id:'ai-message',role:'status',className:'note',text:state.message}));
-    if(state.result?.usage){const u=state.result.usage;card.append(el('p',{id:'ai-usage',className:'hint',text:`本次用量：${u.tokens??'未知'} Token（${u.tokenSource}）；费用：${u.cost===null||u.cost===undefined?'未知，不能视为零':('$'+u.cost+' USD')}${u.billingFactText?'（'+u.billingFactText+'）':''}；${state.result.financiallyComplete===true?'已记录账本':state.result.billingStatus==='dispatch_outstanding'?'供应商调用尚未结束：费用未知，可能仍计费；结束后自动结算一次，不会自动重发。':(u.cost===null?'账本未完成：费用未知，需要人工核对；请勿为补记账重新生成。':'账本未写入（本次费用已确定为 $'+u.cost+' USD），需要人工核对记录。')}`}));}
+    const cur=state.current;
+    if(cur)card.append(el('p',{id:'ai-current-request',className:'hint','data-request-id':cur.requestId,text:'本次请求（ID '+shortId(cur.requestId)+'）：'+(cur.status==='pending'?'进行中':cur.sent===false?'未发送请求，本次费用为0。':cur.sent===true?'已发送，本次费用见下方“本次用量”。':'发送状态未知，请查看系统用量账本，不要视为0。')}));
+    // Usage of a different (earlier) request is never shown as "本次".
+    const ownUsage=state.result?.usage&&cur&&state.result.usageRequestId===cur.requestId;
+    if(state.result?.usage&&!ownUsage){const u=state.result.usage;card.append(el('p',{id:'ai-usage-previous',className:'hint','data-request-id':state.result.usageRequestId||'',text:`上一请求（ID ${shortId(state.result.usageRequestId)}，与本次请求无关）的用量：费用${u.cost===null||u.cost===undefined?'未知，不能视为零':'$'+u.cost+' USD'}${state.result.billingStatus==='dispatch_outstanding'?'；该请求的供应商调用尚未结束，可能仍计费':''}${u.billingFactText?'（'+u.billingFactText+'）':''}。`}));}
+    if(ownUsage){const u=state.result.usage;card.append(el('p',{id:'ai-usage',className:'hint','data-request-id':state.result.usageRequestId,text:`本次用量：${u.tokens??'未知'} Token（${u.tokenSource}）；费用：${u.cost===null||u.cost===undefined?'未知，不能视为零':('$'+u.cost+' USD')}${u.billingFactText?'（'+u.billingFactText+'）':''}；${state.result.financiallyComplete===true?'已记录账本':state.result.billingStatus==='dispatch_outstanding'?'供应商调用尚未结束：费用未知，可能仍计费；结束后自动结算一次，不会自动重发。':(u.cost===null?'账本未完成：费用未知，需要人工核对；请勿为补记账重新生成。':'账本未写入（本次费用已确定为 $'+u.cost+' USD），需要人工核对记录。')}`}));}
     if(state.draft)editor(card);root.append(card);
   }
   window.AIJIntakeDraft={mount(container,options){root=container;models=options.models||[];if(source!==options.description){source=options.description;state.description=source;invalidate();}render();},

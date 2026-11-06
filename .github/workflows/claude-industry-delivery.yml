@@ -1,0 +1,97 @@
+name: Claude industry delivery batch (#17)
+# Dedicated workflow for feat/claude-v2-industry-delivery-batch (#17/#19). The shared
+# ci.yml is not edited by this package; this workflow runs the full existing suite
+# plus the new delivery checks. Local MOCK models only; no paid APIs or secrets.
+on:
+  push:
+    branches: [feat/claude-v2-industry-delivery-batch]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: claude-delivery-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install poppler and LibreOffice (existing suite needs them)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Report sandbox isolation support (smoke tests are NOT_RUN where unsupported)
+        run: node -e "console.log(JSON.stringify(require('./lib/code-exec').codeExecStatus()))"
+      - name: Full existing suite (npm test)
+        env:
+          INDUSTRY_E2E_OUT: ${{ runner.temp }}/industry-e2e
+        run: npm test
+      - name: Claude delivery checks (unit + real server HTTP)
+        env:
+          CLAUDE_DELIVERY_OUT: ${{ runner.temp }}/claude-delivery
+        run: node --test tests/claude-delivery-checks.test.js tests/claude-delivery-http.test.js
+      - name: Hash delivery evidence
+        if: always()
+        run: if [ -d "$RUNNER_TEMP/claude-delivery" ]; then cd "$RUNNER_TEMP/claude-delivery" && sha256sum * ; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-delivery-evidence
+          path: ${{ runner.temp }}/claude-delivery
+          if-no-files-found: ignore
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install isolated, pinned browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/aij-ui-deps" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/aij-ui-deps/node_modules/.bin/playwright" install --with-deps chromium
+          mkdir -p "$RUNNER_TEMP/aij-ui-shots"
+      - name: Existing browser suites (admin, workspace, intake, industry)
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:ui && npm run test:workspace && npm run test:intake && npm run test:industry
+      - name: "#19 cost attribution + #17 workspace delivery checks (Chromium)"
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: node tests/ui/claude-delivery.e2e.js
+      - name: Hash screenshots
+        if: always()
+        run: cd "$RUNNER_TEMP/aij-ui-shots" && sha256sum claude-delivery-* org-chart.svg 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-delivery-browser
+          path: ${{ runner.temp }}/aij-ui-shots
+          if-no-files-found: ignore
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build independent production image
+        run: docker build --tag aijavais:ci .
+      - name: Start isolated backend and verify health (no public host port)
+        run: |
+          docker run --detach --name aij-ci aijavais:ci
+          for attempt in $(seq 1 30); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' aij-ci)" = healthy ]; then exit 0; fi
+            if [ "$(docker inspect --format '{{.State.Status}}' aij-ci)" = exited ]; then exit 1; fi
+            sleep 2
+          done
+          exit 1
+      - name: Remove isolated container
+        if: always()
+        run: docker rm --force --volumes aij-ci || true

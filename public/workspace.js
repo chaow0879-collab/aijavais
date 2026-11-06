@@ -241,6 +241,31 @@
     if(!state.runs.some(r=>r.runId===state.run.runId))state.runs.unshift(state.run);
     else state.runs=state.runs.map(r=>r.runId===state.run.runId?state.run:r);
     renderRunPicker();renderRun();
+    if(!['running','queued'].includes(state.run.status))await loadDelivery(state.run.runId);else renderDelivery(null);
+  }
+  // #17 M4: four independent delivery facts; nothing is shown as usable/verified unless the server checked it.
+  const DELIVERY_TONE={runnable_verified:'ok',graph_validated:'ok',evidence_mapped_unverified:'warn',structure_only:'warn',not_run:'warn',evidence_gaps:'bad',mock_placeholder:'bad',failed:'bad',valid:'ok',invalid:'bad'};
+  function deliveryRow(name,s,extra=''){
+    const cell=(key,text)=>node('td',{},[node('span',{class:'pill','data-state':s[key],'data-tone':DELIVERY_TONE[s[key]]||'',text})]);
+    return node('tr',{'data-delivery-kind':s.kind,'data-usable':s.usable},[node('td',{text:name}),cell('generated',s.labels.generated),cell('structure',s.labels.structure),cell('usable',s.labels.usable),cell('expertReview',s.labels.expertReview),node('td',{class:'hint',text:[s.reason,extra].filter(Boolean).join('；')})]);
+  }
+  function renderDelivery(m){
+    if(!m){$('delivery-summary').textContent='尚未运行交付检查。';$('delivery-results').replaceChildren();return;}
+    const sum=m.summary;$('delivery-summary').textContent=`检查时间 ${m.checkedAt}：已生成 ${sum.generated} 项；结构可解析 ${sum.structureValid}；通过可用性检查 ${sum.usableVerified}；占位/Mock ${sum.mockPlaceholder}；领域专家已评审 ${sum.expertReviewed}。${m.humanReview?.note||''}`;
+    const rows=[];
+    for(const item of m.items||[]){
+      const name={software:'软件交付',organization:'组织结构',research:'研究证据链'}[item.kind]||item.kind;
+      const extra=item.kind==='software'?(item.smoke?.ran?`沙盒退出码 ${item.smoke.exitCode}`:'')+(item.warnings?.length?' 告警：'+item.warnings.join('；'):'')
+        :item.kind==='organization'?(item.errors?.length?'错误：'+item.errors.join('；'):'')+(item.warnings?.length?' 提醒：'+item.warnings.join('；'):'')
+        :item.kind==='research'?`主张${item.summary?.claims??0}，缺证${item.summary?.unsupported??0}，合成${item.summary?.synthetic??0}，未核实${item.summary?.unverified??0}，已核实0`+(item.errors?.length?' 错误：'+item.errors.join('；'):''):'';
+      rows.push(deliveryRow(name,item.status,extra));
+    }
+    for(const f of m.files||[])rows.push(deliveryRow(f.filename+'（'+f.bytes+' 字节，SHA-256 '+String(f.sha256).slice(0,12)+'…）',f));
+    const links=(m.generatedArtifacts||[]).map(a=>{const href=safeDownloadUrl(a.downloadUrl);return href?node('a',{href,'data-generated':a.filename,text:'下载 '+a.filename+'（SHA-256 '+a.sha256.slice(0,12)+'…）'}):null;}).filter(Boolean);
+    $('delivery-results').replaceChildren(node('table',{id:'delivery-table'},[node('thead',{},[node('tr',{},['成果','文件已生成','结构可解析','可实际使用','领域专家评审','说明'].map(t=>node('th',{text:t})))]),node('tbody',{},rows)]),...links.map(a=>node('p',{},[a])));
+  }
+  async function loadDelivery(runId){
+    try{const data=await api('/api/v2/runs/'+encodeURIComponent(runId)+'/delivery-check');renderDelivery(data.manifest);}catch{renderDelivery(null);}
   }
   function safeDownloadUrl(value) {
     try{const url=new URL(value,location.origin);return url.origin===location.origin && url.protocol===location.protocol && url.pathname.startsWith('/api/')?url.href:null;}catch{return null;}
@@ -339,6 +364,7 @@
     await api('/api/v2/runs/'+state.run.runId+'/review','POST',{decision,feedback:comment,comment,...(decision==='rework'?approval():{})});$('approve-paid').checked=false;await loadRun(state.run.runId);feedback(decision==='approve'?'审核记录已保存':'返工要求已提交');
   }));
   $('export-run').addEventListener('click',work(downloadExport));
+  $('delivery-check').addEventListener('click',work(async()=>{if(!state.run)throw Error('请先选择任务');const data=await api('/api/v2/runs/'+encodeURIComponent(state.run.runId)+'/delivery-check','POST',{smokeTest:$('delivery-smoke').checked});renderDelivery(data.manifest);feedback('交付检查完成：结果为服务端真实检查记录；领域专家评审仍未进行。');}));
   $('upload-materials').addEventListener('click',work(uploadMaterials));
   $('save-skill').addEventListener('click',work(async()=>{let skill;try{skill=JSON.parse($('skill-json').value);}catch{throw Error('Skill JSON 格式不正确');}await api('/api/v2/skills','POST',skill);await refreshResources();feedback('Skill 已注册。请在执行步骤中显式选择。');}));
   $('discover-tools').addEventListener('click',work(async()=>{const result=await api('/api/v2/tools/discover','POST',{});await refreshResources();feedback('已刷新服务端配置的 MCP 工具；新增工具需加入本次运行白名单。'+(result.servers?'\n连接诊断：'+JSON.stringify(result.servers):''));}));
