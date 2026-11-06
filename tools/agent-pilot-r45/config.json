@@ -1,0 +1,19 @@
+{
+  "_comment": "R45 default policy: OFF. Live execution needs an audited source change to live_enabled, a trusted dispatcher public key, AIJ_PILOT_LIVE=1, --live, an ephemeral GitHub-hosted runner and official CLI credentials. Natural-language Issue text is never an authorization.",
+  "live_enabled": false,
+  "allow_fake_cli": false,
+  "allow_local_live": false,
+  "repo": "chaow0879-collab/aijavais",
+  "allowed_issues": [29],
+  "allowed_branch_pattern": "^(feat|fix|test|integrate)/[A-Za-z0-9._/-]+$",
+  "allowed_roles": ["developer", "audit", "qa"],
+  "trusted_keys": {},
+  "pinned_gate_sha": null,
+  "accepted_audit_verdicts": ["ACCEPT", "ACCEPT_WITH_FOLLOWUP"],
+  "accepted_qa_verdicts": ["PASS"],
+  "max_budget_usd": 0.5,
+  "max_runtime_ms": 300000,
+  "max_output_bytes": 262144,
+  "max_envelope_age_ms": 3600000,
+  "codex_spend_limit_attested": false
+}
