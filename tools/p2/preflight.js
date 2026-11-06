@@ -9,7 +9,7 @@ function preflight(target,{aclProbe=p=>spawnSync('getfacl',['-cp','--',p],{encod
    if(!s.isDirectory()||s.isSymbolicLink())blockers.push('NON_DIRECTORY_OR_SYMLINK');
    if((s.mode&0o022)!==0)blockers.push('UNTRUSTED_WRITERS');
    if(typeof process.getuid!=='function'||![0,process.getuid()].includes(s.uid))blockers.push('FOREIGN_OWNER');
-   const acl=aclProbe(p);if(acl.status!==0)blockers.push('ACL_UNKNOWN');
+   const acl=s.isDirectory()&&!s.isSymbolicLink()?aclProbe(p):{status:1};if(acl.status!==0)blockers.push('ACL_UNKNOWN');
    else if(/^(default:|user:[^:]|group:[^:]|mask:)/m.test(acl.stdout))blockers.push('EXTENDED_ACL_REQUIRES_REVIEW');
   }catch{blockers.push('PATH_UNREADABLE');}
   const parent=path.dirname(p);if(parent===p)break;p=parent;
