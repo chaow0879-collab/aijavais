@@ -1,3 +1,14 @@
+# 第三十轮 #22 当前接力（覆盖以下历史状态）
+
+- 产品：通用跨行业虚拟AI公司；当前工程第一优先为受控自动接力（#26），不是将产品改成开发者Runner。
+- 唯一写入者Codex；checkout `/workspace/aijavais-autoexec`，分支 `feat/codex-v2-autoexec-v2-stub`；保留原WIP `a999e9bffec1a64e7aba5c6563df49792d95a1ea`，新增版本探测、只读单任务提案和24项测试。最新完整SHA/CI见Issue #22第三十轮交付，不使用本文内嵌SHA自引用。
+- V2 115 + 冻结V1常规37 = 本地152通过；完整业务276通过（umask022），4组Chromium通过；首次环境失败及重跑详见docs/AGENT-EXECUTOR-V2.md。Fake/Stub不代表真实模型执行。
+- Codex CLI --version=0.166.0，Claude CLI未安装，认证/原生费用硬限额未验证；实际Agent模型启动0。所有开关OFF，禁用模板仍不在.github/workflows中。专属PR/manual CI增加TAP和安全环境探测工件，无Secrets/定时器。
+- Claude独占#25修复；不得修改其scheduler文件。新修复只有在提供准确最终SHA并经#2独立审计通过后才精确引入本分支；当前整包WAIT_GATE，不能标最终READY或启用真实派工。#22后续V2集中审计和合法认证/受控只读窗口仍需实证。不操作生产/main，不调用付费API。
+- 下一步：核对#25最终报告+#2精确SHA结论→复核diff/精确集成→V1+V2+独立负例/全量/CI→统一候选SHA；如冲突停止自动处理。通过独立验收后准备先Codex再Claude的一次受控实测；缺认证则BLOCKED_CREDENTIALS，不以网页版会话代替CLI。
+
+---
+
 # 当前：第十七轮 #14 五包（Claude Code）— 已完成，等待一次集中独立审计
 
 唯一写入者Claude Code；分支`feat/claude-v2-p1-cancel-lifecycle`；基线`17ec74c1f43afd1f19e3695568a24adf5cad40d3`（#6/#8已审计ACCEPT）。最终40位SHA、CI链接与五包证据以#14/#7/#9同一份`[AGENT_REPORT_V1] READY_FOR_REVIEW`为准；交付后停写，不自行关闭Issue、不合main、不部署。

@@ -19,9 +19,20 @@ jobs:
         with:
           node-version: '24'
       - name: Fake executor plus frozen V1 regression
-        run: node --test tests/agent-executor/*.test.js tests/agent-scheduler/*.test.js
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node --test --test-reporter=tap tests/agent-executor/*.test.js tests/agent-scheduler/*.test.js | tee "$RUNNER_TEMP/agent-executor-evidence/tests.tap"
+      - name: Public CLI version metadata only (no model request or authentication read)
+        run: node tools/agent-executor/runner-entry.js --probe > "$RUNNER_TEMP/agent-executor-evidence/environment.json"
       - name: Default OFF and explicit offline demo only
         run: |
           node tools/agent-executor/cli.js
           node tools/agent-executor/cli.js --fake-demo
           node tools/agent-executor/runner-entry.js --stub
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-executor-offline-evidence
+          path: ${{ runner.temp }}/agent-executor-evidence
+          if-no-files-found: error
