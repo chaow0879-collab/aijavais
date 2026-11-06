@@ -71,3 +71,7 @@ test('Planner grants with no bound SHA cannot authorize integration',()=>{
  const s=F.positive();for(const c of s.issues[10].comments)if(c.user.login==='planner')c.body=c.body.replace(/^candidate_sha:.*\n/gm,'');
  const r=evaluate(s,F.config);assert.equal(r.state,'BLOCKED');assert.match(r.missing_gates[0],/AUTHORIZATION/);
 });
+test('integration role has exactly one designated identity',()=>{
+ const config={...F.config,trustedActors:{...F.config.trustedActors,integrator:['first','second']}};
+ assert.equal(evaluate(F.positive(),config).missing_gates[0],'NO_UNIQUE_INTEGRATOR');
+});

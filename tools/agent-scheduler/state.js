@@ -22,6 +22,10 @@ function evaluate(snapshot, config, now=Date.now()) {
   if(['codex','claude','integrator'].some(role=>(config.trustedActors?.[role]||[]).some(actor=>auditActors.includes(actor))))return stop('AUDITOR_AUTHOR_CONFLICT');
   if(!snapshot || snapshot.complete!==true || !Number.isFinite(snapshot.checked_at) || now-snapshot.checked_at>config.max_snapshot_age_ms || snapshot.checked_at>now+30000) return stop('UNKNOWN_INCOMPLETE_OR_STALE_SOURCE');
   if(!Array.isArray(snapshot.runs)||!snapshot.issues||!snapshot.refs)return stop('UNKNOWN_SOURCE_FIELDS');
+  if((config.trustedActors?.integrator||[]).length>1)return stop('NO_UNIQUE_INTEGRATOR');
+  out.source_refs=Object.keys(snapshot.issues).map(id=>'https://github.com/chaow0879-collab/aijavais/issues/'+id);
+  out.observed_shas.remote_refs={};
+  for(const branch of ['feat/codex-v2-p2-followups','feat/claude-v2-industry-delivery-batch','test/codex-v2-productqa-gaps'])if(SHA.test(snapshot.refs[branch]||''))out.observed_shas.remote_refs[branch]=snapshot.refs[branch];
   const comments=Object.values(snapshot.issues).flatMap(i=>Array.isArray(i.comments)?i.comments:[]);
   const trusted=(c,role)=>Array.isArray(config.trustedActors?.[role])&&config.trustedActors[role].includes(c.user?.login)&&['OWNER','MEMBER','COLLABORATOR'].includes(c.author_association);
   const records=(issue,role)=> (snapshot.issues[issue]?.comments||[]).filter(c=>trusted(c,role)).map(c=>({c,r:parse(c.body,'AGENT_REPORT_V1')})).filter(x=>x.r&&roles[role].includes(x.r.role));
