@@ -78,12 +78,25 @@ function evaluate(snapshot, config, now=Date.now()) {
     return 'NO_PLANNER_DECISION';
   };
   const unbound=g=>!Object.hasOwn(g,'candidate_sha')&&!Object.hasOwn(g,'base_sha');
+  // AUD-33-SCH-01: an explicit candidate_sha is the binding. A decision naming another
+  // candidate never applies to this one, whatever its base_sha says; when both fields are
+  // present they must both match (inconsistent -> not an approval). base_sha alone is the
+  // package-level binding (never for audit/QA). Scope selection and approval use the same
+  // binding so another candidate's decision can neither authorize nor revoke this one.
+  const scopeOf=(g,r,baseAllowed)=>{
+    if(Object.hasOwn(g,'candidate_sha'))return g.candidate_sha===r.head_sha;
+    if(Object.hasOwn(g,'base_sha'))return baseAllowed&&g.base_sha===r.base_sha;
+    return true; // unbound: role/issue-wide revocation, never an approval
+  };
+  const exactBinding=(g,r,baseAllowed)=>{
+    if(Object.hasOwn(g,'candidate_sha'))return SHA.test(g.candidate_sha||'')&&g.candidate_sha===r.head_sha&&(!Object.hasOwn(g,'base_sha')||(SHA.test(g.base_sha||'')&&g.base_sha===r.base_sha));
+    return baseAllowed&&SHA.test(g.base_sha||'')&&g.base_sha===r.base_sha;
+  };
   const authorization=(r,role,issue)=>{
     const baseAllowed=!['audit','qa'].includes(role);
-    const bound=g=>(SHA.test(g.candidate_sha||'')&&g.candidate_sha===r.head_sha)||(baseAllowed&&SHA.test(g.base_sha||'')&&g.base_sha===r.base_sha);
     return decide(
-      g=>g.authorized_role===role&&String(g.issue)===String(issue)&&(g.branch===undefined||g.branch===r.branch)&&(unbound(g)||g.candidate_sha===r.head_sha||(baseAllowed&&Object.hasOwn(g,'base_sha')&&g.base_sha===r.base_sha)),
-      g=>g.approved===true&&!NEGATIVE.has(g.status)&&g.branch===r.branch&&bound(g));
+      g=>g.authorized_role===role&&String(g.issue)===String(issue)&&(g.branch===undefined||g.branch===r.branch)&&scopeOf(g,r,baseAllowed),
+      g=>g.approved===true&&!NEGATIVE.has(g.status)&&g.branch===r.branch&&!unbound(g)&&exactBinding(g,r,baseAllowed));
   };
   const note=(x)=>{out.source_refs.push(x.c.html_url);out.evidence.push({status:x.r.status,role:x.r.role,sha:x.r.head_sha||x.r.reviewed_sha||null});};
   for(const role of Object.keys(roles))for(const issue of Object.keys(byIssue))for(const {r} of reports(issue,role)) {
@@ -99,7 +112,15 @@ function evaluate(snapshot, config, now=Date.now()) {
       const key=String(run.workflow_id??run.path??run.name??'(unidentified-workflow)');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(run);
     }
     const order=run=>[Number.isSafeInteger(run.id)?run.id:null,Number.isSafeInteger(run.run_attempt)?run.run_attempt:1];
-    const jobOk=(run,name)=>Array.isArray(run.jobs)&&run.jobs.some(j=>j?.name===name&&j.status==='completed'&&j.conclusion==='success'&&Array.isArray(j.steps)&&j.steps.length>0&&j.steps.every(s=>s?.status==='completed'&&s.conclusion==='success'));
+    // AUD-33-SCH-02: judge every job record, never "some job with this name succeeded".
+    // Each required name needs >=1 matching job and ALL matching jobs (and all their steps)
+    // must have succeeded; two records with the same job id are contradictory -> block.
+    const jobPassed=j=>j?.status==='completed'&&j.conclusion==='success'&&Array.isArray(j.steps)&&j.steps.length>0&&j.steps.every(s=>s?.status==='completed'&&s.conclusion==='success');
+    const requiredJobsOk=(run,names)=>{
+      if(!Array.isArray(run.jobs))return false;
+      const ids=run.jobs.filter(j=>j?.id!==undefined).map(j=>j.id);if(new Set(ids).size!==ids.length)return false;
+      return names.every(name=>{const matching=run.jobs.filter(j=>j?.name===name);return matching.length>0&&matching.every(jobPassed);});
+    };
     let satisfied=false;
     for(const group of groups.values()){
       if(!group.some(run=>Array.isArray(run.jobs)&&run.jobs.some(j=>required.includes(j?.name))))continue;
@@ -111,8 +132,9 @@ function evaluate(snapshot, config, now=Date.now()) {
         if(order(prev)[0]===order(newest)[0]&&order(prev)[1]===order(newest)[1])return false;
       }
       if(newest.status!=='completed'||newest.conclusion!=='success'||!Array.isArray(newest.jobs))return false;
-      if(newest.jobs.some(j=>required.includes(j?.name)&&!jobOk(newest,j.name)))return false;
-      if(required.every(name=>jobOk(newest,name)))satisfied=true;
+      const present=required.filter(name=>newest.jobs.some(j=>j?.name===name));
+      if(!requiredJobsOk(newest,present))return false;
+      if(present.length===required.length)satisfied=true;
     }
     return satisfied;
   }
@@ -161,7 +183,7 @@ function evaluate(snapshot, config, now=Date.now()) {
   if(authorLogins.has(qa.c.user.login))return stop('QA_AUTHOR_CONFLICT');
   if(authorization({...q,head_sha:q.reviewed_sha},'qa',4)||!SHA.test(q.reviewed_sha||'')||q.reviewed_sha!==r.head_sha||q.t2_complete!==true||!SHA.test(q.test_head_sha||'')||snapshot.refs[q.branch]!==q.test_head_sha||q.ci_sha!==q.test_head_sha||!ci(q.test_head_sha,qaJobs))return stop('QA_SHA_CI_OR_T2_INCOMPLETE','PRODUCT_QA');
   if(q.e4!=='PASS'||q.e5!=='PASS')return stop('E4_E5_REQUIRE_HUMAN_AUTHORIZATION_AND_EVIDENCE','PRODUCT_QA');
-  const trials=decide(g=>Object.hasOwn(g,'human_trials_approved')&&(!Object.hasOwn(g,'candidate_sha')||g.candidate_sha===r.head_sha),g=>g.human_trials_approved===true&&g.candidate_sha===r.head_sha&&!NEGATIVE.has(g.status));
+  const trials=decide(g=>Object.hasOwn(g,'human_trials_approved')&&(!Object.hasOwn(g,'candidate_sha')||g.candidate_sha===r.head_sha),g=>g.human_trials_approved===true&&exactBinding(g,r,false)&&!NEGATIVE.has(g.status));
   if(trials)return stop('E4_E5_REQUIRE_HUMAN_AUTHORIZATION_AND_EVIDENCE','PRODUCT_QA');
   out.state='READY_FOR_HUMAN_GATE';out.suggested_next_action='仅供人工发布门禁核查；不代表已授权上线';return out;
 }

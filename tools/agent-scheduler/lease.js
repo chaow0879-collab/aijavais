@@ -15,6 +15,8 @@ function validState(state) {
   }
   return true;
 }
+// The single encoding this tool writes: {"version":1,"plans":{<key>:{"created_at","expires_at"}}}.
+const canonical=state=>JSON.stringify({version:state.version,plans:Object.fromEntries(Object.entries(state.plans).map(([k,v])=>[k,{created_at:v.created_at,expires_at:v.expires_at}]))});
 class PlanStore {
   constructor(dir,ttl=600000) {
     this.dir=path.resolve(dir);if(!this.dir.startsWith(path.resolve(os.tmpdir())+path.sep)||!Number.isSafeInteger(ttl)||ttl<1)throw Error('TEMP_SIMULATION_ONLY');
@@ -25,8 +27,13 @@ class PlanStore {
   readState() {
     let st;try{st=fs.lstatSync(this.file);}catch(e){if(e.code==='ENOENT')return {version:1,plans:{}};throw e;}
     if(!st.isFile())throw Error('CORRUPT_SIMULATION_SNAPSHOT');
-    let state;try{state=JSON.parse(fs.readFileSync(this.file,'utf8'));}catch{throw Error('CORRUPT_SIMULATION_SNAPSHOT');}
-    if(!validState(state))throw Error('CORRUPT_SIMULATION_SNAPSHOT');
+    // AUD-33-SCH-03: JSON.parse silently keeps the last of duplicate keys, so the shape
+    // check alone cannot see an erased history. The writer only ever emits the canonical
+    // JSON.stringify encoding; any other byte sequence (duplicate or escaped-equivalent
+    // keys, reordering, whitespace) is corrupt. Fail closed and keep the original bytes.
+    const raw=fs.readFileSync(this.file,'utf8');
+    let state;try{state=JSON.parse(raw);}catch{throw Error('CORRUPT_SIMULATION_SNAPSHOT');}
+    if(!validState(state)||canonical(state)!==raw)throw Error('CORRUPT_SIMULATION_SNAPSHOT');
     return state;
   }
   claim({issue,role,phase,sha},now=Date.now()) {
@@ -37,7 +44,7 @@ class PlanStore {
       const state=this.readState();
       if(Object.hasOwn(state.plans,key))return {would_dispatch:false,actual_dispatch:false,warning:now>=state.plans[key].expires_at?'EXPIRED_LEASE_HUMAN_REVIEW_REQUIRED':'DUPLICATE_EVENT'};
       state.plans[key]={created_at:now,expires_at:now+this.ttl};
-      const staged=this.file+'.'+crypto.randomUUID();fs.writeFileSync(staged,JSON.stringify(state),{mode:0o600,flag:'wx'});fs.renameSync(staged,this.file);
+      const staged=this.file+'.'+crypto.randomUUID();fs.writeFileSync(staged,canonical(state),{mode:0o600,flag:'wx'});fs.renameSync(staged,this.file);
       // Read back: the persisted ledger must contain the key before any plan is reported.
       if(!Object.hasOwn(this.readState().plans,key))throw Error('CORRUPT_SIMULATION_SNAPSHOT');
       return {would_dispatch:true,actual_dispatch:false,key};

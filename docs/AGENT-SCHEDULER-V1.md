@@ -45,3 +45,14 @@ config.json enabled=false，poll_interval_minutes=10。无定时器/cron/常驻�
 - **SCH-05 QA 独立与不可降级门槛**：`trustedActors.qa` 不得与 codex/claude/integrator 重叠（QA_AUTHOR_CONFLICT），且 QA/审计报告的发布账号不得是本轮任一开发/集成报告的发布账号。`qa_required_jobs` 可省略（默认 HTTP+Chromium），若给出必须是去重非空字符串数组且包含 HTTP 与 Chromium；`required_jobs` 必须包含 tests/browser/container；`trustedActors` 每项必须是非空字符串数组。job 改名需改代码并重新审计，不能用配置删掉必测。
 
 验证：`node --test tests/agent-scheduler/*.test.js`（原 37 + 新回归）。新回归在原 6363e8d 代码上运行时，审计者的 12 个最小反例全部失败（即确实复现原缺陷），在修复后全部通过。仍未验证：真实 `--live` 采集、跨主机锁、其它 OS/ACL、真实 Agent 派工（V1 不可开启）。
+
+## 第三十四轮定向返工（#25 R34，AUD-33-SCH-01…03）
+
+基于被 #2 #6677345745 REJECT 的 `1e7b09294e55210f04089bb6c1ac93782d2ae462` 追加提交；第三十轮全部修复保留，原 37 + R26 103 项测试未改。
+
+- **SCH-01（P1）candidate/base 绑定**：决议里写了 `candidate_sha` 就以它为准——指向别的候选的决议对本候选**既不授权也不撤回**，不再因 `base_sha` 相同而套用；两字段同时存在时必须都与报告一致，否则不是批准。只有 `base_sha` 的决议是包级授权/撤回（审计/QA 不适用）；无 SHA 的决议仍只能撤回。范围选择和最终批准共用同一绑定规则。E4/E5 的 `human_trials_approved` 同样要求精确 candidate，若附 base 也须与集成报告一致。
+- **SCH-02（P1）同名必测 job**：不再用“任意同名 job 成功”判断。最新 run 中每个必需名称至少一个 job，且**全部**同名 job（及其全部步骤）都必须 completed/success；同一 run 内重复 job id 视为矛盾记录直接阻断。合法 matrix（不同 id、全部成功）仍通过；不含必需 job 名的可选 workflow 不受影响。
+- **SCH-03（P2）账本重复键**：`JSON.parse` 会静默保留重复键的最后一个值，所以只校验解析后的形状不够。本工具只写一种规范编码 `{"version":1,"plans":{<key>:{"created_at","expires_at"}}}`；读入字节必须与该规范编码逐字节相同，否则（重复/转义等价键、字段重排、缩进、尾随换行、BOM）一律 `CORRUPT_SIMULATION_SNAPSHOT`，保留原字节、不改写、不删除，锁照常释放，不产生新计划。
+- **自由格式 Planner 决议迁移**：行为不变，没有为兼容而放宽。较新的、无法解析的可信 `[PLANNER_DECISION_V1]` 仍会阻断其后的授权判断；需由规划方为 5 个角色及 E4/E5 重新发布完整、精确范围的闭合结构化块（合成正例见 R33 回归最后一项）。本分支不签发、不代替 Planner 授权。
+
+回归：`tests/agent-scheduler/audit-r33-regression.test.js`（审计 3 个最小复现原样 + 相邻负例与合法正例）。在 1e7b092 旧代码上运行该文件：80 项中 49 项失败，3 个审计复现全部失败；修复后全部通过。
