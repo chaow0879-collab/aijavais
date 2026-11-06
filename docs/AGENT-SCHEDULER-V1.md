@@ -33,3 +33,15 @@ config.json enabled=false，poll_interval_minutes=10。无定时器/cron/常驻�
 本地最终测试37/37、0失败/跳过，含T01–T18门禁/故障/正例、唯一集成人、歧义块拒绝及正式审计精确授权约束。另已显式执行一次真实GitHub只读采集：来源完整后因trustedActors默认为空而BLOCKED(NO_AUTHENTICATED_REPORT_15)，actual_dispatch=false/would_dispatch=[]；没有将采集成功当作任务已授权。CI Draft PR #21仅供验证，不合并。手动workflow dispatch首次404（新workflow未在默认分支注册），改用本Issue允许的PR验证路径。最终精确SHA与CI结果见#18交付报告。
 
 最终复跑发现并修复EEXIST后锁被移除、lstat返回ENOENT的竞争窗口：竞争者仅返回LOCK_CHANGED_RETRY_READONLY和would_dispatch=false。新增确定性负例，四进程竞争重复5次均只有一个模拟计划。中间失败记录未计入最终通过；最终完整37/37。
+
+## 第三十轮门禁整改（#25，AUD-26-SCH-01…05）
+
+修复分支 `fix/claude-v1-gate-p1-26`，base `6363e8d10595a566a1ba266cb70017711cc806be`（被 #2 独立审计 REJECT）。只改 `tools/agent-scheduler/state.js`、`lease.js`、本节、新增回归 `tests/agent-scheduler/audit-r26-regression.test.js` 与专属 workflow `agent-scheduler-fix-26.yml`；原 37 项测试未改。仍默认关闭、GET-only、`actual_dispatch` 恒 false。
+
+- **SCH-01 最终审计/QA状态契约**：最新一条可信报告决定；先判显式状态：`REJECTED` 或审计 `verdict: REJECT` → REJECTED；`BLOCKED` → BLOCKED；缺 `status` → BLOCKED；其它非 `READY_FOR_REVIEW`（CLAIMED、PRE_AUDIT_PREPARED、小写、未知）→ 不前进。之后才要求审计 `verdict` ∈ ACCEPT/ACCEPT_WITH_FOLLOWUP、`review_phase: FINAL`、`reviewed_sha` 精确（若给 `head_sha` 必须相同），QA `verdict: PASS`。可信账号较新的报告块若无法解析（重复字段、多块、坏 JSON）或缺/未知 `role`，按**歧义**阻断，绝不回退到较旧的 ACCEPT/PASS。评论按 `created_at`（再按评论 id、原顺序）排序；时间戳不可解析 → UNKNOWN。
+- **SCH-02 授权撤回**：Planner 决议按范围 `(authorized_role, issue[, branch][, candidate_sha|base_sha])` 取**最新适用**一条；`approved:false`、`status` 为 BLOCKED/REJECTED/REVOKED/WITHDRAWN/CANCELLED/FAILED 或 approved:true 但带否定状态都不是批准；无 SHA/无 branch 的决议是该角色+Issue 的整体撤回（不能作为批准）。撤回后需新的精确授权才能恢复。较新的可信 Planner 块不可解析 → 人工复核。E4/E5 同理：`human_trials_approved` 的最新适用决议（同候选或不带候选的整体撤回）决定。注意：自由格式（无闭合标签）的 `[PLANNER_DECISION_V1]` 评论也会被视为歧义而阻断其后的所有授权判断，需负责人发布闭合结构化块。
+- **SCH-03 CI 选择**：同一 SHA 的运行按 workflow（`workflow_id`→`path`→`name`）分组；凡含必需 job 名的 workflow，只看其**最新 run/attempt**（`id` 再 `run_attempt`），必须 completed/success 且其中必需 job 与步骤全部成功；最新为失败、取消、超时、进行中即阻断，旧绿不能遮盖。同组多条无法排序或同 id/attempt 内容冲突 → 阻断。完全不含必需 job 的可选 workflow 不影响判定。重复的同一 run 记录去重。
+- **SCH-04 lease 账本**：只接受精确 `{version:1, plans:{"[issue,role,phase,sha]":{created_at,expires_at}}}` 的普通对象；数组、null、原始值、多余字段、畸形 key/entry、非有限时间、`__proto__` 键、截断/空文件、符号链接一律 `CORRUPT_SIMULATION_SNAPSHOT` 失败关闭，**不改写、不删除**原文件（留待人工）；锁照常释放。写入后回读确认键已落盘才报告 `would_dispatch`。
+- **SCH-05 QA 独立与不可降级门槛**：`trustedActors.qa` 不得与 codex/claude/integrator 重叠（QA_AUTHOR_CONFLICT），且 QA/审计报告的发布账号不得是本轮任一开发/集成报告的发布账号。`qa_required_jobs` 可省略（默认 HTTP+Chromium），若给出必须是去重非空字符串数组且包含 HTTP 与 Chromium；`required_jobs` 必须包含 tests/browser/container；`trustedActors` 每项必须是非空字符串数组。job 改名需改代码并重新审计，不能用配置删掉必测。
+
+验证：`node --test tests/agent-scheduler/*.test.js`（原 37 + 新回归）。新回归在原 6363e8d 代码上运行时，审计者的 12 个最小反例全部失败（即确实复现原缺陷），在修复后全部通过。仍未验证：真实 `--live` 采集、跨主机锁、其它 OS/ACL、真实 Agent 派工（V1 不可开启）。
