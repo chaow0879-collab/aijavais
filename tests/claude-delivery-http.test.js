@@ -118,7 +118,8 @@ test('A/B/C delivery check via real server: four-level status, SVG artifact, lin
 
   // Independent parsing of the exported files.
   const probe = spawnSync('python3', ['-c', 'import docx, openpyxl, pptx'], { encoding: 'utf8' });
-  if (probe.status !== 0) evidence.independentParse = 'NOT_RUN (python-docx/openpyxl/python-pptx missing)';
+  // Integration (#23): honour the #15 release gate - missing parsers fail (BLOCKED) under AIJ_RELEASE_VALIDATION=1.
+  if (probe.status !== 0) { require('../tools/p2/office-gate').requireParsed({ status: 'NOT_RUN' }); evidence.independentParse = 'NOT_RUN (python-docx/openpyxl/python-pptx missing)'; }
   else {
     const r = spawnSync('python3', ['-c', `import sys,json,zipfile,docx,openpyxl,pptx,xml.etree.ElementTree as ET
 d=sys.argv[1]

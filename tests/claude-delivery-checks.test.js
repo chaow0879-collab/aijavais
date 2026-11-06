@@ -121,6 +121,8 @@ test('M2/M3 export linkage: real DOCX/XLSX/PPTX contain the verified org structu
     'sw.docx': createDeliverable('docx', { ...DC.augmentExport('docx', FX.software()), title: 'SW' }).buffer,
   };
   for (const [k, b] of Object.entries(files)) assert.equal(DC.checkArtifact({ artifactId: k, filename: k, format: k.split('.').pop() }, b).structure, 'valid', k);
+  // Integration (#23): under AIJ_RELEASE_VALIDATION=1 the #15 gate turns missing parsers into a BLOCKED failure.
+  if (probe.status !== 0) require('../tools/p2/office-gate').requireParsed({ status: 'NOT_RUN' });
   if (probe.status !== 0) { t.diagnostic('NOT_RUN: python-docx/openpyxl/python-pptx missing'); t.skip('independent parsers unavailable (NOT_RUN)'); return; }
   const dir = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'aij-claude-delivery-'));
   t.after(() => require('node:fs').rmSync(dir, { recursive: true, force: true }));

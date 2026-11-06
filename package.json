@@ -14,7 +14,10 @@
     "db:info": "node tools/database.js info",
     "db:backup-inventory": "node tools/backup-inventory.js",
     "test:p2": "node --test tests/p2/*.test.js",
-    "test:release-industry": "AIJ_RELEASE_VALIDATION=1 node --test tests/industry-mock-e2e.test.js"
+    "test:release-industry": "AIJ_RELEASE_VALIDATION=1 node --test tests/industry-mock-e2e.test.js",
+    "test:delivery": "node --test tests/claude-delivery-checks.test.js tests/claude-delivery-http.test.js",
+    "test:release-delivery": "AIJ_RELEASE_VALIDATION=1 node --test tests/claude-delivery-checks.test.js tests/claude-delivery-http.test.js",
+    "test:delivery-ui": "node tests/ui/claude-delivery.e2e.js"
   },
   "engines": {
     "node": ">=24.0.0"
