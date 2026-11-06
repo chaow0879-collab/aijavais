@@ -10,7 +10,7 @@ class PlanStore {
   claim({issue,role,phase,sha},now=Date.now()) {
     if(!Number.isSafeInteger(issue)||![role,phase].every(x=>typeof x==='string'&&x.length<100)||!/^[a-f0-9]{40}$/.test(sha))throw Error('INVALID_PLAN');
     const key=JSON.stringify([issue,role,phase,sha]);let fd;
-    try{fd=fs.openSync(this.lock,'wx',0o600);}catch(e){if(e.code!=='EEXIST')throw e;const stale=now-fs.lstatSync(this.lock).mtimeMs>this.ttl;return {would_dispatch:false,actual_dispatch:false,warning:stale?'STALE_LOCK_HUMAN_REVIEW_REQUIRED':'LOCK_BUSY'};}
+    try{fd=fs.openSync(this.lock,'wx',0o600);}catch(e){if(e.code!=='EEXIST')throw e;let metadata;try{metadata=fs.lstatSync(this.lock);}catch(readError){if(readError.code==='ENOENT')return {would_dispatch:false,actual_dispatch:false,warning:'LOCK_CHANGED_RETRY_READONLY'};throw readError;}const stale=now-metadata.mtimeMs>this.ttl;return {would_dispatch:false,actual_dispatch:false,warning:stale?'STALE_LOCK_HUMAN_REVIEW_REQUIRED':'LOCK_BUSY'};}
     try {
       const state=fs.existsSync(this.file)?JSON.parse(fs.readFileSync(this.file,'utf8')):{version:1,plans:{}};
       if(state.version!==1||!state.plans||typeof state.plans!=='object')throw Error('CORRUPT_SIMULATION_SNAPSHOT');

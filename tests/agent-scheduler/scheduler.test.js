@@ -38,7 +38,7 @@ test('T15 expired leases and stale locks require human review without reissue',t
 test('T16 separate process races produce only one plan',async t=>{
  const d=area(t),modulePath=path.resolve(__dirname,'../../tools/agent-scheduler/lease.js');
  const code=`const {PlanStore}=require(${JSON.stringify(modulePath)});console.log(JSON.stringify(new PlanStore(process.argv[1]).claim({issue:15,role:'codex',phase:'ready',sha:'${F.sha(1)}'})))`;
- const run=()=>new Promise((resolve,reject)=>{const env={...process.env};delete env.NODE_TEST_CONTEXT;const c=spawn(process.execPath,['-e',code,d],{env});let out='';c.stdout.on('data',b=>out+=b);c.on('error',reject);c.on('exit',n=>n===0?resolve(JSON.parse(out)):reject(Error('child failed')));});
+ const run=()=>new Promise((resolve,reject)=>{const env={...process.env};delete env.NODE_TEST_CONTEXT;const c=spawn(process.execPath,['-e',code,d],{env});let out='',errors='';c.stderr.on('data',b=>errors+=b);c.stdout.on('data',b=>out+=b);c.on('error',reject);c.on('exit',n=>n===0?resolve(JSON.parse(out)):reject(Error('child failed '+errors)));});
  const results=await Promise.all([run(),run(),run(),run()]);assert.equal(results.filter(r=>r.would_dispatch).length,1);assert.ok(results.every(r=>r.actual_dispatch===false));
 });
 test('duplicate fields, identity conflicts and missing policy fail closed',()=>{assert.equal(parse('[AGENT_REPORT_V1]\nstatus: A\nstatus: B\n[/AGENT_REPORT_V1]','AGENT_REPORT_V1'),null);assert.equal(evaluate(F.positive(),{...F.config,required_jobs:[]}).state,'BLOCKED');assert.equal(evaluate(F.positive(),{...F.config,trustedActors:{...F.config.trustedActors,audit:['codex']}}).state,'BLOCKED');});
@@ -82,4 +82,12 @@ test('preparation base-only authorization cannot authorize final audit',()=>{
  s.issues[2].comments[0].body=s.issues[2].comments[0].body.replace('[/AGENT_REPORT_V1]','base_sha: '+F.BASE+'\n[/AGENT_REPORT_V1]');
  const g=s.issues[10].comments.find(c=>c.body.includes('authorized_role: audit'));g.body=g.body.replace(/^candidate_sha:.*$/m,'base_sha: '+F.BASE);
  assert.notEqual(evaluate(s,F.config).state,'READY_FOR_HUMAN_GATE');
+});
+test('lock removed between EEXIST and stat is a safe non-dispatch result',t=>{
+ const store=new PlanStore(area(t)),open=fs.openSync,stat=fs.lstatSync;
+ try {
+  fs.openSync=(file,...args)=>{if(file===store.lock)throw Object.assign(Error(),{code:'EEXIST'});return open(file,...args);};
+  fs.lstatSync=(file,...args)=>{if(file===store.lock)throw Object.assign(Error(),{code:'ENOENT'});return stat(file,...args);};
+  const r=store.claim({issue:15,role:'codex',phase:'ready',sha:F.sha(1)});assert.equal(r.would_dispatch,false);assert.equal(r.actual_dispatch,false);assert.match(r.warning,/LOCK_CHANGED/);
+ }finally{fs.openSync=open;fs.lstatSync=stat;}
 });

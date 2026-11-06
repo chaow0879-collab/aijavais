@@ -30,4 +30,6 @@ config.json enabled=false，poll_interval_minutes=10。无定时器/cron/常驻�
 
 `node --test tests/agent-scheduler/*.test.js`：覆盖T01-T18和额外正例/身份冲突/分页完整性/真实多进程竞争。实际模型/Agent调用0；测试Github响应为注入Mock，手动live采集另行记录。专属workflow仅PR/manual，permissions contents:read，测试不用secret不联网。新workflow不在默认分支时GitHub可能不允许直接dispatch；可建立仅用于CI的draft PR到同一已审计base分支，不合并不改target。CI及最终SHA以Issue #18报告为准。租约不是安全的跨主机分布式锁；特殊ACL/其他OS未验证。没有真实供应商/生产操作。
 
-本地最终测试34/34、0失败/跳过，含T01–T18门禁/故障/正例、唯一集成人、歧义块拒绝及正式审计精确授权约束。另已显式执行一次真实GitHub只读采集：来源完整后因trustedActors默认为空而BLOCKED(NO_AUTHENTICATED_REPORT_15)，actual_dispatch=false/would_dispatch=[]；没有将采集成功当作任务已授权。CI Draft PR #21仅供验证，不合并。手动workflow dispatch首次404（新workflow未在默认分支注册），改用本Issue允许的PR验证路径。最终精确SHA与CI结果见#18交付报告。
+本地最终测试35/35、0失败/跳过，含T01–T18门禁/故障/正例、唯一集成人、歧义块拒绝及正式审计精确授权约束。另已显式执行一次真实GitHub只读采集：来源完整后因trustedActors默认为空而BLOCKED(NO_AUTHENTICATED_REPORT_15)，actual_dispatch=false/would_dispatch=[]；没有将采集成功当作任务已授权。CI Draft PR #21仅供验证，不合并。手动workflow dispatch首次404（新workflow未在默认分支注册），改用本Issue允许的PR验证路径。最终精确SHA与CI结果见#18交付报告。
+
+最终复跑发现并修复EEXIST后锁被移除、lstat返回ENOENT的竞争窗口：竞争者仅返回LOCK_CHANGED_RETRY_READONLY和would_dispatch=false。新增确定性负例，四进程竞争重复5次均只有一个模拟计划。中间失败记录未计入最终通过；最终完整35/35。
