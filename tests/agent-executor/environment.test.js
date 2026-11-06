@@ -14,8 +14,8 @@ const {execFileSync}=require('node:child_process'),entry=path.resolve(__dirname,
 function fakeProbe(t,script){
  const d=fs.mkdtempSync(path.join(os.tmpdir(),'fixed-version-fixture-'));t.after(()=>fs.rmSync(d,{recursive:true,force:true}));
  fs.writeFileSync(path.join(d,'codex'),'#!'+process.execPath+'\n'+script,{mode:0o700});
- // Child receives no credential environment. The fixture only accepts --version.
- return JSON.parse(execFileSync(process.execPath,[entry,'--probe'],{encoding:'utf8',env:{PATH:d,LANG:'C.UTF-8'},timeout:10000}));
+ // Runner receives synthetic sentinels; probe child must not inherit them. Never real credentials.
+ return JSON.parse(execFileSync(process.execPath,[entry,'--probe'],{encoding:'utf8',env:{PATH:d,LANG:'C.UTF-8',OPENAI_API_KEY:'SYNTHETIC_PROBE_SENTINEL',ANTHROPIC_API_KEY:'SYNTHETIC_PROBE_SENTINEL'},timeout:10000}));
 }
 test('version subprocess uses only fixed argument and never exposes raw output or environment secrets',t=>{
  const r=fakeProbe(t,"if(process.argv.slice(2).join(' ')!=='--version')process.exit(9);if(process.env.OPENAI_API_KEY||process.env.ANTHROPIC_API_KEY)process.exit(8);console.log('fixture-cli 1.2.3 PRIVATE_FIXTURE_SENTINEL');");
