@@ -51,7 +51,7 @@ jobs:
           QA_GAPS_OUT: ${{ runner.temp }}/productqa-gaps-api
         run: |
           test -f "$QA_GAPS_OUT/provenance.json"
-          node -e "require('./tests/productqa-gaps/harness.cjs').manifest()"
+          node -e "console.log('QA_GAPS_ARTIFACT_HASHES '+JSON.stringify(require('./tests/productqa-gaps/harness.cjs').manifest()))"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -92,7 +92,7 @@ jobs:
           QA_GAPS_OUT: ${{ runner.temp }}/productqa-gaps-browser
         run: |
           test -f "$QA_GAPS_OUT/provenance.json"
-          node -e "require('./tests/productqa-gaps/harness.cjs').manifest()"
+          node -e "console.log('QA_GAPS_ARTIFACT_HASHES '+JSON.stringify(require('./tests/productqa-gaps/harness.cjs').manifest()))"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
