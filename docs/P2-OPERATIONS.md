@@ -11,3 +11,5 @@ FU-03（FIXED）：npm run test:p2在临时worker内注入5类真实生产模块
 FU-04（FIXED）：npm run test:release-industry要求独立Office解析PARSED，缺依赖/解析失败报BLOCKED并失败；普通开发模式可NOT_RUN，但summary为INCOMPLETE_NOT_RUN，不再写完整PASS。CI安装python-docx/openpyxl/python-pptx，严格模式实际导出和独立读取三行业文件，记录SHA256。缺依赖负例由tools/p2/office-gate与P2测试验证。
 
 FU-05（DOC_ONLY）：AI-DRAFT明确#7基线缺陷已修；剩余永久不合作供应商可用性和未知费用边界仍保留。本轮无lib/public/schema改动，不修改Claude #17或QA #4文件。真实厂商、专业质量、E4/E5、生产均未验证。
+
+本轮本地证据：npm test 276/276；test:p2 9/9（含5种危险语义变异被捕获、真实缺Python进程失败）；test:release-industry 3/3，三份summary均PARSED且有真实产物哈希；test:intake与test:workspace通过。当前开发目录只读父链检查无blocker，productionVerified=false。初次回归的既有fake-chmod夹具假定SQLite初始非600，现改为明确留下644验证拒绝发布，并保留全部原断言；不改lib实现。最终SHA/精确CI见Issue #15报告。
