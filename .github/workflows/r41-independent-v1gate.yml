@@ -104,7 +104,7 @@ jobs:
           set -euo pipefail
           cp reviewed/tests/agent-scheduler/audit-r33-regression.test.js old-core/tests/agent-scheduler/audit-r33-regression.test.js
           set +e
-          (cd old-core && node --test --test-concurrency=1 tests/agent-scheduler/audit-r33-regression.test.js) > old-core-control.log 2>&1
+          (cd old-core && node --test --test-reporter=tap --test-concurrency=1 tests/agent-scheduler/audit-r33-regression.test.js) > old-core-control.log 2>&1
           rc=$?
           set -e
           tail -n 22 old-core-control.log
