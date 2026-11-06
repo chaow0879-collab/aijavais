@@ -1,0 +1,26 @@
+name: Agent executor V2 fake-only validation
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/agent-executor/**'
+      - 'tests/agent-executor/**'
+      - 'docs/AGENT-EXECUTOR-V2.md'
+      - '.github/workflows/agent-executor-v2.yml'
+permissions:
+  contents: read
+jobs:
+  fake-executor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Fake executor plus frozen V1 regression
+        run: node --test tests/agent-executor/*.test.js tests/agent-scheduler/*.test.js
+      - name: Default OFF and explicit offline demo only
+        run: |
+          node tools/agent-executor/cli.js
+          node tools/agent-executor/cli.js --fake-demo
