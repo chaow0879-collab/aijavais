@@ -1,0 +1,11 @@
+{
+  "source_sha": "c1db3590a3b91a7651d6c276b079b0aea53376c6",
+  "source_directory": "tests/productqa-gaps",
+  "original_sha256": {
+    "sanitize-trace.py": "92a470c00972fde8e4e071db04c52a2c3bafabc379675a325a9574cb7764cd5e",
+    "harness.cjs": "efeb54c548922b97f15f1cb988cd3784d5fac18181fe25f1deee07d96245e90e",
+    "fault-preload.cjs": "6ad5010dfcf71535c45f290c3997bef6825b7d563514e2cdda6ada47bca39c7e",
+    "run.cjs": "80de1024bb33bfb3282c679d9d7d3d3d764dc687b590fed2ca00665d3d9d536e"
+  },
+  "note": "Inherited independent tests; only candidate binding and delivered SOP expectation adapted for R43."
+}
