@@ -1,0 +1,55 @@
+name: Agent executor V2 fake-only validation
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/agent-executor/**'
+      - 'tests/agent-executor/**'
+      - 'docs/AGENT-EXECUTOR-V2.md'
+      - 'tools/agent-scheduler/**'
+      - 'tests/agent-scheduler/**'
+      - 'docs/AGENT-SCHEDULER-V1.md'
+      - '.github/workflows/agent-executor-v2.yml'
+permissions:
+  contents: read
+jobs:
+  fake-executor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Confirm exact candidate source
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
+      - name: Integrated V1 regression including real process races (serial test files)
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node --test --test-concurrency=1 --test-reporter=tap tests/agent-scheduler/*.test.js | tee "$RUNNER_TEMP/agent-executor-evidence/v1.tap"
+      - name: Fake executor plus integrated V1 regression
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node --test --test-reporter=tap tests/agent-executor/*.test.js tests/agent-scheduler/*.test.js | tee "$RUNNER_TEMP/agent-executor-evidence/tests.tap"
+      - name: Public CLI version metadata only (no model request or authentication read)
+        run: node tools/agent-executor/runner-entry.js --probe > "$RUNNER_TEMP/agent-executor-evidence/environment.json"
+      - name: Default OFF and explicit offline demo only
+        run: |
+          node tools/agent-executor/cli.js
+          node tools/agent-executor/cli.js --fake-demo
+          node tools/agent-executor/runner-entry.js --stub
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-executor-offline-evidence
+          path: ${{ runner.temp }}/agent-executor-evidence
+          if-no-files-found: error
