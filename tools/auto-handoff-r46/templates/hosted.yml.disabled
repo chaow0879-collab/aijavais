@@ -1,0 +1,37 @@
+# INERT DESIGN: outside .github/workflows. Not installed on default branch.
+name: Future independently approved R46 reconciliation (OFF)
+on:
+  issue_comment:
+    types: [created, edited]
+  workflow_run:
+    workflows: ['approved-fixed-source-gates']
+    types: [completed]
+  schedule:
+    - cron: '*/10 * * * *'
+permissions:
+  contents: read
+  issues: read
+  actions: read
+jobs:
+  reconcile:
+    if: >-
+      vars.R46_AUTOMATION_ENABLED == 'true' &&
+      vars.R46_AUDITED_SHA != '' &&
+      github.repository == 'chaow0879-collab/aijavais' &&
+      (github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_repository.fork == false &&
+      github.event.workflow_run.event != 'pull_request' &&
+      github.event.workflow_run.event != 'pull_request_target'))
+    environment: approved-nonproduction-handoff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ vars.R46_AUDITED_SHA }}
+          persist-credentials: false
+      - run: node tools/auto-handoff-r46/cli.js
+        # This revision returns DISABLED. No secrets/credentials configured.
+        # A future signed webhook/broker, protected FF-only state ref, independent
+        # joint audit and explicit execution window are still required.
