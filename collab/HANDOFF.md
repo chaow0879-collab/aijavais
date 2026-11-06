@@ -1,13 +1,14 @@
-# 第三十轮 #22 当前接力（覆盖以下历史状态）
+# 第42轮 #22 当前集成交付（覆盖以下历史状态）
 
-- 产品：通用跨行业虚拟AI公司；当前工程第一优先为受控自动接力（#26），不是将产品改成开发者Runner。
-- 唯一写入者Codex；checkout `/workspace/aijavais-autoexec`，分支 `feat/codex-v2-autoexec-v2-stub`；保留原WIP `a999e9bffec1a64e7aba5c6563df49792d95a1ea`，新增版本探测、只读单任务提案和24项测试。最新完整SHA/CI见Issue #22第三十轮交付，不使用本文内嵌SHA自引用。
-- V2 115 + 冻结V1常规37 = 本地152通过；完整业务276通过（umask022），4组Chromium通过；首次环境失败及重跑详见docs/AGENT-EXECUTOR-V2.md。Fake/Stub不代表真实模型执行。
-- Codex CLI --version=0.166.0，Claude CLI未安装，认证/原生费用硬限额未验证；实际Agent模型启动0。所有开关OFF，禁用模板仍不在.github/workflows中。专属PR/manual CI增加TAP和安全环境探测工件，无Secrets/定时器。
-- Claude独占#25修复；不得修改其scheduler文件。新修复只有在提供准确最终SHA并经#2独立审计通过后才精确引入本分支；当前整包WAIT_GATE，不能标最终READY或启用真实派工。#22后续V2集中审计和合法认证/受控只读窗口仍需实证。不操作生产/main，不调用付费API。
-- 下一步：核对#25最终报告+#2精确SHA结论→复核diff/精确集成→V1+V2+独立负例/全量/CI→统一候选SHA；如冲突停止自动处理。通过独立验收后准备先Codex再Claude的一次受控实测；缺认证则BLOCKED_CREDENTIALS，不以网页版会话代替CLI。
+- 唯一写入者Codex，原隔离checkout `/workspace/aijavais-autoexec`，分支 `feat/codex-v2-autoexec-v2-stub`。原WIP `4b8bc6929833a06d1186df1d62a95300398daa45`完整保留，未重写历史。
+- 正式#22#6686129504及独立#2#6685927910解除V1代码依赖；merge `adbe5598b7497e43e31fb2c69b5a0a2e6d2012f6`父链为4b8bc692… + 获认可的精确V1 `d54b29e11716a01f0812b3e8576982b9f5b9b234`。无冲突，未修改Claude冻结分支或main。
+- AUD-41-COMPAT-01只增加Independent-CodeAudit精确别名，旧别名/可信身份/最新否决/SHA/branch/授权检查保留；新增40项V1及8项V2回归，两条旧V2夹具只补时间戳而不改断言。
+- 本地V1 260/260、V1+V2 383/383、业务276/276（umask022）及四组Chromium通过；初次集成夹具失败、历史umask077失败均如实保留在docs/AGENT-EXECUTOR-V2-R42.md。容器/准确CI与最终40位SHA见Issue #22第42轮AGENT_REPORT_V1。
+- 产品仍为通用跨行业虚拟AI公司；当前工程优先为自动接力。仅代码候选READY_FOR_REVIEW，不代表新V2独立审计/产品QA通过；实际Agent启动0、成本NOT_VERIFIED。真实入口/远端写入编译期OFF，开关全部false、dry_run=true、cron/webhook关闭，无Secrets/付费API/生产改动。
+- 下一步由GPT核候选SHA/CI，再独立CodeAudit和必要#4 QA。真实Planner自由格式决议需负责人按精确SHA和独立账号重新发布结构化协议，开发者未代签/伪造。真实认证/费用/窗口及实际接力须另获负责人明确授权，勿因解除V1代码依赖自动启用。
 
 ---
+
 
 # 最新：第十七轮 #14 五包交付（Claude Code → 集中独立审计 #2）
 

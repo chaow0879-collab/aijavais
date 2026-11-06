@@ -1,3 +1,5 @@
+> 第42轮集成状态：本文件原始作者分支保持冻结；#22在feat/codex-v2-autoexec-v2-stub合入独立认可的d54b29e11716a01f0812b3e8576982b9f5b9b234，并仅追加Independent-CodeAudit精确机器角色别名，保留CodeAudit/Codex-CodeAudit及所有可信身份/最新状态/SHA/授权门禁。完整来源、40项新回归、Planner文书迁移与NOT_RUN见 [第42轮说明](AGENT-EXECUTOR-V2-R42.md)。V1当前260项通过；实际派工仍关闭，新集成候选尚待独立审计。
+
 # 自动调度器V1：只读门禁模拟
 
 唯一分支feat/codex-v2-scheduler-v1，base 58c52f0084997f669eea763edc7b58e11d3ef4f4。#15已在另一checkout冻结于c088076425256f52a26aab4e5272a5b1f72402a4；本分支不包含其改动，不修改业务/数据库/计费/通用测试或package。

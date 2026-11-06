@@ -83,10 +83,10 @@ test('SIGKILL of simulated RUNNING process recovers unknown, keeps reservation a
  assert.equal(state.audit.filter(e=>e.type==='RECOVERED_UNKNOWN').length,1);
 });
 test('unexpected source comment edit remains denied even when gate summary unchanged',t=>{
- const f=fixture(t);f.snapshot.issues[22].comments.push({body:'changed task'});assert.equal(f.run().reason,'SOURCE_REVISION_CHANGED');
+ const f=fixture(t);f.snapshot.issues[22].comments.push({body:'changed task',created_at:new Date(f.now).toISOString()});assert.equal(f.run().reason,'SOURCE_REVISION_CHANGED');
 });
 test('active formal audit is not launched again from AUDITING gate',t=>{
- const f=fixture(t,'audit','codex'),c={user:{login:'audit'},author_association:'OWNER',html_url:'https://github.com/FAKE/audit',body:'[AGENT_REPORT_V1]\nrole: CodeAudit\nstatus: RUNNING\nreviewed_sha: '+f.request.sha+'\n[/AGENT_REPORT_V1]'};
+ const f=fixture(t,'audit','codex'),c={user:{login:'audit'},author_association:'OWNER',created_at:new Date(f.now+1).toISOString(),html_url:'https://github.com/FAKE/audit',body:'[AGENT_REPORT_V1]\nrole: CodeAudit\nstatus: RUNNING\nreviewed_sha: '+f.request.sha+'\n[/AGENT_REPORT_V1]'};
  f.snapshot.issues[2].comments.push(c);f.payload.source_digest=P.digest(f.snapshot);f.payload.gate_digest=P.gateDigest(require('../../tools/agent-scheduler/state').evaluate(f.snapshot,f.policy.gate_config,f.now));f.approval=f.sign();
  assert.equal(f.run().reason,'ROLE_ALREADY_RUNNING');
 });

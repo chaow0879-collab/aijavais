@@ -1,7 +1,8 @@
 'use strict';
 const crypto = require('node:crypto');
 const SHA = /^[a-f0-9]{40}$/;
-const roles = {codex:['Codex-Developer','Codex'],claude:['Claude','Claude Code'],integrator:['Integrator'],audit:['CodeAudit','Codex-CodeAudit'],qa:['ProductQA','Codex-ProductQA']};
+// AUD-41-COMPAT-01: exact machine-role alias only; actor trust and all gates remain unchanged.
+const roles = {codex:['Codex-Developer','Codex'],claude:['Claude','Claude Code'],integrator:['Integrator'],audit:['CodeAudit','Codex-CodeAudit','Independent-CodeAudit'],qa:['ProductQA','Codex-ProductQA']};
 const AUTHOR_ROLES = ['codex','claude','integrator'];
 // Floors that configuration can extend but never lower (AUD-26-SCH-05).
 const MIN_REQUIRED_JOBS = ['tests','browser','container'];

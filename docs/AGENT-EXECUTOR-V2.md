@@ -1,10 +1,10 @@
-> **WIP / 依赖BLOCKED。** 第三十轮授权继续现有CLI/GitHub-hosted源码、版本元数据探测及Stub验证；V1仍因AUD-26-SCH-01/02/03三项P1被独立REJECT，#25尚无独立审计通过的新SHA。本分支不修V1，不引入未审计修复，整条真实接力保持阻断。所有实际Agent执行、凭据配置、定时部署、生产操作均OFF。
+> **第42轮：V1代码集成依赖已解除，实际执行仍OFF。** 已将独立认可的精确V1 d54b29e合入原#22分支，并完成AUD-41-COMPAT-01精确角色别名及正负回归。候选等待新集成SHA的独立审计/QA；不得因原V1准入而启动真实接力。来源、260项V1/383项组合测试、历史失败与Planner协议迁移见 [第42轮交付说明](AGENT-EXECUTOR-V2-R42.md)。最终候选SHA/CI以Issue #22同轮报告为准。
 
 # 自动执行器V2：离线Fake/Stub开发包（#22）
 
 ## ADR-22-01：不接入真实执行器
 
-基线为V1精确SHA 6363e8d10595a566a1ba266cb70017711cc806be，独立分支feat/codex-v2-autoexec-v2-stub、独立checkout；V1尚无独立CodeAudit ACCEPT。本包不修改tools/agent-scheduler或业务代码，不把V1作者测试当独立审计。当前业务Claude #17=1bf1aef3fb02f5a4fa40507435dd5b05b023207e、Codex #15=c088076425256f52a26aab4e5272a5b1f72402a4；业务#23集成候选尚未核验，不凭两支CI绿推断集成通过。
+原始开发基点6363e8d曾被独立REJECT，第三十轮WIP为4b8bc6929833a06d1186df1d62a95300398daa45。第42轮在同一分支feat/codex-v2-autoexec-v2-stub、同一隔离checkout受控merge精确V1 d54b29e11716a01f0812b3e8576982b9f5b9b234，保留全部WIP；本轮只在集成候选中追加精确Independent-CodeAudit角色别名，不改业务代码。原V1独立ACCEPT_WITH_FOLLOWUP仅用于代码集成，新V2整体仍需独立复核。
 
 选择：当前只用不可替换的内存Fake适配器；包含受编译期OFF保护的CLI监管实现，实际启动路径在本构建永远封锁；不加载真实SDK或云任务。cli/sdk/cloud_approved只是预留后端枚举，都会返回真实接入BLOCKED_CREDENTIALS，不能因二进制存在推断登录、套餐、费用、条款或可执行资格。默认清单只查PATH文件元数据；显式runner-entry.js --probe可执行固定--version（8秒/16KiB上限），只保留数字版本和安全状态，不执行登录/认证命令，不读cookie/凭据文件或输出token。
 
@@ -16,7 +16,7 @@
 
 policy.js严格校验所有OFF开关（配置和环境变量）、签名/身份/仓库/Issue/分支/角色/phase/SHA/approval_version/最小上下文与完整来源摘要、预算和到期。Ed25519签名仅是模拟授权完整性协议；demo生成内存临时Fake密钥，没有用户真实授权、模型凭据或登录。默认身份及公钥白名单为空。允许后端cli/sdk/cloud_approved，但均只能构造不可替换、冻结的FakeAdapter；任意自定义adapter被拒绝，realDispatch永远抛错。
 
-engine.js复用原V1纯门禁evaluate（原文件未改），核对observed_ref与snapshot refs，绑定source_digest防Issue/评论强改；CLAIMED/RUNNING/IN_PROGRESS不重复启动，新SHA的QA关键FAIL停人工。只有INTEGRATION_READY/AUDITING/PRODUCT_QA可模拟对应已签角色。P0/P1、未知来源、CI失败、非fast-forward、脏工作区、旧SHA等全部阻断。E4/E5、main、生产角色没有自动执行入口。
+engine.js复用已集成安全修复的V1纯门禁evaluate（本轮最小改动仅增加审计角色精确别名），核对observed_ref与snapshot refs，绑定source_digest防Issue/评论强改；CLAIMED/RUNNING/IN_PROGRESS不重复启动，新SHA的QA关键FAIL停人工。只有INTEGRATION_READY/AUDITING/PRODUCT_QA可模拟对应已签角色。P0/P1、未知来源、CI失败、非fast-forward、脏工作区、旧SHA等全部阻断。E4/E5、main、生产角色没有自动执行入口。
 
 store.js仅允许当前UID拥有的0700临时目录，文件0600；wx独占事务锁、fsync临时快照+原子rename、校验和/版本、哈希串联审计。键为repo/issue/role/phase/sha/approval_version；持久CLAIMED后才标RUNNING，之后才调用Fake；单角色最大1。事件与CI rerun重复、重启均不重放。heartbeat/TTL与死PID恢复为HUMAN_REVIEW_REQUIRED，actual_cost=null并保留假设预留；不自动删除僵尸锁或释放未知作业。超过4MiB、腐坏文件、权限或持久写入失败均停止；当前不是生产分布式锁、未声称断电/恶意同UID/跨主机安全。所有数据/日志写入本地模拟目录，不写业务SQLite/GitHub。
 
@@ -46,7 +46,9 @@ node --test tests/agent-executor/*.test.js tests/agent-scheduler/*.test.js
 初始Fake阶段V2 58项+原V1 37项=95/95通过；包括完整Fake集成→独立审计→QA轨道、两种执行器及3种Stub后端、真实4子进程争锁、SIGKILL Fake worker后保守恢复、预算/签名/凭据/分支/修订/CI故障、状态持久写入失败、运行中防重复及停止开关。测试曾发现夹具重签许可未真正传入，已修正闭包并复核，未删断言。实际模型/Claude/Codex/云任务启动0；计时/用量/服务费用均模拟，不是供应商或生产验证。独立专属CI及最终40位SHA见Issue #22。
 
 
-## 第二十八轮 CLI / GitHub-hosted源码交付（仍未启用）
+## 历史验证记录（第28/30轮；当前准入状态以顶部第42轮说明为准）
+
+### 第二十八轮 CLI / GitHub-hosted源码交付（仍未启用）
 
 cli-runner.js实现Codex/Claude候选命令构造与stdin上下文、无shell argv、退出码、有限输出、跨chunk脱敏、流式用量检查、超时watchdog与显式stop、子进程回收。实际模型CLI版本/参数兼容/账号/条款/凭据/原生Token与USD硬限额未验证，不能宣称接力实测；Codex没有已证实原生USD预算能力时必须BLOCKED，而不是假定subscription免费。真实输出默认不返回正文；已知secret/Bearer/sk-脱敏只是额外保护，不是通用DLP。Node Stub用固定本地脚本，进程环境不继承模型密钥；watchdog仅是该显式测试进程的安全超时，不是自动轮询/定时派工。
 
