@@ -1,0 +1,30 @@
+{
+  "enabled": false,
+  "real_dispatch": false,
+  "cron_enabled": false,
+  "webhook_enabled": false,
+  "repo": "chaow0879-collab/aijavais",
+  "source_sha": "ab3e07979f67924e795426737e26c5c4d84b8501",
+  "allowed_issues": [
+    30
+  ],
+  "allowed_branches": [
+    "feat/codex-r46-auto-handoff-control"
+  ],
+  "allowed_senders": [],
+  "repository_id": 1446621245,
+  "tick_ms": 600000,
+  "clock_skew_ms": 30000,
+  "lease_ms": 60000,
+  "max_runtime_ms": 30000,
+  "max_tokens": 512,
+  "max_cost": 0,
+  "max_daily_cost": 0,
+  "max_tasks": 256,
+  "max_audit": 4096,
+  "trusted_keys": {},
+  "gate_config": null,
+  "trusted_event_branches": [
+    "integrate/r43-unified-product-autoexec"
+  ]
+}

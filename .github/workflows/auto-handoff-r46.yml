@@ -1,0 +1,87 @@
+name: R46 auto handoff control (Fake only)
+on:
+  push:
+    branches: [feat/codex-r46-auto-handoff-control]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: r46-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Exact candidate and strict file ownership
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git merge-base --is-ancestor ab3e07979f67924e795426737e26c5c4d84b8501 HEAD
+          git show -s --format='%H %P %T' HEAD
+          node - <<'JS'
+          const {execFileSync}=require('node:child_process');
+          const paths=execFileSync('git',['diff','--name-only','ab3e07979f67924e795426737e26c5c4d84b8501','HEAD'],{encoding:'utf8'}).trim().split('\n');
+          if(!paths.every(p=>p.startsWith('tools/auto-handoff-r46/')||p.startsWith('tests/auto-handoff-r46/')||p==='docs/AUTO-HANDOFF-R46.md'||p==='.github/workflows/auto-handoff-r46.yml'))process.exit(1);
+          console.log(JSON.stringify({owned_paths:paths.length,source_sha:'ab3e07979f67924e795426737e26c5c4d84b8501',real_dispatch:false}));
+          JS
+      - name: Control, security, real HTTP CAS fixture, processes and crash recovery
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/r46-evidence"
+          node --test --test-reporter=tap tests/auto-handoff-r46/*.test.js | tee "$RUNNER_TEMP/r46-evidence/control.tap"
+      - name: Default OFF and explicit two-stage Fake contract only
+        run: |
+          node tools/auto-handoff-r46/cli.js
+          node tools/auto-handoff-r46/cli.js --fake-demo > "$RUNNER_TEMP/r46-evidence/fake-demo.json"
+          cat "$RUNNER_TEMP/r46-evidence/fake-demo.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r46-control-e2-e3-only
+          path: ${{ runner.temp }}/r46-evidence
+          if-no-files-found: error
+  regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Exact candidate
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Existing Office regression dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+          python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: All original V1 and V2 tests remain unchanged
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/r46-regression"
+          node --test --test-reporter=tap tests/agent-executor/*.test.js tests/agent-scheduler/*.test.js | tee "$RUNNER_TEMP/r46-regression/r43-automation.tap"
+      - name: Original business, HTTP, budget, files and SQLite suite
+        if: success() || failure()
+        shell: bash
+        run: npm test | tee "$RUNNER_TEMP/r46-regression/business.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r46-r43-regression-evidence
+          path: ${{ runner.temp }}/r46-regression
+          if-no-files-found: error
