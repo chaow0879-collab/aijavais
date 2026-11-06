@@ -36,8 +36,8 @@ function evaluate(snapshot, config, now=Date.now()) {
   for(const role of Object.keys(roles))for(const issue of Object.keys(snapshot.issues))for(const {r} of records(issue,role)) {
     if((['P0','P1'].includes(r.severity)&&r.status!=='RESOLVED')||r.unknown_cost===true){out.blockers.push('HUMAN_REVIEW_REQUIRED');return stop('OPEN_SECURITY_OR_UNKNOWN_COST');}
   }
-  function ci(sha) {
-    return snapshot.runs.some(run=>run.head_sha===sha&&run.status==='completed'&&run.conclusion==='success'&&Array.isArray(run.jobs)&&config.required_jobs.every(name=>run.jobs.some(j=>j.name===name&&j.status==='completed'&&j.conclusion==='success'&&Array.isArray(j.steps)&&j.steps.length>0&&j.steps.every(s=>s.status==='completed'&&s.conclusion==='success'))));
+  function ci(sha,required=config.required_jobs) {
+    return snapshot.runs.some(run=>run.head_sha===sha&&run.status==='completed'&&run.conclusion==='success'&&Array.isArray(run.jobs)&&required.length>0&&required.every(name=>run.jobs.some(j=>j.name===name&&j.status==='completed'&&j.conclusion==='success'&&Array.isArray(j.steps)&&j.steps.length>0&&j.steps.every(s=>s.status==='completed'&&s.conclusion==='success'))));
   }
   for(const [issue,role,count] of [[15,'codex',3],[17,'claude',4]]) {
     const x=latest(issue,role);if(!x)return stop('NO_AUTHENTICATED_REPORT_'+issue);note(x);
@@ -62,7 +62,7 @@ function evaluate(snapshot, config, now=Date.now()) {
   if(!authorized({...audit.r,head_sha:audit.r.reviewed_sha},'audit',2)||audit.r.status==='PRE_AUDIT_PREPARED'||audit.r.review_phase!=='FINAL'||audit.r.reviewed_sha!==r.head_sha||!['ACCEPT','ACCEPT_WITH_FOLLOWUP'].includes(audit.r.verdict))return stop('AUDIT_SHA_OR_PHASE_MISMATCH','AUDITING');
   out.evidence.push({state:'AUDIT_ACCEPTED',sha:r.head_sha});
   const qa=latest(4,'qa');if(!qa)return stop('NEW_SHA_PRODUCT_QA_REQUIRED','PRODUCT_QA');note(qa);
-  if(!authorized({...qa.r,head_sha:qa.r.reviewed_sha},'qa',4)||qa.r.reviewed_sha!==r.head_sha||qa.r.verdict!=='PASS'||qa.r.t2_complete!==true||qa.r.ci_sha!==r.head_sha||!ci(r.head_sha))return stop('QA_SHA_CI_OR_T2_INCOMPLETE','PRODUCT_QA');
+  if(!authorized({...qa.r,head_sha:qa.r.reviewed_sha},'qa',4)||qa.r.reviewed_sha!==r.head_sha||qa.r.verdict!=='PASS'||qa.r.t2_complete!==true||!SHA.test(qa.r.test_head_sha||'')||snapshot.refs[qa.r.branch]!==qa.r.test_head_sha||qa.r.ci_sha!==qa.r.test_head_sha||!ci(qa.r.test_head_sha,config.qa_required_jobs||['HTTP','Chromium']))return stop('QA_SHA_CI_OR_T2_INCOMPLETE','PRODUCT_QA');
   if(qa.r.e4!=='PASS'||qa.r.e5!=='PASS'||!grants.some(g=>g.human_trials_approved===true&&g.candidate_sha===r.head_sha))return stop('E4_E5_REQUIRE_HUMAN_AUTHORIZATION_AND_EVIDENCE','PRODUCT_QA');
   out.state='READY_FOR_HUMAN_GATE';out.suggested_next_action='仅供人工发布门禁核查；不代表已授权上线';return out;
 }

@@ -16,7 +16,7 @@ config.json enabled=false，poll_interval_minutes=10。无定时器/cron/常驻�
 
 只接受闭合[AGENT_REPORT_V1]块（结束[/AGENT_REPORT_V1]），行`key: value`，数组/布尔使用JSON，拒绝重复键。旧自由格式/无结束标签的评论不会猜测解析，需负责人认可的结构化报告；本程序不回写补字段。必需字段：role/status/branch/head_sha/base_sha/completed_milestones（#15 M1-M3，#17 M1-M4）。Planner闭合[PLANNER_DECISION_V1]须提供approved:true、authorized_role（codex/claude/integrator/audit/qa）、issue、branch及base_sha或candidate_sha；正式审计/QA授权须candidate_sha匹配reviewed_sha。集成报告另需parent_shas同时绑定两个冻结开发SHA，唯一非审计集成人获Planner授权；CI必须精确SHA和required_jobs tests/browser/container全部completed/success，步骤不得空缺/失败/跳过。
 
-状态顺序为READY/CLAIMED/RUNNING → READY_FOR_REVIEW →（每包证据CI_VERIFIED）→ INTEGRATION_READY → AUDITING →（证据AUDIT_ACCEPTED）→ PRODUCT_QA → READY_FOR_HUMAN_GATE。后两项要求正式FINAL审计verdict ACCEPT/ACCEPT_WITH_FOLLOWUP与精确集成SHA；QA同SHA、CI同SHA、t2_complete:true；E4/E5均PASS且有Planner human_trials_approved:true及candidate_sha。PLAN_ONLY不能通过。字段可解析不代表事实可信，独立审计/QA仍由人授权的角色提供。P0/P1或unknown_cost报告立即HUMAN_REVIEW_REQUIRED。永远不自动批准生产发布。
+状态顺序为READY/CLAIMED/RUNNING → READY_FOR_REVIEW →（每包证据CI_VERIFIED）→ INTEGRATION_READY → AUDITING →（证据AUDIT_ACCEPTED）→ PRODUCT_QA → READY_FOR_HUMAN_GATE。后两项要求正式FINAL审计verdict ACCEPT/ACCEPT_WITH_FOLLOWUP与精确集成SHA；QA reviewed_sha同集成SHA、t2_complete:true；QA还须提供自身test_head_sha及其远端branch/ref一致，ci_sha同test_head_sha，qa_required_jobs默认HTTP/Chromium都成功；E4/E5均PASS且有Planner human_trials_approved:true及candidate_sha。PLAN_ONLY不能通过。字段可解析不代表事实可信，独立审计/QA仍由人授权的角色提供。P0/P1或unknown_cost报告立即HUMAN_REVIEW_REQUIRED。永远不自动批准生产发布。
 
 ## 模拟lease和重启
 
@@ -30,6 +30,6 @@ config.json enabled=false，poll_interval_minutes=10。无定时器/cron/常驻�
 
 `node --test tests/agent-scheduler/*.test.js`：覆盖T01-T18和额外正例/身份冲突/分页完整性/真实多进程竞争。实际模型/Agent调用0；测试Github响应为注入Mock，手动live采集另行记录。专属workflow仅PR/manual，permissions contents:read，测试不用secret不联网。新workflow不在默认分支时GitHub可能不允许直接dispatch；可建立仅用于CI的draft PR到同一已审计base分支，不合并不改target。CI及最终SHA以Issue #18报告为准。租约不是安全的跨主机分布式锁；特殊ACL/其他OS未验证。没有真实供应商/生产操作。
 
-本地最终测试35/35、0失败/跳过，含T01–T18门禁/故障/正例、唯一集成人、歧义块拒绝及正式审计精确授权约束。另已显式执行一次真实GitHub只读采集：来源完整后因trustedActors默认为空而BLOCKED(NO_AUTHENTICATED_REPORT_15)，actual_dispatch=false/would_dispatch=[]；没有将采集成功当作任务已授权。CI Draft PR #21仅供验证，不合并。手动workflow dispatch首次404（新workflow未在默认分支注册），改用本Issue允许的PR验证路径。最终精确SHA与CI结果见#18交付报告。
+本地最终测试37/37、0失败/跳过，含T01–T18门禁/故障/正例、唯一集成人、歧义块拒绝及正式审计精确授权约束。另已显式执行一次真实GitHub只读采集：来源完整后因trustedActors默认为空而BLOCKED(NO_AUTHENTICATED_REPORT_15)，actual_dispatch=false/would_dispatch=[]；没有将采集成功当作任务已授权。CI Draft PR #21仅供验证，不合并。手动workflow dispatch首次404（新workflow未在默认分支注册），改用本Issue允许的PR验证路径。最终精确SHA与CI结果见#18交付报告。
 
-最终复跑发现并修复EEXIST后锁被移除、lstat返回ENOENT的竞争窗口：竞争者仅返回LOCK_CHANGED_RETRY_READONLY和would_dispatch=false。新增确定性负例，四进程竞争重复5次均只有一个模拟计划。中间失败记录未计入最终通过；最终完整35/35。
+最终复跑发现并修复EEXIST后锁被移除、lstat返回ENOENT的竞争窗口：竞争者仅返回LOCK_CHANGED_RETRY_READONLY和would_dispatch=false。新增确定性负例，四进程竞争重复5次均只有一个模拟计划。中间失败记录未计入最终通过；最终完整37/37。

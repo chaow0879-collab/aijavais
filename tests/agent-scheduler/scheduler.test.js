@@ -16,7 +16,7 @@ const cases=[
  ['T11 E4/E5 plan only',s=>edit(s,4,'e4','PLAN_ONLY')],
  ['T12 P1 independent report',s=>s.issues[2].comments.push(F.comment('audit',{role:'CodeAudit',status:'OPEN',severity:'P1'}))],
  ['T13 incomplete source',s=>s.complete=false],
- ['T17 HTTP success Chromium fail',s=>{s.runs[2].conclusion='failure';s.runs[2].jobs[1].conclusion='failure';}],
+ ['T17 HTTP success Chromium fail',s=>{s.runs[3].conclusion='failure';s.runs[3].jobs[1].conclusion='failure';}],
  ['untrusted report author',s=>s.issues[15].comments[0].user.login='attacker'],
  ['missing milestone',s=>edit(s,15,'completed_milestones',['M1'])],
  ['no integration candidate',s=>s.issues[10].comments=s.issues[10].comments.filter(c=>c.user.login!=='integrator')],
@@ -90,4 +90,10 @@ test('lock removed between EEXIST and stat is a safe non-dispatch result',t=>{
   fs.lstatSync=(file,...args)=>{if(file===store.lock)throw Object.assign(Error(),{code:'ENOENT'});return stat(file,...args);};
   const r=store.claim({issue:15,role:'codex',phase:'ready',sha:F.sha(1)});assert.equal(r.would_dispatch,false);assert.equal(r.actual_dispatch,false);assert.match(r.warning,/LOCK_CHANGED/);
  }finally{fs.openSync=open;fs.lstatSync=stat;}
+});
+test('default disabled JSON keeps the full machine report contract',async()=>{
+ const r=await main([]);for(const key of ['run_id','checked_at','source_refs','observed_shas','evidence','missing_gates','blockers','suggested_next_action','authorized_scope','would_dispatch','actual_dispatch'])assert.ok(Object.hasOwn(r,key));
+});
+test('QA own CI/ref must match test head as well as reviewed integration SHA',()=>{
+ const s=F.positive();s.refs['qa-test']=F.sha(8);assert.notEqual(evaluate(s,F.config).state,'READY_FOR_HUMAN_GATE');
 });
