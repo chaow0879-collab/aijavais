@@ -1,0 +1,101 @@
+name: Codex ProductQA Gap Acceptance
+on:
+  push:
+    branches: [test/codex-v2-productqa-gaps]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: codex-productqa-gaps-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  api-and-crash:
+    name: Independent gap HTTP concurrency and SIGKILL
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify frozen business source and permitted test delta
+        run: |
+          python3 - <<'PY'
+          import subprocess,re,os
+          base='099b9c3e99a5708bd582109d3d05e8fdff4a148c'
+          business='58c52f0084997f669eea763edc7b58e11d3ef4f4'
+          subprocess.run(['git','merge-base','--is-ancestor',business,'HEAD'],check=True)
+          subprocess.run(['git','merge-base','--is-ancestor',base,'HEAD'],check=True)
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          allowed=r'^(tests/productqa-gaps/|product-acceptance/productqa-gaps/|\.github/workflows/productqa-gaps\.yml$)'
+          assert paths and all(re.match(allowed,p) for p in paths),paths
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['GITHUB_SHA']
+          print('BUSINESS_SHA='+business)
+          print('TEST_BASE_SHA='+base)
+          print('TEST_HEAD_SHA='+os.environ['GITHUB_SHA'])
+          print('\n'.join(paths))
+          PY
+      - name: Run independent real HTTP, SQLite, barrier and crash probes
+        env:
+          QA_GAPS_OUT: ${{ runner.temp }}/productqa-gaps-api
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$QA_GAPS_OUT"
+          node tests/productqa-gaps/run.cjs --api 2>&1 | tee "$QA_GAPS_OUT/runner.log"
+      - name: Finalize hashes after runner log closes
+        if: always()
+        env:
+          QA_GAPS_OUT: ${{ runner.temp }}/productqa-gaps-api
+        run: |
+          test -f "$QA_GAPS_OUT/provenance.json"
+          node -e "require('./tests/productqa-gaps/harness.cjs').manifest()"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codex-productqa-gaps-api
+          path: ${{ runner.temp }}/productqa-gaps-api/
+          if-no-files-found: error
+  chromium-gaps:
+    name: Independent Chromium error billing and capacity gaps
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify candidate business source unchanged
+        run: |
+          git merge-base --is-ancestor 099b9c3e99a5708bd582109d3d05e8fdff4a148c HEAD
+          git diff --exit-code 099b9c3e99a5708bd582109d3d05e8fdff4a148c HEAD -- lib/ public/ server.js package.json catalog/ tools/
+      - name: Install isolated pinned Playwright and real Chromium
+        run: |
+          npm install --prefix "$RUNNER_TEMP/productqa-browser-deps" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/productqa-browser-deps/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Run independent Chromium gaps with real unmodified 60-second deadline
+        env:
+          NODE_PATH: ${{ runner.temp }}/productqa-browser-deps/node_modules
+          QA_GAPS_OUT: ${{ runner.temp }}/productqa-gaps-browser
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$QA_GAPS_OUT"
+          node tests/productqa-gaps/run.cjs --browser 2>&1 | tee "$QA_GAPS_OUT/runner.log"
+      - name: Finalize hashes after browser runner log closes
+        if: always()
+        env:
+          QA_GAPS_OUT: ${{ runner.temp }}/productqa-gaps-browser
+        run: |
+          test -f "$QA_GAPS_OUT/provenance.json"
+          node -e "require('./tests/productqa-gaps/harness.cjs').manifest()"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codex-productqa-gaps-browser
+          path: ${{ runner.temp }}/productqa-gaps-browser/
+          if-no-files-found: error
