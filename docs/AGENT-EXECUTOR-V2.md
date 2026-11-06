@@ -56,8 +56,13 @@ workspace.js实现仅受信本地Git源、clean/精确SHA校验、0700临时私�
 
 真实调用源码只允许显式的OPENAI_API_KEY/ANTHROPIC_API_KEY/CODEX_HOME/CLAUDE_CONFIG_DIR凭据字段，不能覆盖PATH/NODE_OPTIONS等执行环境；当前Stub忽略这些字段，未配置任何真实值。真实credentials必须由未来审计后的broker/受保护环境提供，模型工具不能继承公开PR注入的密钥；当前没有Secrets设置或外部令牌申请。
 
-GH-hosted完整示例在tools/agent-executor/templates/hosted-runner.yml.disabled，不位于.github/workflows，复制/默认分支启用均需额外授权。仅允许内部可信事件；workflow_run拒绝fork/PR来源；执行器checkout必须固定AUDITED_EXECUTOR_SHA而不是事件提供的ref，persist-credentials=false。公开PR只跑无secret Stub CI。用户不需购买新服务器或私有控制repo；未来跨host持久原子锁后端/受保护GitHub App写入方案仍需审计实现和许可，本地模拟锁不冒充GitHub-hosted跨job持久锁，任何只靠workflow concurrency的方案不得启用。
+GH-hosted完整示例在tools/agent-executor/templates/hosted-runner.yml.disabled，不位于.github/workflows，复制/默认分支启用均需额外授权。仅允许内部可信事件；workflow_run拒绝fork/PR来源；执行器checkout必须固定AUDITED_EXECUTOR_SHA而不是事件提供的ref，persist-credentials=false。公开PR只跑无secret Stub CI。用户不需购买新服务器或私有控制repo；跨host持久CAS后端的受保护GitHub App写入方案仍需独立审计与实际许可，本地模拟锁不冒充GitHub-hosted跨job持久锁，任何只靠workflow concurrency的方案不得启用。
 
 下一步依赖：Claude #25修完所有独立P1、出准确SHA和独立ACCEPT后，GPT明确准入的固定修复版本；再由授权唯一集成人精确引入本分支，补独立反例并执行端到端Fake/Stub及全量CI。未经该步骤，源码模块可以独立审阅，整包/真实接力不能签READY或上线。
 
-第二十八轮无耦合模块最终本地：V2 85项（Fake/CLI监管Stub/隔离Git/远端CAS协议Fake）+原V1常规37项，共122/122、0失败/跳过。远端CAS协议只在FakeAtomicRemote测试共享状态竞争、重启去重、丢提交ACK不重试；LiveGithubRefTransport禁止构造，真实跨job持久后端尚未实现/验证，不把本地或Fake远端锁当真实GitHub原子锁。V1常规37项仍未覆盖独立审计的3个P1；这些绿不能解除依赖。当前#25远端仍旧6363e8d，无可引入的审计通过SHA。
+第二十八轮无耦合模块最终本地：V2 85项（Fake/CLI监管Stub/隔离Git/远端CAS协议Fake）+原V1常规37项，共122/122、0失败/跳过。远端CAS协议只在FakeAtomicRemote测试共享状态竞争、重启去重、丢提交ACK不重试；LiveGithubRefTransport禁止构造，真实跨job后端的REST源码已补齐，但运行仍OFF且未实测，不把本地或Fake远端锁当真实GitHub原子锁。V1常规37项仍未覆盖独立审计的3个P1；这些绿不能解除依赖。当前#25远端仍旧6363e8d，无可引入的审计通过SHA。
+
+
+第二十八轮末补齐github-ref-backend.js：同一业务repo的专用refs/heads/feat/agent-executor-state-v2，GET当前ref/commit/tree/blob，严格白名单jobs元数据，POST状态blob/tree/单父commit，再PATCH force:false发布。FF sibling竞争只允许一个成功；不自动初始化404，不重试丢ACK写入。RemoteJobs保留key墓碑、owner_hash与单角色互斥、UTC当日假设成本上界；成功也保守计入当日上界，不把未知账单改0。state-ref必须由可信App独占写入、禁止force/delete并独立审核；管理员强制回滚不在安全保证内。LiveGithubRefTransport编译期永久OFF，当前没有调用任何GitHub写API、没有创建state分支；CAS协议仅注入Fake REST验证。未来control-plane token只供后端，不进入Agent子进程环境。
+
+最终无耦合模块本地：V2 91项+冻结V1常规37项=128/128，通过/失败/跳过为128/0/0。专属CI和统一WIP SHA见#22最终报告。V1真实P1仍未修复/验收，不能把这些模拟通过或CI绿当作整包READY_FOR_REVIEW；仍等待#25精确新SHA和独立审计准入。

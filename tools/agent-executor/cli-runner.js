@@ -22,7 +22,7 @@ function verifyReadiness(request,proofs,trustedKeys){
   if(p.payload.manifest_digest!==digest(request)||p.payload.role!==role||p.payload.expires_at<=Date.now())reject('BLOCKED_READINESS');
  }
  if(!/^[a-f0-9]{40}$/.test(request.fixed_gate_sha||'')||request.fixed_gate_sha==='6363e8d10595a566a1ba266cb70017711cc806be'||proofs.v1_audit.payload.verdict!=='ACCEPT'||proofs.v2_audit.payload.verdict!=='ACCEPT'||proofs.operator.payload.approved!==true)reject('BLOCKED_GATE_OR_AUDIT');
- if(request.isolation!=='ephemeral_github_hosted'||request.credentials_verified!==true||request.cli_version_verified!==true||request.native_token_cap_verified!==true||request.native_spend_cap_verified!==true||request.role_scope_verified!==true)reject('BLOCKED_CREDENTIALS_OR_LIMIT_ENFORCEMENT');
+ if(request.isolation!=='ephemeral_github_hosted'||request.credentials_verified!==true||request.cli_version_verified!==true||request.native_token_cap_verified!==true||request.native_spend_cap_verified!==true||request.role_scope_verified!==true||request.state_ref_protection_verified!==true)reject('BLOCKED_CREDENTIALS_OR_LIMIT_ENFORCEMENT');
  return true;
 }
 // Only these two internal call sites can reach process supervision: the fixed
@@ -61,14 +61,20 @@ function runStub(scenario,options={}){
 async function runLive(request,proofs,keys,options){
  if(!LIVE_BUILD_ENABLED)reject('LIVE_BUILD_DISABLED');
  verifyReadiness(request,proofs,keys);
+ const {RemoteJobs,LiveGithubRefTransport}=require('./remote-state');
+ const remote=new RemoteJobs(new LiveGithubRefTransport(options.controlPlaneToken));
+ const claim=await remote.claim(request);if(claim.state!=='CLAIMED')return {state:'BLOCKED',reason:'REMOTE_CLAIM_REQUIRED',actual_dispatch:false};
+ if((await remote.update(claim.key,'RUNNING')).state!=='RUNNING')return {state:'BLOCKED',reason:'REMOTE_RUNNING_ACK_REQUIRED',actual_dispatch:false};
  const workspace=require('./workspace');
  const isolated=workspace.prepare(request.source,request.branch,request.sha);
  try {
   const command=buildCommand(request.kind,request.limits,request.role);
   const result=await supervise(command.executable,command.args,request.context,{...options,cwd:isolated.dir,timeoutMs:request.limits.max_job_runtime,maxTokens:request.limits.max_tokens,maxSpend:request.limits.max_model_spend},'live');
   workspace.verifyChanges(isolated,request.role,request.allowed_paths);
+  const final=['SUCCESS','FAILED','STOPPED'].includes(result.state)?result.state:'UNKNOWN';
+  if((await remote.update(claim.key,final)).state!==final){result.state='HUMAN_REVIEW_REQUIRED';result.reason='REMOTE_SETTLEMENT_UNKNOWN';}
   if(result.state==='SUCCESS')workspace.cleanup(isolated);else result.evidence_retained=true;
   return result;
- }catch{reject('LIVE_EXECUTION_REQUIRES_HUMAN_REVIEW');}
+ }catch{await remote.update(claim.key,'UNKNOWN');reject('LIVE_EXECUTION_REQUIRES_HUMAN_REVIEW');}
 }
 module.exports={redact,buildCommand,verifyReadiness,runStub,runLive};
