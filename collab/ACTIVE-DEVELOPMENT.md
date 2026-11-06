@@ -1,3 +1,14 @@
+# R43 唯一联合候选（覆盖以下历史分叉状态）
+
+- 唯一写入者Codex-Integrator；分支 `integrate/r43-unified-product-autoexec`，复用现有隔离checkout。业务b377d427e6a018dc03fbf01c6ec1db40be156b4c与自动化e891978b46490bccf2c2282df24c8e7b2f4ced42已真实no-ff无冲突合流，merge 64b3df5c75548b0fda3e44d8f1a35a6a8ed25200保留双父链。
+- 两线运行逻辑/安全/费用/交付与原测试保留；仅现有联合CI、源码保全工具和一项SVG浏览器夹具兼容修复。53条来源改动路径按Git blob+mode核验，除显式钉死旧/新blob的SVG测试外其余52条不变。
+- 完整来源、260 V1/383组合/276业务/9 P2/3严格行业/9严格交付、五组浏览器、容器证据及先前失败见docs/UNIFIED-R43.md；最终唯一40位SHA/tree/CI run及job结果见Issue #22 R43 AGENT_REPORT_V1，#23仅索引。
+- 原冻结来源分支不改；Claude R44在feat/claude-v2-universal-intake-r44独立开发，不等待或合入未完成WIP。R43冻结后只在同一SHA做一次并行独立CodeAudit+QA。
+- 产品仍为通用跨行业虚拟AI公司，三行业只是样例。真实Agent启动0、费用NOT_VERIFIED；实际CLI/远端写、10分钟轮询/daemon/webhook和5个ENABLED仍OFF。无生产/服务器/Secrets/main/PR合并；Git协调分支/报告不自动授予模型执行权。
+- 下一步由GPT核统一SHA/CI，独立联合审计/QA后另批真实认证/费用/窗口的有界接力；不把CI/Fake/文件结构通过当真实模型或E4/E5。
+
+---
+
 # 第42轮 #22 当前集成交付（覆盖以下历史状态）
 
 - 唯一写入者Codex，原隔离checkout `/workspace/aijavais-autoexec`，分支 `feat/codex-v2-autoexec-v2-stub`。原WIP `4b8bc6929833a06d1186df1d62a95300398daa45`完整保留，未重写历史。

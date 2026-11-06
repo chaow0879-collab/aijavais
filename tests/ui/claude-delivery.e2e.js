@@ -167,11 +167,18 @@ async function partDelivery(browser) {
         const resp = await page.context().request.get(new URL(href, base).href);
         assert.equal(resp.status(), 200); assert.equal(resp.headers()['content-type'], 'image/svg+xml'); assert.match(resp.headers()['content-disposition'], /attachment/);
         const svgBytes = await resp.body(); fs.writeFileSync(path.join(SHOTS, 'org-chart.svg'), svgBytes);
+        // Render those exact downloaded bytes over local HTTP. Managed Chromium may
+        // prohibit data: navigation; no policy changes, external hosts or CSP that
+        // could hide a broken escaping assertion are used by this fixture.
+        const svgServer = http.createServer((req, res) => { res.writeHead(200, { 'content-type': 'image/svg+xml', 'x-content-type-options': 'nosniff' }); res.end(svgBytes); });
+        await new Promise(resolve => svgServer.listen(0, '127.0.0.1', resolve));
         const svgPage = await page.context().newPage();
-        await svgPage.goto('data:image/svg+xml;base64,' + svgBytes.toString('base64'));
-        assert.equal(await svgPage.locator('g[data-node-id]').count(), 8, 'all 8 org nodes render in Chromium');
-        assert.equal(await svgPage.evaluate(() => window.__xss), undefined, 'escaped name never executes'); assert.equal(await svgPage.locator('img').count(), 0);
-        await svgPage.screenshot({ path: path.join(SHOTS, 'claude-delivery-org-chart-svg.png') }); await svgPage.close();
+        try {
+          await svgPage.goto('http://127.0.0.1:' + svgServer.address().port + '/org-chart.svg');
+          assert.equal(await svgPage.locator('g[data-node-id]').count(), 8, 'all 8 org nodes render in Chromium');
+          assert.equal(await svgPage.evaluate(() => window.__xss), undefined, 'escaped name never executes'); assert.equal(await svgPage.locator('img').count(), 0);
+          await svgPage.screenshot({ path: path.join(SHOTS, 'claude-delivery-org-chart-svg.png') });
+        } finally { await svgPage.close(); svgServer.closeAllConnections(); await new Promise(resolve => svgServer.close(resolve)); }
       }
       // The workspace never claims domain-expert review, and reloading shows the persisted manifest.
       await page.reload(); await page.click('#tab-run'); await page.waitForSelector('#delivery-table');

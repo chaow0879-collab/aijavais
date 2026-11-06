@@ -1,17 +1,18 @@
-name: Integrated acceptance 26 (#17 + #15)
-# Dedicated workflow for the #23 isolated integration branch only. It runs every
+name: Unified R43 product and automation validation
+# Reused #23 workflow: R43 unifies frozen product and automation in one exact SHA.
+# No new execution workflow or scheduler is activated. It runs every
 # existing gate of both packages on one exact SHA: the full suite, #15 semantic
 # guards and strict release Office parsing, #17 delivery checks (also under the
 # release gate), all Chromium suites and the container health check.
 # Local MOCK models only; no secrets, no paid APIs, no deploy, no schedule.
 on:
   push:
-    branches: [feat/aijavais-v2-integrated-acceptance-26]
+    branches: [feat/aijavais-v2-integrated-acceptance-26, integrate/r43-unified-product-autoexec]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: integrated-26-${{ github.ref }}
+  group: integrated-r43-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   tests:
@@ -19,6 +20,15 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Assert exact unified candidate
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -68,6 +78,15 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Assert exact unified candidate
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -119,6 +138,15 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Assert exact unified candidate
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
       - name: Build independent production image
         run: docker build --tag aijavais:ci .
       - name: Verify pdftotext is present in the image
@@ -135,3 +163,50 @@ jobs:
       - name: Remove isolated container
         if: always()
         run: docker rm --force --volumes aij-ci || true
+
+  automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Confirm exact candidate source
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
+      - name: Verify both frozen runtime and test sources are preserved
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node tools/integration/verify-r43-sources.js > "$RUNNER_TEMP/agent-executor-evidence/source-provenance.json"
+          cat "$RUNNER_TEMP/agent-executor-evidence/source-provenance.json"
+      - name: Integrated V1 regression including real process races (serial test files)
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node --test --test-concurrency=1 --test-reporter=tap tests/agent-scheduler/*.test.js | tee "$RUNNER_TEMP/agent-executor-evidence/v1.tap"
+      - name: Fake executor plus integrated V1 regression
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node --test --test-reporter=tap tests/agent-executor/*.test.js tests/agent-scheduler/*.test.js | tee "$RUNNER_TEMP/agent-executor-evidence/tests.tap"
+      - name: Public CLI version metadata only (no model request or authentication read)
+        run: node tools/agent-executor/runner-entry.js --probe > "$RUNNER_TEMP/agent-executor-evidence/environment.json"
+      - name: Default OFF and explicit offline demo only
+        run: |
+          node tools/agent-executor/cli.js
+          node tools/agent-executor/cli.js --fake-demo
+          node tools/agent-executor/runner-entry.js --stub
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-executor-offline-evidence
+          path: ${{ runner.temp }}/agent-executor-evidence
+          if-no-files-found: error
