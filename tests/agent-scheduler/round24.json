@@ -1,0 +1,268 @@
+{
+  "complete": true,
+  "checked_at": 1793931920668,
+  "issues": {
+    "2": {
+      "comments": [
+        {
+          "user": {
+            "login": "audit"
+          },
+          "author_association": "OWNER",
+          "created_at": "2026-11-06T00:00:00Z",
+          "html_url": "https://github.com/fixture/audit",
+          "body": "[AGENT_REPORT_V1]\nrole: CodeAudit\nstatus: PRE_AUDIT_PREPARED\n[/AGENT_REPORT_V1]"
+        }
+      ]
+    },
+    "4": {
+      "comments": [
+        {
+          "user": {
+            "login": "qa"
+          },
+          "author_association": "OWNER",
+          "created_at": "2026-11-06T00:00:00Z",
+          "html_url": "https://github.com/fixture/qa",
+          "body": "[AGENT_REPORT_V1]\nrole: ProductQA\nstatus: BLOCKED\nreviewed_sha: 58c52f0084997f669eea763edc7b58e11d3ef4f4\nhead_sha: c1db3590a3b91a7651d6c276b079b0aea53376c6\nrisk: QA-GAPS-UX-01\n[/AGENT_REPORT_V1]"
+        }
+      ]
+    },
+    "10": {
+      "comments": [
+        {
+          "user": {
+            "login": "planner"
+          },
+          "author_association": "OWNER",
+          "created_at": "2026-11-06T00:00:00Z",
+          "html_url": "https://github.com/fixture/planner",
+          "body": "[PLANNER_DECISION_V1]\nauthorized_role: codex\nissue: 15\nbranch: codex\napproved: true\ncandidate_sha: 1111111111111111111111111111111111111111\n[/PLANNER_DECISION_V1]"
+        },
+        {
+          "user": {
+            "login": "planner"
+          },
+          "author_association": "OWNER",
+          "created_at": "2026-11-06T00:00:00Z",
+          "html_url": "https://github.com/fixture/planner",
+          "body": "[PLANNER_DECISION_V1]\nauthorized_role: claude\nissue: 17\nbranch: claude\napproved: true\ncandidate_sha: 2222222222222222222222222222222222222222\n[/PLANNER_DECISION_V1]"
+        },
+        {
+          "user": {
+            "login": "integrator"
+          },
+          "author_association": "OWNER",
+          "created_at": "2026-11-06T00:00:00Z",
+          "html_url": "https://github.com/fixture/integrator",
+          "body": "[AGENT_REPORT_V1]\nrole: Integrator\nstatus: READY_FOR_REVIEW\nhead_sha: 3333333333333333333333333333333333333333\nbranch: integration\nparent_shas: [\"1111111111111111111111111111111111111111\",\"2222222222222222222222222222222222222222\"]\n[/AGENT_REPORT_V1]"
+        },
+        {
+          "user": {
+            "login": "planner"
+          },
+          "author_association": "OWNER",
+          "created_at": "2026-11-06T00:00:00Z",
+          "html_url": "https://github.com/fixture/planner",
+          "body": "[PLANNER_DECISION_V1]\nauthorized_role: integrator\nissue: 10\nbranch: integration\napproved: true\ncandidate_sha: 3333333333333333333333333333333333333333\n[/PLANNER_DECISION_V1]"
+        },
+        {
+          "user": {
+            "login": "planner"
+          },
+          "author_association": "OWNER",
+          "created_at": "2026-11-06T00:00:00Z",
+          "html_url": "https://github.com/fixture/planner",
+          "body": "[PLANNER_DECISION_V1]\nauthorized_role: audit\nissue: 2\nbranch: integration\napproved: true\ncandidate_sha: 3333333333333333333333333333333333333333\n[/PLANNER_DECISION_V1]"
+        },
+        {
+          "user": {
+            "login": "planner"
+          },
+          "author_association": "OWNER",
+          "created_at": "2026-11-06T00:00:00Z",
+          "html_url": "https://github.com/fixture/planner",
+          "body": "[PLANNER_DECISION_V1]\nauthorized_role: qa\nissue: 4\nbranch: integration\napproved: true\ncandidate_sha: 3333333333333333333333333333333333333333\n[/PLANNER_DECISION_V1]"
+        },
+        {
+          "user": {
+            "login": "planner"
+          },
+          "author_association": "OWNER",
+          "created_at": "2026-11-06T00:00:00Z",
+          "html_url": "https://github.com/fixture/planner",
+          "body": "[PLANNER_DECISION_V1]\nhuman_trials_approved: true\ncandidate_sha: 3333333333333333333333333333333333333333\n[/PLANNER_DECISION_V1]"
+        }
+      ]
+    },
+    "12": {
+      "comments": []
+    },
+    "15": {
+      "comments": []
+    },
+    "16": {
+      "comments": []
+    },
+    "17": {
+      "comments": []
+    },
+    "18": {
+      "comments": []
+    }
+  },
+  "refs": {
+    "codex": "58c52f0084997f669eea763edc7b58e11d3ef4f4",
+    "claude": "58c52f0084997f669eea763edc7b58e11d3ef4f4",
+    "integration": "3333333333333333333333333333333333333333"
+  },
+  "runs": [
+    {
+      "head_sha": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "tests",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "security",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "browser",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "security",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "container",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "security",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "head_sha": "2222222222222222222222222222222222222222",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "tests",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "security",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "browser",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "security",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "container",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "security",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "head_sha": "3333333333333333333333333333333333333333",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "tests",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "security",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "browser",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "security",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "name": "container",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "security",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 42146837614,
+      "head_sha": "c1db3590a3b91a7651d6c276b079b0aea53376c6",
+      "status": "completed",
+      "conclusion": "failure",
+      "jobs": [
+        {
+          "name": "HTTP",
+          "conclusion": "success"
+        },
+        {
+          "name": "Chromium",
+          "conclusion": "failure"
+        }
+      ]
+    }
+  ],
+  "pulls": [],
+  "fixture_provenance": "MOCK as-of round24; not a live report"
+}
