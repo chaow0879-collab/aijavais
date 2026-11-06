@@ -3,7 +3,7 @@ const crypto = require('node:crypto');
 const SHA = /^[a-f0-9]{40}$/;
 const roles = {codex:['Codex-Developer','Codex'],claude:['Claude','Claude Code'],integrator:['Integrator'],audit:['CodeAudit','Codex-CodeAudit'],qa:['ProductQA','Codex-ProductQA']};
 function parse(body, tag) {
-  if(typeof body!=='string') return null;
+  if(typeof body!=='string'||body.split('['+tag+']').length!==2||body.split('[/'+tag+']').length!==2) return null;
   const match=body.match(new RegExp('\\['+tag+'\\]([\\s\\S]*?)\\[/'+tag+'\\]'));
   if(!match) return null;
   const out={};
@@ -31,7 +31,7 @@ function evaluate(snapshot, config, now=Date.now()) {
   const records=(issue,role)=> (snapshot.issues[issue]?.comments||[]).filter(c=>trusted(c,role)).map(c=>({c,r:parse(c.body,'AGENT_REPORT_V1')})).filter(x=>x.r&&roles[role].includes(x.r.role));
   const latest=(issue,role)=> records(issue,role).at(-1);
   const grants=comments.filter(c=>trusted(c,'planner')).map(c=>parse(c.body,'PLANNER_DECISION_V1')).filter(Boolean);
-  const authorized=(r,role,issue)=>grants.some(g=>g.authorized_role===role&&String(g.issue)===String(issue)&&g.branch===r.branch&&g.approved===true&&((SHA.test(g.candidate_sha||'')&&g.candidate_sha===r.head_sha)||(SHA.test(g.base_sha||'')&&g.base_sha===r.base_sha)));
+  const authorized=(r,role,issue)=>grants.some(g=>g.authorized_role===role&&String(g.issue)===String(issue)&&g.branch===r.branch&&g.approved===true&&((SHA.test(g.candidate_sha||'')&&g.candidate_sha===r.head_sha)||(!['audit','qa'].includes(role)&&SHA.test(g.base_sha||'')&&g.base_sha===r.base_sha)));
   const note=(x)=>{out.source_refs.push(x.c.html_url);out.evidence.push({status:x.r.status,role:x.r.role,sha:x.r.head_sha||x.r.reviewed_sha||null});};
   for(const role of Object.keys(roles))for(const issue of Object.keys(snapshot.issues))for(const {r} of records(issue,role)) {
     if((['P0','P1'].includes(r.severity)&&r.status!=='RESOLVED')||r.unknown_cost===true){out.blockers.push('HUMAN_REVIEW_REQUIRED');return stop('OPEN_SECURITY_OR_UNKNOWN_COST');}

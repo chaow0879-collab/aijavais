@@ -75,3 +75,11 @@ test('integration role has exactly one designated identity',()=>{
  const config={...F.config,trustedActors:{...F.config.trustedActors,integrator:['first','second']}};
  assert.equal(evaluate(F.positive(),config).missing_gates[0],'NO_UNIQUE_INTEGRATOR');
 });
+test('ambiguous repeated report blocks rejected',()=>{const body=F.comment('codex',{role:'Codex',status:'READY'}).body;assert.equal(parse(body+'\n'+body,'AGENT_REPORT_V1'),null);});
+test('preparation base-only authorization cannot authorize final audit',()=>{
+ const s=F.positive();edit(s,2,'base_sha',F.BASE);s.issues[2].comments[0].body+='\n';
+ // Add base to report and replace exact candidate grant with preparation-only base.
+ s.issues[2].comments[0].body=s.issues[2].comments[0].body.replace('[/AGENT_REPORT_V1]','base_sha: '+F.BASE+'\n[/AGENT_REPORT_V1]');
+ const g=s.issues[10].comments.find(c=>c.body.includes('authorized_role: audit'));g.body=g.body.replace(/^candidate_sha:.*$/m,'base_sha: '+F.BASE);
+ assert.notEqual(evaluate(s,F.config).state,'READY_FOR_HUMAN_GATE');
+});
