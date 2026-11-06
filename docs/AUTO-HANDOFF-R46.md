@@ -36,7 +36,7 @@ Runner前必须两次CAS成功并回读确认owner/状态/摘要/lease；再次�
 - CLAIMED/DISPATCHING过期后只转UNKNOWN，不抢lease、不删除墓碑、不自动重发；`recover()`可扫描遗留记录，保留全部费用预留。
 - 未知费用保持null及保守reservation；失败/未知/停止不自动改0。当前已知0只来自明确标记的Fake meter，不是供应商账单。每日按上界累计，不依赖乐观退款。
 - BLOCKED/安全否决/FAILED/UNKNOWN不可通过tick自动复活。WAIT_PARENT/WAIT_ROLE表示**尚未派发**的依赖等待，不是失败重试；只有父SUCCEEDED、费用已知且fixed SHA匹配，子任务自身签名及门禁也通过才可首次启动。
-- `halt()`需要独立签名绑定`control_operation=HALT`，事务记录HALTED；普通RECONCILE许可不能用来HALT，HALT许可也不能派工。没有自动unhalt接口。已运行子进程本地Abort即时通知原Stub监督器；跨Runner持久halt的生效延迟受已开始任务硬时限约束，不能声称远端停止可撤销费用。
+- `halt()`需要受信operator签名绑定`control_operation=HALT`，事务记录HALTED；HALT不授予执行权，故来源出现新BLOCKED/REJECT时仍可停机，不要求模型凭据或新的审计执行许可；普通RECONCILE许可不能用来HALT，HALT许可也不能派工。没有自动unhalt接口。已运行子进程本地Abort即时通知原Stub监督器；跨Runner持久halt的生效延迟受已开始任务硬时限约束，不能声称远端停止可撤销费用。
 - 403/429/5xx分类脱敏；只给只读重查退避提示（429=10分钟、5xx=1分钟），本次不循环重试。已可能派发任务不因退避而再起进程。错误code采用固定白名单，错误正文/令牌/任意本地日志路径不落盘。
 
 这是**at-most-once控制**，不是外部模型exactly-once保证：若在DISPATCHING提交后、实际调用前崩溃，会保守UNKNOWN且可能0次执行；宁可人工核对，不重复收费。GitHub强一致依赖受保护FF-only专用ref、唯一可信写身份、禁force/delete；不认证恶意管理员回滚、丢失后端历史或跨内核断电的持久性。不能用临时worker本地文件锁冒充跨Runner账本。
@@ -85,7 +85,7 @@ npm test
 
 ## 验证、历史失败及证据边界
 
-本地控制/契约测试100 total/100 PASS/0 FAIL/0 SKIP；原R43自动化383/383、业务276/276通过。最终准确SHA上的计数、CI run/attempt/所有job、tree/diff见#30交付。当前测试覆盖：
+本地控制/契约测试101 total/101 PASS/0 FAIL/0 SKIP；原R43自动化383/383、业务276/276通过。最终准确SHA上的计数、CI run/attempt/所有job、tree/diff见#30交付。当前测试覆盖：
 
 - HMAC/来源身份、fork/PR/错repo/branch/SHA、最新否决/独立账号/签名/过期/伪造审批/未知字段/泄露防护。
 - event/tick乱序并发、同ID换参数、换task ID绕work键、单角色互斥、已预批子阶段、所有不可逆失败状态。
