@@ -1,0 +1,5 @@
+{
+  "_comment": "Fixed read-only task prompts. An envelope can only reference one of these IDs; it can never carry free prompt text.",
+  "readonly-repo-summary": "Read README.md in the current directory and reply with exactly one short line that summarises what this repository is. Do not create, modify or delete any file and do not run commands.",
+  "readonly-head-check": "Read the file CLAUDE.md if it exists, otherwise README.md, and reply with exactly one line: the first heading you find. Do not create, modify or delete any file and do not run commands."
+}
