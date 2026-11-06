@@ -89,7 +89,8 @@ test('backup fails closed and never overwrites: existing file, symlink, live DB,
   const fake = overrides => ({ ...fs, ...overrides });
   const cases = [
     ['chmod EPERM', { chmodSync: () => { throw Object.assign(new Error('MOCK chmod'), { code: 'EPERM' }); } }, /MOCK chmod/],
-    ['chmod fake success', { chmodSync: () => {} }, e => e.code === 'backup_permissions'],
+    // Force an unsafe postcondition: SQLite may already create 0600 on some hosts.
+    ['chmod fake success', { chmodSync: file => { fs.chmodSync(file, 0o644); } }, e => e.code === 'backup_permissions'],
     ['unsafe staging dir', { mkdtempSync: (...a) => { const d = fs.mkdtempSync(...a); fs.chmodSync(d, 0o755); return d; } }, e => e.code === 'backup_permissions'],
     ['EXDEV link', { linkSync: () => { throw Object.assign(new Error('MOCK cross-device'), { code: 'EXDEV' }); } }, /cross-device/],
   ];

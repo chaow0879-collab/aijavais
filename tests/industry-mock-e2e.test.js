@@ -197,6 +197,7 @@ for (const fx of INDUSTRIES) test(`industry MOCK E2E [${fx.industry}]: draft→a
   }
   const parsed = independentParse(out, files);
   evidence.parse = { status: parsed.status, reason: parsed.reason };
+  require('../tools/p2/office-gate').requireParsed(parsed);
   if (parsed.status === 'PARSED') {
     const flat = x => JSON.stringify(x);
     for (const needle of fx.deliverableChecks.docx) assert.ok(parsed.content.docx.some(p => p.includes(needle)), 'docx missing ' + needle);
@@ -210,8 +211,8 @@ for (const fx of INDUSTRIES) test(`industry MOCK E2E [${fx.industry}]: draft→a
   const ledger = (await f.app.call('GET', '/api/v2/usage/system')).json.usage.filter(u => u.kind === 'intake_draft');
   assert.ok(ledger.every(u => u.status !== 'reserved' && u.cost === 0), 'local draft calls settled at 0');
   assert.equal(ledger.length, fx.abnormal.length + 3, 'abnormal + malicious + cancelled + final, nothing duplicated');
-  evidence.hashes = hashes; evidence.ledgerRows = ledger.length; evidence.result = 'PASS';
+  evidence.hashes = hashes; evidence.ledgerRows = ledger.length; evidence.result = parsed.status === 'PARSED' ? 'PASS' : 'INCOMPLETE_NOT_RUN';
   write(out, 'summary.json', evidence);
   t.diagnostic('evidence: ' + path.join(out, 'summary.json'));
-  console.log('INDUSTRY E2E PASS ' + fx.id + ' parse=' + parsed.status + ' out=' + out);
+  console.log('INDUSTRY E2E ' + evidence.result + ' ' + fx.id + ' parse=' + parsed.status + ' out=' + out);
 });
