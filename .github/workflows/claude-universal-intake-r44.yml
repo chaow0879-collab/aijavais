@@ -1,0 +1,65 @@
+name: Claude universal intake (#28 R44)
+# Dedicated workflow for feat/claude-v2-universal-intake-r44 only. Local server, no model,
+# no secrets, no paid APIs, no schedule. The shared ci.yml is not edited by this package.
+on:
+  push:
+    branches: [feat/claude-v2-universal-intake-r44]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: claude-universal-r44-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Record exact SHA
+        run: echo "tested_sha=$GITHUB_SHA"
+      - name: Install poppler and LibreOffice (existing suite needs them)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Full existing suite (npm test)
+        run: npm test
+      - name: R44 universal intake (offline engine + real server HTTP)
+        if: success() || failure()
+        run: node --test tests/claude-universal-intake.test.js
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install isolated, pinned browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/aij-ui-deps" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/aij-ui-deps/node_modules/.bin/playwright" install --with-deps chromium
+          mkdir -p "$RUNNER_TEMP/aij-ui-shots"
+      - name: Existing browser suites (admin, workspace, intake, industry)
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:ui && npm run test:workspace && npm run test:intake && npm run test:industry
+      - name: R44 universal intake Chromium E2E (three unseen industries)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: node tests/ui/claude-universal-intake.e2e.js
+      - name: Hash evidence
+        if: always()
+        run: cd "$RUNNER_TEMP/aij-ui-shots" && sha256sum claude-universal-* 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-universal-intake-browser
+          path: ${{ runner.temp }}/aij-ui-shots
+          if-no-files-found: ignore

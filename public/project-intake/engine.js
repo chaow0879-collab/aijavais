@@ -1,8 +1,8 @@
 /* AIJAVAIS Project Intake Engine v1.0 | MIT-style internal module; no API calls or side effects */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.AIJProjectIntake = factory();
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./universal-team.js'));
+  else root.AIJProjectIntake = factory(root.AIJUniversalTeam);
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (Universal) {
   'use strict';
   const RISK = ['low','medium','high'];
   const RIGOR = ['lean','normal','strict'];
@@ -52,11 +52,19 @@
         score += k.length > 4 ? 5 : 3;
       }
       if (q && t.summary && q.includes(words(t.summary).toLowerCase())) score += 5;
-      return { templateId: t.id, name: t.name, summary: t.summary, score, reason: score ? '任务描述与该专业领域关键词匹配' : '可手动选择该团队类型' };
+      // R44: a sample template is never silently presented as "your industry". A single short keyword
+      // hit is a weak match; no hit at all is not a match.
+      const strength = score >= 5 ? 'strong' : score > 0 ? 'weak' : 'none';
+      return { templateId: t.id, name: t.name, summary: t.summary, score, matched: score > 0, strength,
+        reason: strength === 'strong' ? '任务描述与该模板的多个关键词匹配' : strength === 'weak' ? '仅命中个别短关键词，可能并非你的领域，请确认' : '未匹配：仅作为参考样例，不代表适合你的领域' };
     }).sort((a,b) => b.score - a.score || a.name.localeCompare(b.name, 'zh-CN'));
     return items.slice(0, Math.max(1, Math.min(30, Number(limit) || 5)));
   }
   function suggestDefaults(template, description) {
+    if (template && template.universal) {
+      const u = template.universal;
+      return { risk: u.suggestedRisk, rigor: u.suggestedRigor, reason: u.riskDomains.length ? '你的描述涉及高风险领域，建议严格复核并安排人工专家审查' : u.suggestedRisk === 'medium' ? '成果将对外或正式使用，建议独立复核' : '未发现高风险或对外使用的描述，可采用精简流程（可随时调高）' };
+    }
     const q = words(description);
     const intrinsicallySensitive = ['engineering-design','contract-review','financial-budget'].includes(template.id);
     const high = intrinsicallySensitive || /人身安全|生命|事故|结构安全|重大投资|法定|投产|对外正式|高风险|强制认证|监管|生产环境/.test(q);
@@ -103,9 +111,66 @@
     }
     return map;
   }
+  const UNIVERSAL_ID = 'universal';
+  const isObj = x => !!x && typeof x === 'object' && !Array.isArray(x);
+  const ROLE_EDIT = [['name', 50, '名称'], ['duty', 400, '职责'], ['standard', 400, '验收标准'], ['boundary', 300, '权责边界']];
+  const STEP_EDIT = [['title', 80, '步骤名称'], ['deliverable', 200, '交付成果'], ['quality', 400, '检查标准']];
+  // R44: ordinary users may rewrite any role's name/duty/boundary/standard and any step's
+  // title/deliverable/check. Edits are plain bounded text keyed by existing IDs only.
+  function applyEdits(t, input, errors) {
+    const edit = (items, edits, fields, kind) => {
+      if (edits == null) return items;
+      if (!isObj(edits) || Object.keys(edits).length > 40) { errors.push(kind + '编辑格式不正确'); return items; }
+      for (const id of Object.keys(edits)) if (!items.some(x => x.id === id)) errors.push('编辑了不存在的' + kind + ' ' + id.slice(0, 40));
+      return items.map(item => {
+        if (!Object.hasOwn(edits, item.id)) return item;
+        const e = edits[item.id];
+        if (!isObj(e)) { errors.push(kind + '编辑格式不正确'); return item; }
+        const out = { ...item };
+        for (const [key, max, label] of fields) {
+          if (e[key] === undefined) continue;
+          if (typeof e[key] !== 'string') { errors.push(kind + '的' + label + '必须是文字'); continue; }
+          const v = words(e[key]).slice(0, max);
+          if (!v && key !== 'boundary') errors.push(kind + '“' + item.id + '”的' + label + '不能为空');
+          else out[key] = v;
+        }
+        return out;
+      });
+    };
+    return { ...t, roles: edit(t.roles, input.roleEdits, ROLE_EDIT, '岗位'), steps: edit(t.steps, input.stepEdits, STEP_EDIT, '步骤') };
+  }
+  // Re-editable draft file: user input only (no model connections, credentials or plan results).
+  const DRAFT_FORMAT = 'aijavais-intake-draft';
+  const DRAFT_TEXT = { description: 20000, context: 4000, audience: 2000, deliveryExpectation: 2000, referenceNotes: 4000 };
+  function exportDraft(input) {
+    input = input || {};
+    const out = { format: DRAFT_FORMAT, version: 1, note: '可重新导入继续编辑的立项草案；不含模型连接、凭据或执行结果', input: {} };
+    for (const k of ['templateId', ...Object.keys(DRAFT_TEXT), 'answers', 'selectedRoleIds', 'selectedStepIds', 'customRoles', 'customDeliverables', 'roleEdits', 'stepEdits', 'universal']) if (input[k] !== undefined && input[k] !== null) out.input[k] = input[k];
+    out.input.budgetMode = input.budgetMode === 'free_only' ? 'free_only' : 'user_review';
+    return out;
+  }
+  function importDraft(catalog, data) {
+    const errors = [];
+    if (!isObj(data) || data.format !== DRAFT_FORMAT || data.version !== 1 || !isObj(data.input)) return { ok: false, errors: ['不是 AIJAVAIS 立项草案文件（format/version 不符）'] };
+    const src = data.input, input = {};
+    const tid = typeof src.templateId === 'string' ? src.templateId : '';
+    if (tid !== UNIVERSAL_ID && !find(catalog, tid)) errors.push('草案中的项目类型不存在：' + tid.slice(0, 40));
+    input.templateId = tid;
+    for (const [k, max] of Object.entries(DRAFT_TEXT)) { if (src[k] !== undefined && typeof src[k] !== 'string') errors.push(k + ' 必须是文字'); input[k] = typeof src[k] === 'string' ? src[k].slice(0, max) : ''; }
+    const strArray = (k, max) => { if (src[k] == null) return null; if (!Array.isArray(src[k]) || src[k].length > max || !src[k].every(x => typeof x === 'string' && x.length <= 64)) { errors.push(k + ' 格式不正确'); return null; } return [...new Set(src[k])]; };
+    input.selectedRoleIds = strArray('selectedRoleIds', 50); input.selectedStepIds = strArray('selectedStepIds', 80);
+    if (src.answers != null) { if (!isObj(src.answers) || Object.keys(src.answers).length > 20 || !Object.values(src.answers).every(v => typeof v === 'string' && v.length <= 64)) errors.push('answers 格式不正确'); else input.answers = { ...src.answers }; }
+    if (src.customRoles != null) { if (!Array.isArray(src.customRoles) || src.customRoles.length > 12 || !src.customRoles.every(isObj)) errors.push('customRoles 格式不正确'); else input.customRoles = src.customRoles.map(r => ({ id: String(r.id || '').slice(0, 32), name: String(r.name || '').slice(0, 50), duty: String(r.duty || '').slice(0, 400), standard: String(r.standard || '').slice(0, 400), capabilities: [], required: false })); }
+    for (const k of ['customDeliverables', 'roleEdits', 'stepEdits']) if (src[k] != null) { if (!isObj(src[k]) || Object.keys(src[k]).length > 40) errors.push(k + ' 格式不正确'); else input[k] = JSON.parse(JSON.stringify(src[k])); }
+    if (src.universal != null) { if (!isObj(src.universal)) errors.push('universal 格式不正确'); else input.universal = Universal.sanitize(src.universal); }
+    input.budgetMode = src.budgetMode === 'free_only' ? 'free_only' : 'user_review';
+    if (errors.length) return { ok: false, errors };
+    const check = buildPlan(catalog, input);
+    return check.ok ? { ok: true, input, errors: [], plan: check.plan } : { ok: false, errors: check.errors };
+  }
   function buildPlan(catalog, input) {
     input = input || {};
-    const base = find(catalog, input.templateId);
+    const base = input.templateId === UNIVERSAL_ID ? Universal.buildTemplate(input) : find(catalog, input.templateId);
     if (!base) return { ok: false, errors: ['请先选择有效的项目类型'], warnings: [] };
     const customRoles = (Array.isArray(input.customRoles) ? input.customRoles : []).slice(0, 12).map(r => ({
       id: words(r.id).slice(0, 32), name: words(r.name).slice(0, 50), duty: words(r.duty).slice(0, 400),
@@ -117,7 +182,8 @@
       deliverable: words((input.customDeliverables || {})[r.id]) || '形成可审核的工作成果',
       quality: r.standard, tools: []
     }));
-    const t = { ...base, roles: [...base.roles, ...customRoles], steps: [...base.steps, ...customSteps] };
+    const editErrors = [];
+    const t = applyEdits({ ...base, roles: [...base.roles, ...customRoles], steps: [...base.steps, ...customSteps] }, input, editErrors);
     const description = words(input.description);
     if (description.length < 8) return { ok: false, errors: ['请用至少 8 个字描述想解决的问题或期望成果'], warnings: [] };
     if (description.length > 20000) return { ok: false, errors: ['需求描述不能超过 20000 字符，请通过文件附件传递长材料'], warnings: [] };
@@ -131,7 +197,7 @@
     const roleSuggestion = recommendRoles(t, { risk, rigor });
     const roleIds = input.selectedRoleIds == null ? roleSuggestion.selectedRoleIds : uniq(input.selectedRoleIds.map(String));
     const stepIds = input.selectedStepIds == null ? null : uniq(input.selectedStepIds.map(String));
-    const errors = [...quant.errors];
+    const errors = [...quant.errors, ...editErrors];
     if (Array.isArray(input.customRoles) && input.customRoles.length > 12) errors.push('自定义岗位最多 12 个');
     for (const r of customRoles) if (!/^custom-[a-z0-9-]{1,25}$/.test(r.id) || !r.name || !r.duty || !r.standard) errors.push('自定义岗位 ID、名称、职责或验收标准不完整');
     if (new Set(t.roles.map(r => r.id)).size !== t.roles.length) errors.push('岗位 ID 重复');
@@ -140,7 +206,7 @@
     if (!roleIds.length) errors.push('至少选择一个执行岗位');
     for (const id of roleIds) if (!t.roles.some(r => r.id === id)) errors.push('未知岗位 ' + id);
     if (stepIds) for (const id of stepIds) if (!t.steps.some(s => s.id === id)) errors.push('未知流程步骤 ' + id);
-    const roles = t.roles.filter(r => roleIds.includes(r.id)).map(r => ({ ...r, selected: true, modelConnectionId: (input.assignments || {})[r.id] || null }));
+    const roles = t.roles.filter(r => roleIds.includes(r.id)).map(r => ({ ...r, ...(r.boundary ? { duty: r.duty + '（边界：' + r.boundary + '）' } : {}), selected: true, modelConnectionId: (input.assignments || {})[r.id] || null }));
     for (const r of t.roles) if (r.required && !roleIds.includes(r.id)) warnings.push('已移除核心岗位“' + r.name + '”，需重新安排其工作，否则可能无法完整交付');
     const steps = t.steps.filter(s => (!stepIds || stepIds.includes(s.id)) && roleIds.includes(s.roleId)).map(s => ({ ...s, roleName: (t.roles.find(r => r.id === s.roleId) || {}).name || '' }));
     const removed = t.steps.filter(s => (!stepIds || stepIds.includes(s.id)) && !roleIds.includes(s.roleId));
@@ -153,6 +219,11 @@
     const missingTools = requiredTools.filter(id => !(toolMap.has(id) && toolMap.get(id).available && toolMap.get(id).verified));
     if (missingTools.length) warnings.push('尚未验证所需工具：' + missingTools.join('、') + '。工具未就绪时不能宣称已真实完成文件或工程交付');
     if (t.disclaimer) warnings.push(t.disclaimer);
+    const universal = t.universal || null;
+    if (universal) {
+      for (const c of universal.clarifications) warnings.push((c.blocking ? '需要澄清：' : '建议补充：') + c.question);
+      for (const h of universal.humanCheckpoints) warnings.push('人工专家审查：' + h.requirement);
+    }
     const assignments = roles.filter(r => r.modelConnectionId);
     const connectionMap = new Map((Array.isArray(input.availableModels) ? input.availableModels : []).map(c => [c.connectionId,c]));
     const freeOnly = input.budgetMode === 'free_only';
@@ -193,7 +264,9 @@
       standards: roles.map(r => ({ roleId: r.id, roleName: r.name, duty: r.duty, acceptanceStandard: r.standard })),
       customizedRoles: customRoles,
       warnings,
-      readyForAutomatedExecution: !!steps.length && !!roles.length && !missingTools.length && !modelIssues.length && assignments.length === roles.length,
+      readyForAutomatedExecution: !!steps.length && !!roles.length && !missingTools.length && !modelIssues.length && assignments.length === roles.length && !(universal && universal.status === 'needs_clarification'),
+      generation: universal ? 'offline_rules' : 'catalog_template',
+      universal,
       state: 'draft',
       note: '此计划是立项指导，不代表已执行模型调用或工具调用。'
     };
@@ -231,10 +304,16 @@
     out.push(sec('岗位职责边界', plan.roles.map(r => r.name + '：' + r.duty + '；验收标准：' + r.standard)));
     out.push(sec('建议工作流程', plan.steps.map((s,i) => (i+1) + '. ' + s.title + '（' + s.roleName + '）；成果：' + s.deliverable + '；检查：' + s.quality)));
     out.push(sec('工具需求', ['需要：' + (plan.requiredTools.join('、') || '不要求额外工具'), '未验证可用：' + (plan.missingTools.join('、') || '无')]));
+    if (plan.universal) {
+      const u = plan.universal;
+      out.push(sec('交付检查项（均未验证）', u.deliveryChecks.map(c => '- ' + c.text + (c.source === 'user' ? '（用户标准）' : ''))));
+      if (u.humanCheckpoints.length) out.push(sec('人工专家审查', u.humanCheckpoints.map(h => '- ' + h.requirement)));
+      if (u.clarifications.length) out.push(sec('待澄清', u.clarifications.map(c => '- ' + c.question)));
+    }
     if (plan.referenceNotes) out.push(sec('资料提示', [plan.referenceNotes]));
     if (plan.warnings.length) out.push(sec('待确认事项', plan.warnings));
     out.push(sec('执行纪律', ['先检查权限和工具是否具备。', '缺材料时只问真正阻碍任务完成的关键问题。', '各岗位按交付标准提供可核查证据。', '任务需要文件时必须交付真实文件，不能以文字声称生成。', '高风险结论需要符合专业复核和人工确认要求。']));
     return out.join('\n');
   }
-  return { validateCatalog, matchTemplates, suggestDefaults, recommendRoles, buildPlan, rankModels, formatPrompt };
+  return { validateCatalog, matchTemplates, suggestDefaults, recommendRoles, buildPlan, rankModels, formatPrompt, exportDraft, importDraft, UNIVERSAL_ID, Universal };
 });
