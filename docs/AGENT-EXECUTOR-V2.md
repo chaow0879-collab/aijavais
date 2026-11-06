@@ -1,3 +1,5 @@
+> **WIP / BLOCKED：停止开发，未交付READY_FOR_REVIEW。** 独立CodeAudit已在#18冻结基线6363e8d复现P1 AUD-26-SCH-01（#2评论6675651482）：最终审计/QA的BLOCKED/REJECTED/缺失status仍可能被残留ACCEPT/PASS放行。本V2依赖该门禁，按#22授权立即停止受影响开发；未修改V1、未启动CI/真实Agent/定时器。Fake实现及95项本地开发测试仅作保留检查点，不是安全验收。等待GPT决定经修正的准确baseSHA及恢复授权。
+
 # 自动执行器V2：离线Fake/Stub开发包（#22）
 
 ## ADR-22-01：不接入真实执行器
