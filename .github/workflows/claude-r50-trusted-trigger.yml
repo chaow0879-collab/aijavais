@@ -1,0 +1,45 @@
+name: Claude R50 trusted trigger (#33)
+# Dedicated validation for feat/claude-r50-trusted-trigger-signing only. Push/manual on the
+# development branch; never scheduled, never triggered by issues/PRs/webhooks, no secrets,
+# no OIDC token request, no model, no GitHub state write. Synthetic keys live in tests only.
+on:
+  push:
+    branches: [feat/claude-r50-trusted-trigger-signing]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: claude-r50-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Record exact SHA
+        run: echo "tested_sha=$GITHUB_SHA base=fcf52ed855dfccacb16cef632d0e3eb202510718 runner_environment=$RUNNER_ENVIRONMENT"
+      - name: R50 intake / OIDC / broker / E3 joint drill
+        env:
+          R50_OUT: ${{ runner.temp }}/r50
+        run: node --test --test-concurrency=1 tests/trusted-trigger-r50/*.test.js
+      - name: R49 integration and R45/R46 suites unaffected (frozen code, unchanged)
+        run: |
+          git diff --quiet fcf52ed855dfccacb16cef632d0e3eb202510718 HEAD -- tools/agent-pilot-r45 tools/auto-handoff-r46 tools/first-handoff-r49 tools/agent-executor tools/agent-scheduler tools/agent-interop-r48
+          node --test --test-concurrency=1 tests/first-handoff-r49/*.test.js tests/agent-pilot-r45/*.test.js tests/auto-handoff-r46/control.test.js tests/auto-handoff-r46/github.test.js tests/auto-handoff-r46/pilot-contract.test.js
+      - name: Readiness stays BLOCKED (no identity provider, signer, schedule or approval)
+        run: |
+          node tools/trusted-trigger-r50/cli.js readiness | tee "$RUNNER_TEMP/r50/readiness.json"
+          node -e "const r=require(process.env.RUNNER_TEMP+'/r50/readiness.json');if(r.state!=='BLOCKED'||r.actual_agent_launches!==0)process.exit(1)"
+      - name: Hash evidence
+        if: always()
+        run: cd "$RUNNER_TEMP/r50" && sha256sum *.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-r50-trusted-trigger-evidence
+          path: ${{ runner.temp }}/r50
+          if-no-files-found: ignore

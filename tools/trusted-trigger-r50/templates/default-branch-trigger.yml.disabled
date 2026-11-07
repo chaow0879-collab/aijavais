@@ -1,0 +1,33 @@
+# DISABLED SAMPLE — not loaded by GitHub (wrong directory and extension). Activating it needs:
+# owner GO, audited merge to the default branch, rename to .github/workflows/r50-trusted-trigger.yml,
+# a protected Environment holding the model credential, and the R50/R51 independent gates.
+name: R50 trusted trigger (default branch only)
+on:
+  schedule:
+    - cron: "*/10 * * * *"     # 10-minute fallback; GitHub may delay schedules under load
+  workflow_run:
+    workflows: ["Codex R51 integration"]
+    types: [completed]
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  id-token: write              # OIDC caller identity for the broker; no write to the repo
+concurrency:
+  group: r50-trusted-trigger   # one reconcile at a time; the R46 CAS ledger is still the authority
+  cancel-in-progress: false
+jobs:
+  reconcile:
+    if: github.ref == 'refs/heads/main' && github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    environment: aijavais-pilot  # required reviewers; holds the model credential, nothing else
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: "24" }
+      - name: Readiness (must be all-clear before any reconcile)
+        run: node tools/trusted-trigger-r50/cli.js readiness
