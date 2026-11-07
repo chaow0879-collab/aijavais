@@ -1,0 +1,86 @@
+name: Claude R52 universal workbench (#35)
+# Dedicated workflow for feat/claude-r52-universal-halo-workbench only. Local server + local MOCK
+# model, no secrets, no paid APIs, no schedule, no deployment. Shared ci.yml is not edited.
+on:
+  push:
+    branches: [feat/claude-r52-universal-halo-workbench]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: claude-r52-workbench-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Record exact SHA
+        run: echo "tested_sha=$GITHUB_SHA"
+      - name: Install poppler and LibreOffice (existing suite needs them)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Scope — only Claude-owned paths differ from the R44 base
+        run: |
+          git diff --name-only 4c198c430806836bb289cd5da57b7fad44c7b0dc HEAD | tee "$RUNNER_TEMP/changed.txt"
+          if grep -vE '^(public/project-intake\.html|public/project-intake/|public/haloflux-workbench-r52/|tests/claude-universal-intake\.test\.js|tests/ui/claude-universal-intake\.e2e\.js|tests/haloflux-workbench-r52/|docs/UNIVERSAL-WORKBENCH-R52\.md|\.github/workflows/claude-r52-workbench\.yml)' "$RUNNER_TEMP/changed.txt"; then echo "R52 wrote outside its owned paths"; exit 1; fi
+      - name: Full existing suite (npm test)
+        run: npm test
+      - name: R44 universal intake (regression)
+        if: success() || failure()
+        run: node --test tests/claude-universal-intake.test.js tests/project-intake.test.js
+      - name: R52 workbench (pure E2 + real server E3_FAKE)
+        if: success() || failure()
+        env:
+          R52_OUT: ${{ runner.temp }}/r52-out
+        run: mkdir -p "$R52_OUT" && node --test --test-concurrency=1 tests/haloflux-workbench-r52/workbench.test.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-r52-node-evidence
+          path: ${{ runner.temp }}/r52-out
+          if-no-files-found: ignore
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0
+      - name: Install isolated, pinned browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/aij-ui-deps" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/aij-ui-deps/node_modules/.bin/playwright" install --with-deps chromium
+          mkdir -p "$RUNNER_TEMP/aij-ui-shots"
+      - name: Existing browser suites (admin, workspace, intake, industry, R44)
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:ui && npm run test:workspace && npm run test:intake && npm run test:industry && node tests/ui/claude-universal-intake.e2e.js
+      - name: R52 workbench Chromium E2E (blind tasks, HALOFLUX events, live MOCK run, acceptance)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: node tests/haloflux-workbench-r52/workbench.e2e.js
+      - name: Hash evidence
+        if: always()
+        run: cd "$RUNNER_TEMP/aij-ui-shots" && sha256sum r52-* fixture-final.svg r53-bundle-* 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-r52-browser-evidence
+          path: ${{ runner.temp }}/aij-ui-shots
+          if-no-files-found: ignore

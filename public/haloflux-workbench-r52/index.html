@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>AIJAVAIS｜AI 虚拟公司工作台</title>
+<style>
+:root{--bg:#08111f;--card:#0f1d2f;--card2:#0b1728;--line:#29445b;--text:#e9f7ff;--sub:#a7bdca;--accent:#55e7ff;--accent2:#9b88fa;--good:#8de3c1;--warn:#ffd298;--bad:#ff9a9a;--focus:#ffe066;
+  font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--text);background:var(--bg)}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 40% -20%,#173a60 0%,transparent 55%),var(--bg);min-height:100vh;font-size:15px;line-height:1.55}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+header{position:sticky;top:0;z-index:5;background:rgba(8,17,31,.92);border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}
+.top{max-width:1400px;margin:auto;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.brand{font-weight:800;letter-spacing:.12em}.brand span{color:var(--accent)}
+.nav a{margin-left:14px;font-size:13px}
+main{max-width:1400px;margin:auto;padding:20px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px}
+section.card{background:linear-gradient(150deg,rgba(16,32,52,.95),rgba(11,22,39,.97));border:1px solid var(--line);border-radius:16px;padding:18px 18px 20px;min-width:0}
+h1{font-size:22px;margin:0 0 6px}h2{font-size:17px;margin:0 0 10px}h3{font-size:15px;margin:14px 0 6px}
+.sub{color:var(--sub);font-size:13px}
+textarea,input[type=text],input[type=number],select{width:100%;background:var(--card2);border:1px solid #35546d;border-radius:10px;padding:10px;color:var(--text);font:inherit}
+textarea#goal{min-height:96px;font-size:17px}
+button{background:#14304a;color:var(--text);border:1px solid #3d6684;border-radius:10px;padding:9px 14px;font:inherit;cursor:pointer;min-height:40px}
+button.primary{background:linear-gradient(90deg,#1d6f8f,#4b3f9c);border-color:#6fdcff;font-weight:700}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.small{padding:4px 10px;min-height:34px;font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+details{margin-top:10px}summary{cursor:pointer;color:var(--sub)}
+label.lbl{display:block;font-size:12px;color:var(--sub);margin:8px 0 3px}
+.badge{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;border:1px solid var(--line);background:#11263b;margin:2px 4px 2px 0}
+.badge.sim{border-color:var(--warn);color:var(--warn)}.badge.block{border-color:var(--bad);color:var(--bad)}.badge.warn{border-color:var(--warn);color:var(--warn)}.badge.info{color:var(--sub)}.badge.good{border-color:var(--good);color:var(--good)}
+.list{list-style:none;margin:0;padding:0}
+.list li{border:1px solid #233b52;border-radius:12px;padding:10px 12px;margin:8px 0;background:rgba(9,20,35,.6)}
+.role-head{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.role-head strong{font-size:15px}
+.mstatus{font-size:12px}
+.mstatus[data-status=ready]{color:var(--good)}.mstatus[data-status=none],.mstatus[data-status=unavailable]{color:var(--bad)}.mstatus[data-status=paid_needs_approval],.mstatus[data-status=capability_gap]{color:var(--warn)}
+.step{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:start}
+.step .num{font-weight:800;color:var(--accent);min-width:26px;padding-top:8px}
+.tool{font-size:12px}.tool[data-status=available]{color:var(--good)}.tool:not([data-status=available]){color:var(--warn)}
+.cannot li{border-color:#5c4a2a}
+#feedback{min-height:22px;font-size:13px;color:var(--warn)}
+#feedback[data-kind=ok]{color:var(--good)}
+.halo-wrap{position:relative;max-width:560px;margin:0 auto}
+svg.halo{width:100%;height:auto;display:block}
+.halo .ring{fill:none;stroke-width:6;stroke-dasharray:4 9;stroke:#2f5a78;transform-origin:50% 50%}
+.halo .ring-b{stroke-width:2;stroke-dasharray:24 14;stroke:#3c3a7a}
+.halo.live .ring{stroke:#55e7ff;animation:spin 14s linear infinite}
+.halo.live .ring-b{stroke:#9b88fa;animation:spin 22s linear infinite reverse}
+.halo .beam{stroke:#1d3247;stroke-width:1.5}
+.halo .beam-working,.halo .beam-started,.halo .beam-review,.halo .beam-rework{stroke:#55e7ff;stroke-width:2.5}
+.halo .beam-blocked,.halo .beam-failed{stroke:#ff9a9a}
+.halo .edge{stroke:#9b88fa;stroke-width:2;stroke-dasharray:6 5}
+.halo .particle{fill:#e9f7ff}
+.halo .node-disc{fill:#0d2033;stroke:#35546d;stroke-width:2}
+.halo .node-working .node-disc,.halo .node-started .node-disc{fill:#0f3a52;stroke:#55e7ff}
+.halo .node-review .node-disc{stroke:#9b88fa;fill:#221d4a}
+.halo .node-rework .node-disc,.halo .node-handoff .node-disc{stroke:#ffd298}
+.halo .node-completed .node-disc{stroke:#8de3c1}
+.halo .node-blocked .node-disc,.halo .node-failed .node-disc{stroke:#ff9a9a;fill:#3a1820}
+.halo .node-cancelled .node-disc,.halo .node-unknown .node-disc{stroke:#8a8f99;stroke-dasharray:4 3}
+.halo.live .node-working .node-disc{animation:pulse 1.4s ease-in-out infinite}
+.halo .node-label{fill:#cfe7f5;font-size:12px}.halo .node-state{fill:#e9f7ff;font-size:10px}
+.halo .core-mode{fill:#55e7ff;font-size:16px;font-weight:800;letter-spacing:.1em}.halo .core-phase{fill:#cfe7f5;font-size:12px}
+.halo.stale{opacity:.6}
+.halo[data-mode=IDLE] .core-mode{fill:#6b7f8f}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{50%{stroke-width:5}}
+@media (prefers-reduced-motion:reduce){.halo *{animation:none!important}}
+.halo.static *{animation:none!important}
+.banner{border:1px solid var(--warn);color:var(--warn);border-radius:10px;padding:8px 10px;margin:8px 0;font-size:13px}
+.banner.bad{border-color:var(--bad);color:var(--bad)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border-bottom:1px solid #233b52;padding:5px 6px;text-align:left;vertical-align:top;word-break:break-all}
+.scroll{max-height:260px;overflow:auto}
+.cost b{font-size:18px}
+.files li{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.sr{position:absolute;left:-9999px}
+#side{position:sticky;top:64px;align-self:start;max-height:calc(100vh - 72px);overflow:auto;display:grid;gap:20px}
+@media (max-width:980px){#side{position:static;max-height:none;overflow:visible}main{grid-template-columns:1fr;padding:12px}.grid2{grid-template-columns:1fr}.nav a{margin-left:8px}}
+</style>
+</head>
+<body>
+<header><div class="top"><div class="brand">AIJAVAIS <span>AI 虚拟公司</span> · 工作台</div>
+  <div class="row"><span id="mode-badge" class="badge">IDLE</span><span id="backend-badge" class="badge info">后端：检测中</span>
+  <nav class="nav"><a href="/workspace.html">项目工作台</a><a href="/project-intake.html">立项向导</a></nav></div></div></header>
+<main>
+  <div>
+    <section class="card" aria-labelledby="goal-h">
+      <h1 id="goal-h">一句话说出你想完成的事</h1>
+      <p class="sub">任何行业都可以，用你自己的话写。系统会给出一支可修改的 AI 团队和工作方案；在你确认授权之前不会执行任何工作，也不会产生费用。</p>
+      <label class="lbl" for="goal">你的目标</label>
+      <textarea id="goal" maxlength="2000" placeholder="例如：帮我给……做一份……，用来……"></textarea>
+      <details id="more"><summary>补充信息（可选，越具体团队越准确）</summary>
+        <div class="grid2">
+          <div><label class="lbl" for="domain">领域（用自己的话，系统不猜行业）</label><input id="domain" type="text" maxlength="60"></div>
+          <div><label class="lbl" for="audience">成果给谁看/用</label><input id="audience" type="text" maxlength="200"></div>
+        </div>
+        <label class="lbl" for="success">怎样算做好了（每行一条）</label><textarea id="success" rows="2" maxlength="2000"></textarea>
+        <label class="lbl" for="constraints">限制（地区、时间、规范等）</label><input id="constraints" type="text" maxlength="2000">
+      </details>
+      <div class="row" style="margin-top:12px"><button id="make-team" class="primary">生成我的 AI 团队</button><span id="feedback" role="status" aria-live="polite"></span></div>
+    </section>
+
+    <section class="card" id="plan-card" aria-labelledby="plan-h" hidden>
+      <div class="role-head"><h2 id="plan-h">团队与工作方案</h2><span id="plan-label" class="badge sim">SIMULATED</span></div>
+      <p id="plan-summary" class="sub"></p>
+      <div id="confidence"></div>
+      <h3>团队做不到、需要真人的事</h3><ul id="cannot" class="list cannot"></ul>
+      <div id="clarify"></div>
+      <h3>阻断与提醒</h3><div id="blocks"></div>
+      <h3>AI 岗位 <span class="sub">（可改名称、职责、边界、验收标准和模型）</span></h3>
+      <ul id="roles" class="list"></ul>
+      <details id="add-role-box"><summary>＋ 添加一个岗位</summary>
+        <div class="grid2"><div><label class="lbl" for="new-role-name">岗位名称</label><input id="new-role-name" type="text" maxlength="50"></div>
+        <div><label class="lbl" for="new-role-duty">职责</label><input id="new-role-duty" type="text" maxlength="400"></div></div>
+        <button id="add-role" class="small" style="margin-top:8px">添加岗位</button></details>
+      <h3>工作步骤 <span class="sub">（顺序可上下移动）</span></h3>
+      <ol id="steps" class="list"></ol>
+      <h3>验收标准</h3><ul id="acceptance" class="list"></ul>
+      <div class="row"><input id="new-check" type="text" maxlength="200" placeholder="再加一条可检查的标准" style="flex:1;min-width:200px"><button id="add-check" class="small">添加</button></div>
+    </section>
+
+    <section class="card" id="auth-card" aria-labelledby="auth-h" hidden>
+      <h2 id="auth-h">授权与预算</h2>
+      <p class="sub">这里只是你的授权申请。服务器会再次检查模型、工具、费用和权限；浏览器里的按钮不能绕过服务器。</p>
+      <fieldset style="border:0;padding:0;margin:0"><legend class="lbl">允许团队做的操作</legend><div id="ops"></div></fieldset>
+      <div class="grid2">
+        <div><label class="lbl" for="max-cost">本次最高费用（美元）</label><input id="max-cost" type="number" min="0" max="10000" step="0.01"></div>
+        <div><label class="lbl" for="max-tokens">Token 上限</label><input id="max-tokens" type="number" min="1000" max="1000000" step="1000"></div>
+      </div>
+      <div id="paid-box"></div>
+      <label class="row" style="margin-top:10px"><input id="confirm-auth" type="checkbox"> 我确认以上授权范围与费用上限（之后任何编辑都会让这个确认失效）</label>
+      <div class="row" style="margin-top:12px"><button id="save-project">保存为项目</button><button id="start-run" class="primary">开始工作</button></div>
+      <p id="run-refusal" class="sub" role="alert"></p>
+    </section>
+  </div>
+
+  <div id="side">
+    <section class="card" aria-labelledby="halo-h">
+      <div class="role-head"><h2 id="halo-h">HALOFLUX · 真实工作事件</h2>
+        <div class="row"><button id="halo-static" class="small" aria-pressed="false">静态显示</button><button id="demo" class="small">看演示（DEMO）</button></div></div>
+      <div id="halo-banner"></div>
+      <div class="halo-wrap"><svg id="halo" role="group" aria-labelledby="halo-h"></svg></div>
+      <p id="halo-head" class="sub" aria-live="polite"></p>
+      <ul id="halo-list" class="list" style="font-size:13px"></ul>
+      <details><summary>事件记录（来源事件 ID、顺序、因果）</summary><div class="scroll"><table><thead><tr><th>#</th><th>事件</th><th>岗位</th><th>来源/证据</th><th>父事件/因果</th></tr></thead><tbody id="event-log"></tbody></table></div>
+        <div id="event-issues" class="sub"></div></details>
+      <div class="row" style="margin-top:8px"><label class="lbl" for="import-events" style="margin:0">导入事件文件（JSON）</label><input id="import-events" type="file" accept="application/json,.json"></div>
+    </section>
+
+    <section class="card cost" aria-labelledby="cost-h">
+      <h2 id="cost-h">费用</h2>
+      <div id="cost"></div>
+    </section>
+
+    <section class="card" aria-labelledby="out-h">
+      <h2 id="out-h">成果与验收</h2>
+      <p id="out-headline"></p>
+      <ul id="files" class="list files"></ul>
+      <h3>逐条检查</h3><p class="sub" id="marks-note"></p><ul id="checks" class="list"></ul>
+      <div id="review-box">
+        <label class="lbl" for="rework-note">需要返工的地方</label><textarea id="rework-note" rows="2" maxlength="2000"></textarea>
+        <div id="rework-steps" class="row"></div>
+        <div class="row" style="margin-top:8px"><button id="export-docx" class="small">导出 Word</button><button id="export-xlsx" class="small">导出 Excel</button><button id="export-pptx" class="small">导出演示</button>
+          <button id="rework" class="small">要求返工</button><button id="accept" class="primary">验收通过</button></div>
+      </div>
+    </section>
+  </div>
+</main>
+<script src="/project-intake/universal-team.js"></script>
+<script src="/haloflux-workbench-r52/contract.js"></script>
+<script src="/haloflux-workbench-r52/planner.js"></script>
+<script src="/haloflux-workbench-r52/editor.js"></script>
+<script src="/haloflux-workbench-r52/projector.js"></script>
+<script src="/haloflux-workbench-r52/acceptance.js"></script>
+<script src="/haloflux-workbench-r52/halo.js"></script>
+<script src="/haloflux-workbench-r52/demo.js"></script>
+<script src="/haloflux-workbench-r52/app.js"></script>
+</body>
+</html>
