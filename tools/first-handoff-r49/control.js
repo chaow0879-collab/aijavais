@@ -49,7 +49,7 @@ async function execute(input = {}) {
     if (P.canonical(P.unsigned(bound.signed)) !== P.canonical(prepared.unsigned_envelope) || A.authorize(bound.signed,bound.policy,bound.now)) return report('BLOCKED','BLOCKED_TRUSTED_SIGNATURE_BROKER');
     const runner = new SignedFakeR45Runner({...bound,prepared});
     const result = await R46.reconcile({...bound,runner});
-    return {...result, runner_calls:runner.calls, integration:'R46_CAS_TO_R45_SIGNED_FAKE_CLI', schedule:'NOT_ENABLED', E4:'NOT_RUN', E5:'NOT_RUN'};
+    return {...result, runner_calls:runner.calls, previous_run_id:runner.previousRunId, integration:'R46_CAS_TO_R45_SIGNED_FAKE_CLI', schedule:'NOT_ENABLED', E4:'NOT_RUN', E5:'NOT_RUN'};
   } catch {
     // Never forward untrusted error text, signatures, prompt or credentials.
     return report('BLOCKED','INTEGRATION_CONTRACT_OR_GATE_REJECTED');

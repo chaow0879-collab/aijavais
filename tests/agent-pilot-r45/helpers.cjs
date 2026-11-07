@@ -9,7 +9,7 @@ const P = require('../../tools/agent-pilot-r45/policy');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const HEAD = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
-const GATE = 'a'.repeat(40);
+const GATE = HEAD; // R49: valid fixtures authorize the exact code they execute.
 const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
 const other = crypto.generateKeyPairSync('ed25519');
 const pem = k => k.export({ type: 'spki', format: 'pem' });

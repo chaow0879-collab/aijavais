@@ -113,7 +113,8 @@ test('fake mode refuses unmarked executables (cannot be used to run the real CLI
 
 test('wrong / unknown source SHA → BLOCKED WRONG_SHA before any launch', async t => {
   const f = fake(t, 'success');
-  const o = await f.run(H.envelope({ source: { sha: 'e'.repeat(40) } }));
+  const unknown = 'e'.repeat(40);
+  const o = await f.run(H.envelope({ source: { sha: unknown }, gate: { gate_sha: unknown, audit: { reviewed_sha: unknown }, qa: { reviewed_sha: unknown } } }), { policy: H.policy({ pinned_gate_sha: unknown }) });
   valid(o); assert.equal(o.state, 'BLOCKED'); assert.equal(o.reason, 'WRONG_SHA'); assert.equal(o.retry, 'never'); assert.equal(f.cli.launches(), 0);
 });
 

@@ -10,3 +10,10 @@ function workspace(t){const source=temp(t),git=(args,cwd=source)=>execFileSync('
 for(const role of ['audit','qa','developer'])test('R49 AUD-R43-04 committed out-of-scope change refused for '+role,t=>{const f=workspace(t);f.commit('protected.js','changed');assert.equal(W.health(f.ws).clean,true);assert.throws(()=>W.verifyChanges(f.ws,role,['tests']),/SCOPE/);});
 test('R49 committed-and-reverted out-of-scope file still refused',t=>{const f=workspace(t);f.commit('protected.js','unsafe');f.commit('protected.js','safe');assert.throws(()=>W.verifyChanges(f.ws,'qa',['tests']),/SCOPE/);});
 test('R49 in-scope committed QA test accepted, audit write denied',t=>{const f=workspace(t);f.commit('tests/a.js','better');assert.equal(W.verifyChanges(f.ws,'qa',['tests']),true);assert.throws(()=>W.verifyChanges(f.ws,'audit',['tests']),/SCOPE/);});
+test('R49 R48-S01: valid dispatcher re-sign cannot run B with independently reviewed A',async t=>{
+ const H=require('../agent-pilot-r45/helpers.cjs'),A=require('../../tools/agent-pilot-r45/policy'),{runOnce}=require('../../tools/agent-pilot-r45/runner'),dir=H.tmp(t),cli=H.fakeCli(dir,'success'),stateDir=path.join(dir,'state');
+ const e=H.envelope({source:{sha:'ab3e07979f67924e795426737e26c5c4d84b8501'}});
+ assert.notEqual(e.source.sha,e.gate.gate_sha);assert.equal(A.authorize(e,H.policy()),'SOURCE_GATE_SHA_MISMATCH');
+ const o=await runOnce(e,{policy:H.policy(),mode:'fake',fakeExecutable:cli.file,stateDir,sourceRepo:H.ROOT});
+ assert.equal(o.state,'REJECTED');assert.equal(o.reason,'SOURCE_GATE_SHA_MISMATCH');assert.equal(cli.launches(),0);assert.equal(o.agent_launch.actual_agent_launches,0);assert.equal(fs.readdirSync(stateDir).some(f=>f.startsWith('claim-')||f.startsWith('dispatch-')),false);
+});

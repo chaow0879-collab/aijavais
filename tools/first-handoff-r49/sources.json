@@ -54,12 +54,27 @@
     },
     "tools/auto-handoff-r46/r45-adapter.js": {
       "from": "100644 blob cd3f7885b39ae79d23ec77b004d796280d68d4e9",
-      "to": "100644 blob 0d224423b2721e512b21617a156b57469505da7c",
+      "to": "100644 blob 197fed00370239d357b767f09bfd7267069ce0e4",
       "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
     },
     "tools/integration/verify-r43-sources.js": {
       "from": "100644 blob 6411b0ca74a3a60f40b45332cebe3ad9163ea2e4",
       "to": "100644 blob 55542277ef29cf058e1ba5124d4656ab51a54952",
+      "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
+    },
+    "tests/agent-pilot-r45/helpers.cjs": {
+      "from": "100644 blob 9e7487f554b9e4f465f6231f8b040c0bf7de47d6",
+      "to": "100644 blob 74bb37f30da040c5f7962e2513412e84b3441df8",
+      "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
+    },
+    "tests/agent-pilot-r45/runner.test.js": {
+      "from": "100644 blob 76513d6d62a428558201c44246c25fbad9b59cca",
+      "to": "100644 blob 4a381a40c8f836ac323df367818a2ee741e2dfc7",
+      "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
+    },
+    "tools/agent-pilot-r45/policy.js": {
+      "from": "100644 blob 3af2e08bd3ffe13830e4c4c5b34b8d7dcdd32f18",
+      "to": "100644 blob 6b678390e7e4637b84c60833b676eedaffc49e63",
       "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
     }
   },

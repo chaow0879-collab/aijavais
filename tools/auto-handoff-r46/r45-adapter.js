@@ -29,11 +29,18 @@ class SignedFakeR45Runner {
   signedInstances.set(this,{prepared:structuredClone(prepared),signed:structuredClone(signed),policy:structuredClone(policy),stateDir,sourceRepo,fakeExecutable,refs:structuredClone(refs),calls:0});Object.freeze(this);
  }
  get calls(){return signedInstances.get(this).calls;}
+ get previousRunId(){return signedInstances.get(this).previousRunId||null;}
  async run(e,signal){
   const x=signedInstances.get(this),P=require('../agent-pilot-r45/contract'),A=require('../agent-pilot-r45/policy'),B=require('./pilot-contract');
   if(P.canonical(P.unsigned(x.signed))!==P.canonical(x.prepared.unsigned_envelope)||x.signed.source.sha!==e.source_sha||x.signed.gate.gate_sha!==e.source_sha||x.prepared.dedupe_key!==P.dedupeKey(x.signed)||A.authorize(x.signed,x.policy))reject('RUNNER_OUTCOME_INVALID');
   x.calls++;
   const outcome=await require('../agent-pilot-r45/runner').runOnce(x.signed,{mode:'fake',policy:x.policy,stateDir:x.stateDir,sourceRepo:x.sourceRepo,fakeExecutable:x.fakeExecutable,signal});
+  if(outcome.state==='DUPLICATE'){
+   const previous=outcome.evidence?.previous_run_id;if(!require('./contract').safeRunId(previous))reject('RUNNER_OUTCOME_INVALID');
+   // A prior local receipt is not proof of remote settlement or a reconciled
+   // charge. Retain its run pointer, unknown cost and the remote reservation.
+   x.previousRunId=previous;outcome.run_id=previous;outcome.state='HUMAN_REVIEW_REQUIRED';outcome.cost={known:false,usd:null,cap_usd:e.limits.max_cost};
+  }
   return B.normalize(outcome,x.prepared,e,x.refs);
  }
 }

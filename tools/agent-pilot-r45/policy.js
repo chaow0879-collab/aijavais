@@ -44,6 +44,7 @@ function authorize(envelope, policy, now = Date.now()) {
   // Gate: both independent reviews must have passed the SAME pinned candidate, with no open P0/P1.
   const g = envelope.gate;
   if (policy.pinned_gate_sha && g.gate_sha !== policy.pinned_gate_sha) return 'GATE_SHA_NOT_PINNED';
+  if (typeof envelope.source.sha !== 'string' || typeof g.gate_sha !== 'string' || envelope.source.sha !== g.gate_sha) return 'SOURCE_GATE_SHA_MISMATCH';
   if (!policy.accepted_audit_verdicts.includes(g.audit.verdict) || g.audit.reviewed_sha !== g.gate_sha || typeof g.audit.ref !== 'string' || !/^https:\/\/github\.com\//.test(g.audit.ref)) return 'MISSING_OR_FAILED_AUDIT';
   if (!policy.accepted_qa_verdicts.includes(g.qa.verdict) || g.qa.reviewed_sha !== g.gate_sha || typeof g.qa.ref !== 'string' || !/^https:\/\/github\.com\//.test(g.qa.ref)) return 'MISSING_OR_FAILED_QA';
   if (g.open_p0_p1 !== 0) return 'OPEN_P0_P1';
