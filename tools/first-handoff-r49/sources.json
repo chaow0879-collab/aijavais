@@ -54,7 +54,7 @@
     },
     "tools/agent-executor/workspace.js": {
       "from": "100644 blob 20bab4a6f3745efb245028ac7fc57cce19a11efe",
-      "to": "100644 blob 128e755edc6aa5e95af305bf2e48c75cc88360d8",
+      "to": "100644 blob 23b09ab505ed1fbb64d44617b52660089f9f4412",
       "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
     },
     "tools/auto-handoff-r46/contract.js": {
@@ -74,7 +74,7 @@
     },
     "tools/integration/verify-r43-sources.js": {
       "from": "100644 blob 6411b0ca74a3a60f40b45332cebe3ad9163ea2e4",
-      "to": "100644 blob 55542277ef29cf058e1ba5124d4656ab51a54952",
+      "to": "100644 blob 110d8dcbb4e3bc70dc8b92ac77e443e0de3b64e9",
       "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
     },
     "tests/agent-pilot-r45/helpers.cjs": {

@@ -33,7 +33,7 @@ Fake流程中的密钥、CI、审计和预算是合成夹具，**不代表真实
 
 - **AUD-R43-02**：V2 GitHub blob通过strict-json逐对象检查重复键（包括转义同名键、嵌套对象），保留合法空白与字段顺序。损坏或含糊状态读失败，不产生CAS或删除墓碑；体积4MiB、深度64封顶。R46自己的canonical/checksum状态检查保留。
 - **AUD-R43-03**：三个readiness证明的expires_at都必须是未来安全整数；有效签名不能为缺失、null、字符串、NaN等补授权。
-- **AUD-R43-04**：workspace以最初批准SHA检查工作区及全部新增commit的路径，保留commit后又revert的越界证据，禁用rename折叠，并要求原SHA是当前HEAD祖先。audit不能编辑，QA仅获批tests路径可改。没有把HEAD移动后的clean误当作没有越界。
+- **AUD-R43-04**：workspace以最初批准SHA检查工作区及全部新增commit的路径，保留commit后又revert的越界证据，禁用rename折叠，并要求原SHA是当前HEAD祖先。audit不能编辑，QA仅获批tests路径可改。没有把HEAD移动后的clean误当作没有越界。路径保留原始NUL字节、不trim换行/空格；一批最多256个新增commit、单次Git输出1MiB/15秒，超过即拒绝，不是只扫描最新commit。
 
 这些边界在实际激活前若仍能越权或重费，即为阻断风险；本作者补丁与负例等待最终独立整包审计，不能仅因历史标签P2放行。
 
@@ -50,11 +50,11 @@ node tools/first-handoff-r49/run-r48.js
 node tools/first-handoff-r49/cli.js
 ```
 
-专属`codex-r49-integration.yml`在**同一github.sha**保留业务/P2/严格Office、五组Chromium、隔离容器、V1/V2及来源核对，增加R45/R46/R49的跨模块回归。公开官方CLI的安装、--version/--help只核元数据，无模型调用或认证。没有schedule、webhook或模型Secrets。R48自身测试要求R45与原冻结源逐字节相同，所以由R49的run-r48.js在临时精确R48 clone中原样运行49项；不修改Claude任何断言。其历史矩阵仍报告旧R45/R46的8项不兼容和S01不安全接受，这些是旧源观察，不是当前候选的安全PASS。当前R49另外运行84项新增/接口/安全回归（其中2项将原R48 TestBroker/映射用于当前R49 audit/qa，拒绝真实结果伪标Fake），并包含R45独立入口S01负例。默认未配置的真实broker/预算/身份仍是明确NO_GO，不用Fake来填补。
+专属`codex-r49-integration.yml`在**同一github.sha**保留业务/P2/严格Office、五组Chromium、隔离容器、V1/V2及来源核对，增加R45/R46/R49的跨模块回归。公开官方CLI的安装、--version/--help只核元数据，无模型调用或认证。没有schedule、webhook或模型Secrets。R48自身测试要求R45与原冻结源逐字节相同，所以由R49的run-r48.js在临时精确R48 clone中原样运行49项；不修改Claude任何断言。其历史矩阵仍报告旧R45/R46的8项不兼容和S01不安全接受，这些是旧源观察，不是当前候选的安全PASS。当前R49另外运行87项新增/接口/安全回归（其中2项将原R48 TestBroker/映射用于当前R49 audit/qa，拒绝真实结果伪标Fake），并包含R45独立入口S01负例。默认未配置的真实broker/预算/身份仍是明确NO_GO，不用Fake来填补。
 
 E2是Fake模型/合成评论及签名；E3是真实Node进程、临时HTTP/SQLite CAS、SIGKILL恢复与真实文件/解析。四独立Node Runner和独立本地journal对同权威CAS至多启动一次Fake CLI，event/tick重复、ACK丢失、403/429/崩溃、超时/取消/kill、未知费用都不自动重发。已验证已知成功父可接下一份独立签名阶段，费用未知父不能自动推进。不保证分布式exactly-once：允许0次，UNKNOWN保留费用上界，人工调查后才另行批准新工作。
 
-失败历史保留：首轮R49脚手架把快照对象替换后，原fixture签名闭包仍绑定旧对象，引发SIGNED_SOURCE_BINDING；改为原对象内更新，未改生产签名规则。次轮四进程复测中把返回历史SUCCEEDED当重执行，断言不符：保留实际语义，检查DUPLICATE_NO_REPLAY、runner_calls=0、总进程计数不增；不放松最多一次断言。首次已提交来源检查因新增strict-json没有显式列入scope而BLOCKED，随后精确钉住该新增文件blob，未宽泛豁免目录。恢复测试曾在把模拟时钟退回旧时刻后得到CLOCK_SKEW阻断；现将事件、后续tick及恢复时刻分别更新快照并重新签署有效合成frame，明确断言DUPLICATE_NO_REPLAY或UNKNOWN来自持久状态，而非复用旧签名失败。准确最终测试结果另见#32，不把试跑exit0或旧SHA结果拼接。
+失败历史保留：首轮R49脚手架把快照对象替换后，原fixture签名闭包仍绑定旧对象，引发SIGNED_SOURCE_BINDING；改为原对象内更新，未改生产签名规则。次轮四进程复测中把返回历史SUCCEEDED当重执行，断言不符：保留实际语义，检查DUPLICATE_NO_REPLAY、runner_calls=0、总进程计数不增；不放松最多一次断言。首次已提交来源检查因新增strict-json没有显式列入scope而BLOCKED，随后精确钉住该新增文件blob，未宽泛豁免目录。恢复测试曾在把模拟时钟退回旧时刻后得到CLOCK_SKEW阻断；现将事件、后续tick及恢复时刻分别更新快照并重新签署有效合成frame，明确断言DUPLICATE_NO_REPLAY或UNKNOWN来自持久状态，而非复用旧签名失败。冻结前还真实复现了字面换行开头的\ntests目录被trim误认授权路径；改用NUL原始路径与diff-tree --stdin历史，新增未跟踪/暂存/提交三负例。这使73f4c35被后续候选替代，其CI不转移签字。准确最终测试结果另见#32，不把试跑exit0或旧SHA结果拼接。
 
 ## 首次真实试点GO/NO_GO与部署准备
 

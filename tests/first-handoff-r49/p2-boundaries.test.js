@@ -17,3 +17,4 @@ test('R49 R48-S01: valid dispatcher re-sign cannot run B with independently revi
  const o=await runOnce(e,{policy:H.policy(),mode:'fake',fakeExecutable:cli.file,stateDir,sourceRepo:H.ROOT});
  assert.equal(o.state,'REJECTED');assert.equal(o.reason,'SOURCE_GATE_SHA_MISMATCH');assert.equal(cli.launches(),0);assert.equal(o.agent_launch.actual_agent_launches,0);assert.equal(fs.readdirSync(stateDir).some(f=>f.startsWith('claim-')||f.startsWith('dispatch-')),false);
 });
+for(const state of ['untracked','staged','committed'])test('R49 literal leading-newline path cannot impersonate tests/ scope: '+state,t=>{const f=workspace(t),dir=path.join(f.ws.dir,'\ntests');fs.mkdirSync(dir);fs.writeFileSync(path.join(dir,'evil.js'),'outside tests scope');if(state!=='untracked')f.git(['add','.']);if(state==='committed')f.git(['commit','-m','outside']);assert.throws(()=>W.verifyChanges(f.ws,'qa',['tests']),/SCOPE/);});
