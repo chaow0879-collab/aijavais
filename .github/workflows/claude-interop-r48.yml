@@ -1,0 +1,47 @@
+name: Claude interop R48 (#31)
+# Dedicated validation for feat/claude-r48-cross-runner-conformance only. Executes the frozen
+# R45 (0b95251) and R46 (a1a258a) code read-only from exact SHAs; a missing source is
+# BLOCKED_SOURCE (the job fails), never a fallback. No secrets, no model, no schedule.
+on:
+  push:
+    branches: [feat/claude-r48-cross-runner-conformance]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: claude-interop-r48-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  interop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Record exact SHAs under test
+        run: |
+          echo "tested_sha=$GITHUB_SHA runner_environment=$RUNNER_ENVIRONMENT"
+          for s in 0b95251133d47fd7c0b9280d3ddb5287c2628307 a1a258a41c2041ab8d6cebc622cfed0c690c3387 ab3e07979f67924e795426737e26c5c4d84b8501; do
+            echo "$s $(git cat-file -t $s 2>/dev/null || echo MISSING)"
+          done
+      - name: R48 conformance matrix, bridge, GO/NO_GO and frozen-suite regressions
+        env:
+          R48_OUT: ${{ runner.temp }}/r48
+        run: node --test tests/agent-interop-r48/*.test.js
+      - name: Real R45 preflight on this ephemeral runner + GO/NO_GO (expected NO_GO)
+        run: |
+          node tools/agent-interop-r48/cli.js gonogo --out "$RUNNER_TEMP/r48/cli" | tee "$RUNNER_TEMP/r48/gonogo-summary.json"
+          node -e "const g=require(process.env.RUNNER_TEMP+'/r48/cli/gonogo.json');console.log('R48_GONOGO '+g.decision+' launches='+g.real_agent_launches+' blocking='+g.blocking.join(','));if(g.decision!=='NO_GO'||g.real_agent_launches!==0)process.exit(1)"
+      - name: Hash evidence
+        if: always()
+        run: cd "$RUNNER_TEMP/r48" && find . -type f -name '*.json' -print0 | sort -z | xargs -0 sha256sum || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-interop-r48-evidence
+          path: ${{ runner.temp }}/r48
+          if-no-files-found: ignore
