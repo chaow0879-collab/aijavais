@@ -8,7 +8,7 @@
 
 精确选择性引入R44单个产品提交`4c198c430806836bb289cd5da57b7fad44c7b0dc`，不引入其其他旧父链。其通用规则按工作类型/成果形式/风险生成建议，不按行业名if/switch；R53后端复用其协议，计划明确`PLAN_SIMULATED/E2_RULES_NOT_AI`，没有模型时不能宣称理解完成。岗位职责、步骤、验收、连接与工具建议均可编辑；建议不是授权，也不代表专业能力已验证。
 
-`lib/universal-workflow.js`是现有Engine的产品适配器；`lib/product-events.js`只投影服务端持久事件，不接受浏览器伪造状态。必要接缝仅在`lib/project-engine.js`、`lib/project-store.js`、`lib/v2-api.js`；新增按岗位权限与预算、审核事件及通用验收要求，旧API认证/同源/预算/取消/幂等仍保留。R52独占前端文件由Claude维护，最终只按准确READY增量引入。
+`lib/universal-workflow.js`是现有Engine的产品适配器；`lib/product-events.js`只投影服务端持久事件，不接受浏览器伪造状态。必要接缝位于`lib/project-engine.js`、`lib/project-store.js`、`lib/v2-api.js`和`server.js`的首次输出回调；新增按岗位权限与预算、审核事件及通用验收要求，旧API认证/同源/预算/取消/幂等仍保留。R52独占前端文件由Claude维护，最终只按准确READY增量引入。
 
 ## 后端JSON契约（R52可复用）
 
@@ -30,7 +30,7 @@
 
 角色授权是以roleId为键的`rolePermissions`：`{approved:true,connectionId,allowedTools:[],maxTokens,maxCost}`。每角色必须批准准确连接、调用的工具和上限，不能用其他岗位权限替代。复用原共享预算，实际工具与Skill拿到该岗位缩减后的allowedTools。新通用入口仅允许策略白名单内已注册/当前可用的本地连接；远端费用硬上限未证明时返回`BLOCKED_UNENFORCEABLE_COST_CAP`。旧产品远端API策略没有因此被放宽，本轮测试仅Mock。
 
-事件schema `aijavais.work-event/v1`：`event_id/source_event_id/sequence/task_id/work_id/project_id/parent_id/type/raw_type/role_id/actor/source_sha/timestamp/round/step_id/artifact_id/message_id/evidence/cost`。事件id、parent和时间由服务端append生成；source SHA来自运行源码Git元数据，发布镜像无.git时null。`agent_started`只由调用适配器前的持久model_dispatched事实产生，step准备不冒称模型已工作；`handoff`有实际消息ID，`peer_review`有审查角色产出ID；`accepted`仅人工确认。
+事件schema `aijavais.work-event/v1`：`event_id/source_event_id/sequence/task_id/work_id/project_id/parent_id/type/raw_type/role_id/actor/source_sha/timestamp/round/step_id/artifact_id/message_id/evidence/cost`。事件id、parent和时间由服务端append生成；source SHA来自运行源码Git元数据，发布镜像无.git时null。`agent_started`代表适配器派发尝试；`work_started`仅由服务器实际收到首个输出片段的回调生成，hang/预检失败没有该事件，step准备不冒称模型已工作；`handoff`有实际消息ID，`peer_review`有审查角色产出ID；`accepted`仅人工确认。
 
 HALOFLUX可按事件ID去重、sequence分页，乱序/断线重新GET补齐，不能靠前端动画决定后台状态。旧事件无新增字段时投影稳定`run:seq`，标UNVERIFIED_LEGACY_EVENT。所有事件费用保持未知供应商账单，假provider的成功不升级E4/E5。
 

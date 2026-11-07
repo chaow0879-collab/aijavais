@@ -394,13 +394,13 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
   }, { maxEventBytes: LIMITS.maxEventBytes, maxTotalBytes: LIMITS.maxCallBytes, onBytes });
 }
 
-async function callModel(p, { role, task, system, prompt, maxTokens, taskId, runId, parentSpanId, attempt, agentInstanceId, roleId, signal }) {
+async function callModel(p, { role, task, system, prompt, maxTokens, taskId, runId, parentSpanId, attempt, agentInstanceId, roleId, signal, onFirstOutput }) {
   const spanId = EV.newSpanId();
   const T = { taskId, runId, spanId, parentSpanId, attempt, agentInstanceId, roleId };
   ingest({ agent: p.id, label: p.label, model: p.model, role, task, eventType: 'model_start' }, T);
   const t0 = Date.now();
   /* inSeen / outSeen：厂商是否真的返回了该项用量 —— 区分“0”与“未知” */
-  let out = '', inTok = 0, outTok = 0, inSeen = false, outSeen = false, pending = '', lastEmit = 0;
+  let out = '', inTok = 0, outTok = 0, inSeen = false, outSeen = false, pending = '', lastEmit = 0, firstOutput=false;
   const flush = force => {
     const now = Date.now();
     if (!force && now - lastEmit < 150) return;
@@ -417,7 +417,7 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId, run
   try {
     await streamChat(p, {
       system, prompt, maxTokens, signal,
-      onDelta: t => { out += t; if (cfg.settings.showText) pending += t; flush(false); },
+      onDelta: t => { if(t&&!firstOutput){firstOutput=true;onFirstOutput?.();}out += t; if (cfg.settings.showText) pending += t; flush(false); },
       onUsage: (i, o) => {
         if (Number.isFinite(i) && i >= 0 && (i > 0 || !inSeen)) { inTok = i; inSeen = true; }
         if (Number.isFinite(o) && o >= 0 && (o > 0 || !outSeen)) { outTok = o; outSeen = true; }
