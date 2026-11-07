@@ -47,4 +47,17 @@ Fake meter只用于schema测试，不是供应商账单；真实模型启动0，
 4. 另行批准必要源码开关与main/default-branch工作流变更，再启用一次受控event/10min兜底；本包只提交.disabled样例。
 5. 停止先持久HALT、禁止新派发，再取消活跃进程/撤销授权；已发生费用无法靠kill撤销。异常回滚保留journal/state-ref/墓碑和unknown上界，不清零、不重claim。
 
-当前R50最终增量与R49双门禁状态、准确最终SHA/CI/计数将在#34唯一最终报告更新。本包尚在开发，不以中间检查点申请审计或真实GO。
+R50已核[真实READY报告](https://github.com/chaow0879-collab/aijavais/issues/33#issuecomment-6700976155)、准确4ea740ee5638882e44f697a6a47cee60c8a8457d及CI42328460103；只引入1b5a837c→4ea740ee两提交、17个新增文件，源码/mode保持与原SHA一致，不修改Claude冻结分支。R49双门禁状态及准确最终SHA/CI/计数由#34唯一最终报告更新，不能把作者或旧SHA结论代签。
+
+
+## R50到R51的最终接入
+
+`r50-bridge.handleTrusted`默认真实路径先返回LIVE_BUILD_DISABLED，连broker/approval/IdP凭据getter都不读取。仅显式E3_FAKE：R50原verifyDelivery或verifyOidc（显式synthetic JWKS）→精确task/issue/source/role→R49 prepare→R50原Broker→R51 runPilot。R50 TestSigner必须显式且原样，收据的SHA/work key/digest再次绑定；真实/KMS未配置时仍BLOCKED，不伪造信任。
+
+只在R51独占适配层补强：approval必须有exact task_id；broker与operator/V1/V2/owner身份按DER比较，不能靠PEM换行不同绕过；额外admission digest由原operator批准。R50 v1 owner token没有原生Token硬上限/供应商账单证明，R51的synthetic Token约束不能被当作实际provider执行证明。
+
+授权撤回、R50 KILL、批准/策略/来源快照变化在CAS前、clone后spawn前及运行中重复核验，短命watch至多一个在途查询。源变化只减权停止，不自动重签或提升权限。真实GitHub最新否决采集/IdP/JWKS可信来源尚需后续经审计部署，内存fixture的改变不冒充真实GitHub事件。无效getter/循环/非JSON约束拒绝，Fake执行只复制公开协议字段，不枚举官方credential context。
+
+失败历史：首个联合撤回测试少传TriggerStore.revoke的reason参数，SQLite拒绝第三参数绑定（63/64）；修正**测试调用**为(id, reason, at)后通过，未改R50实现或撤回断言。官方CLI占位入口失败与原生二进制元数据成功分开保留；不把初次失败或历史来源计数删掉。
+
+默认分支只使用本R51的`templates/r50-trusted-trigger.yml.disabled`作为后续唯一启用候选；R50原样例是保全的上游资料，不同时注册第二个dispatcher。R51模板job常false、固定运行时SHA占位、无模型Secrets，需另一次owner审批的default-branch activation commit对准冻结runtime SHA，与R50 trusted_workflow_ref精确一致。这里不存在“复制就自动启动”。

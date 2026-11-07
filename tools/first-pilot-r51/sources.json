@@ -1,6 +1,18 @@
 {
   "base_sha": "fcf52ed855dfccacb16cef632d0e3eb202510718",
-  "r50": null,
+  "r50": {
+    "base": "fcf52ed855dfccacb16cef632d0e3eb202510718",
+    "head": "4ea740ee5638882e44f697a6a47cee60c8a8457d",
+    "parent": "1b5a837c303b96aa8e2b8c841d41ca527c7f2ff9",
+    "ci_run": 42328460103,
+    "report": "https://github.com/chaow0879-collab/aijavais/issues/33#issuecomment-6700976155",
+    "prefixes": [
+      "tools/trusted-trigger-r50/",
+      "tests/trusted-trigger-r50/",
+      "docs/TRUSTED-TRIGGER-R50.md",
+      ".github/workflows/claude-r50-trusted-trigger.yml"
+    ]
+  },
   "exceptions": {
     "tools/agent-pilot-r45/runner.js": {
       "from": "100644 blob 5f9a9a93f6a4be443d634ee26e4d75c9f1e4d153",
