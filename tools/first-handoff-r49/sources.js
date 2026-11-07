@@ -21,7 +21,8 @@ function verify(){
  const ownPrefixes=['tools/first-handoff-r49/','tests/first-handoff-r49/','docs/FIRST-REAL-HANDOFF-R49.md','.github/workflows/codex-r49-integration.yml'];
  const selected=new Set(sources.flatMap(s=>git(['diff','--name-only','-z',s.base,s.head]).split('\0').filter(Boolean)));
  const changed=git(['diff','--name-only','-z',M.base_sha,sha]).split('\0').filter(Boolean);
- for(const f of changed)if(!selected.has(f)&&!M.exceptions[f]&&!ownPrefixes.some(p=>f.startsWith(p)))violations.push('UNOWNED_PATH:'+f);
+ for(const [f,blob] of Object.entries(M.additional_glue||{}))if(current.get(f)!==blob)violations.push('ADDED_GLUE_BLOB_CHANGED:'+f);
+ for(const f of changed)if(!selected.has(f)&&!M.exceptions[f]&&!Object.hasOwn(M.additional_glue||{},f)&&!ownPrefixes.some(p=>f.startsWith(p)))violations.push('UNOWNED_PATH:'+f);
  git(['diff','--quiet','HEAD']);
  return {head_sha:sha,tree:git(['rev-parse','HEAD^{tree}']),state:violations.length?'BLOCKED':'SOURCE_PRESERVED_WITH_PENDING_REVIEW_DELTAS',sources,exceptions:M.exceptions,violations,r48:M.r48||'WAIT_R48',r47_independent_gate:'NOT_INFERRED_FROM_AUTHOR_CODE',real_agent_launches:0,schedule:'NOT_ENABLED'};
 }

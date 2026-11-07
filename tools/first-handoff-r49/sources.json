@@ -62,5 +62,8 @@
       "to": "100644 blob 55542277ef29cf058e1ba5124d4656ab51a54952",
       "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
     }
+  },
+  "additional_glue": {
+    "tools/agent-executor/strict-json.js": "100644 blob e6bb3805a520e57f164cb06a6df6a9209e3f33b2"
   }
 }
