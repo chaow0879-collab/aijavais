@@ -7,6 +7,7 @@
 //   INCOMPATIBLE          they do not interoperate as delivered (delta proposed)
 //   SAFE_REFUSAL          an unsafe input was refused, as required
 //   UNSAFE_ACCEPTED       an input that must be refused was accepted (a finding)
+//   HARNESS_ERROR         the scenario was not actually exercised (never counted as a pass)
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -138,7 +139,9 @@ async function runMatrix({ repo = process.cwd(), keep = false } = {}) {
     row('S09', 'dedupe', 'same work: tick then GitHub event', seq2.o.state === 'DUPLICATE' && seq.cli.launches() === 1 ? 'SAFE_REFUSAL' : 'UNSAFE_ACCEPTED', { first: seq.o.state, second: seq2.o.state, launches: seq.cli.launches() });
     const race = await raceProcesses(L, broker, [tickSigned, ev, tickSigned, ev], repo);
     dirs.push(race.dir);
-    row('S10', 'dedupe', 'event/tick race: 4 separate R45 runner processes', race.launches === 1 && race.states.filter(s => s === 'SUCCESS').length === 1 ? 'SAFE_REFUSAL' : 'UNSAFE_ACCEPTED', { states: race.states, launches: race.launches });
+    const wins = race.states.filter(s => s === 'SUCCESS').length;
+    // More than one start is unsafe; zero starts means the race was never exercised (harness error, not a pass).
+    row('S10', 'dedupe', 'event/tick race: 4 separate R45 runner processes', race.launches > 1 || wins > 1 ? 'UNSAFE_ACCEPTED' : race.launches === 1 && wins === 1 ? 'SAFE_REFUSAL' : 'HARNESS_ERROR', { states: race.states, reasons: race.reasons, launches: race.launches });
     // Lost ACK: R45 settled, the control plane never heard back and redelivers.
     const ack = await run45(pairSigned, 'success', { dir: pairRun.d, cli: pairRun.cli });
     row('S11', 'lost-ack', 'redelivery after a lost result never relaunches', ack.o.state === 'DUPLICATE' && pairRun.cli.launches() === 1 ? 'SAFE_REFUSAL' : 'UNSAFE_ACCEPTED', { redelivery: ack.o.state, previous_run_id: ack.o.evidence.previous_run_id, launches: pairRun.cli.launches(), r46_can_settle: 'NO (see C09)' });
@@ -193,7 +196,7 @@ async function runMatrix({ repo = process.cwd(), keep = false } = {}) {
       environment: { node: process.version, platform: process.platform, github_actions: process.env.GITHUB_ACTIONS === 'true', runner_environment: process.env.RUNNER_ENVIRONMENT || null, ci_run: process.env.GITHUB_RUN_ID || null },
       evidence_level: 'E2/E3_FAKE (frozen R45+R46 code executed; fake CLI subprocesses; no model)',
       real_agent_launches: 0,
-      summary: { rows: rows.length, COMPATIBLE: count('COMPATIBLE'), COMPATIBLE_WITH_DELTA: count('COMPATIBLE_WITH_DELTA'), INCOMPATIBLE: count('INCOMPATIBLE'), SAFE_REFUSAL: count('SAFE_REFUSAL'), UNSAFE_ACCEPTED: count('UNSAFE_ACCEPTED') },
+      summary: { rows: rows.length, COMPATIBLE: count('COMPATIBLE'), COMPATIBLE_WITH_DELTA: count('COMPATIBLE_WITH_DELTA'), INCOMPATIBLE: count('INCOMPATIBLE'), SAFE_REFUSAL: count('SAFE_REFUSAL'), UNSAFE_ACCEPTED: count('UNSAFE_ACCEPTED'), HARNESS_ERROR: count('HARNESS_ERROR') },
       rows
     };
   } finally {
@@ -207,10 +210,12 @@ async function raceProcesses(L, broker, envelopes, repo) {
   fs.writeFileSync(polFile, JSON.stringify({ trusted_keys: broker.trustEntry(), allowed_issues: [30], allow_fake_cli: true, pinned_gate_sha: GATE_FACTS.r43_candidate }));
   const one = (env, i) => new Promise((resolve, reject) => {
     const f = path.join(dir, 'env-' + i + '.json'); fs.writeFileSync(f, JSON.stringify(env));
-    const c = spawn(process.execPath, [L.r45cli, 'run', '--envelope', f, '--state-dir', path.join(dir, 'state'), '--policy', polFile, '--source-repo', repo, '--fake-cli', cli.file], { env: { PATH: process.env.PATH, HOME: process.env.HOME || os.tmpdir() } });
+    // Minimal env; RUNNER_TEMP must pass through because R45 only accepts state/workspace dirs under its temp roots.
+    const childEnv = { PATH: process.env.PATH, HOME: process.env.HOME || os.tmpdir(), ...(process.env.RUNNER_TEMP ? { RUNNER_TEMP: process.env.RUNNER_TEMP } : {}), ...(process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}) };
+    const c = spawn(process.execPath, [L.r45cli, 'run', '--envelope', f, '--state-dir', path.join(dir, 'state'), '--policy', polFile, '--source-repo', repo, '--fake-cli', cli.file], { env: childEnv });
     let out = ''; c.stdout.on('data', d => out += d); c.on('error', reject); c.on('close', () => { try { resolve(JSON.parse(out)); } catch { reject(Error('RACE_OUTPUT:' + out.slice(0, 200))); } });
   });
   const res = await Promise.all(envelopes.map(one));
-  return { dir, states: res.map(r => r.state), launches: cli.launches() };
+  return { dir, states: res.map(r => r.state), reasons: res.map(r => r.reason || null), launches: cli.launches() };
 }
 module.exports = { runMatrix, load, r46Frame, SOURCES };
