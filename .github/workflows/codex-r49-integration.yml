@@ -232,9 +232,10 @@ jobs:
         env:
           R49_EVIDENCE_DIR: ${{ runner.temp }}/r49
         run: node --test tests/agent-pilot-r45/*.test.js tests/auto-handoff-r46/*.test.js tests/first-handoff-r49/*.test.js
-      - name: R48 source dependency status (never claim absent conformance PASS)
-        run: |
-          node -e "const s=require('./tools/first-handoff-r49/sources.json');console.log(s.r48 ? 'R48_SOURCE_PRESENT' : 'WAIT_R48: conformance NOT_RUN; not a complete frozen candidate')"
+      - name: R48 original 49 tests at exact source SHA (historical gaps remain observations)
+        env:
+          R48_OUT: ${{ runner.temp }}/r49/r48-historical
+        run: node tools/first-handoff-r49/run-r48.js
       - name: Pinned public CLI metadata only (no model authentication or request)
         run: |
           npm install --prefix "$RUNNER_TEMP/public-cli" --no-package-lock --ignore-scripts @anthropic-ai/claude-code@2.1.318 @openai/codex@0.167.0
