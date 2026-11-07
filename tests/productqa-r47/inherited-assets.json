@@ -1,0 +1,16 @@
+{
+  "source_test_sha": "10c6d9a9d8e160c2f11b10472bb5f6647983a582",
+  "source_files": {
+    "harness.cjs": "b3bf885800cb531c56a90c6bd21cfc87e8e534364bfa1fbd4ffb35ac150c5d26",
+    "run.cjs": "f7260cbfa8a00adc36f25a071d1eb952f72582b11e3fb2caa42ac54ea0fe906a",
+    "fault-preload.cjs": "6ad5010dfcf71535c45f290c3997bef6825b7d563514e2cdda6ada47bca39c7e",
+    "sanitize-trace.py": "92a470c00972fde8e4e071db04c52a2c3bafabc379675a325a9574cb7764cd5e",
+    "delivery.cjs": "73302b1fbea9106240d8648dcc8727c74db0caa41f6db215da051ca1085d6a94"
+  },
+  "changes": [
+    "Exact R47 business binding",
+    "Run only 2 API, 3 browser, 1 org delivery + 1 parser cases",
+    "No execution switch or software smoke rerun",
+    "Independent parsers check actual sentinel/cell/slide content"
+  ]
+}
