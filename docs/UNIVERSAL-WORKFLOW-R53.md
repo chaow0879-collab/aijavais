@@ -26,7 +26,7 @@
 | POST `/universal/runs/:runId/rework` | 新`requestId`、反馈与完整新授权；同run新round，原产出保留 |
 | POST `/universal/runs/:runId/deliver` | `{requestId,format:docx\|xlsx\|pptx\|md\|csv\|json}` → `{artifact}`含downloadUrl/hash/round/sourceArtifactId；只从已完成实际输出生成文件 |
 | GET `/runs/:runId/artifacts/:artifactId/download` | 原认证下载接口，实际持久化字节 |
-| POST `/universal/runs/:runId/accept` | `{artifactId,sha256,confirmCriteria:true,acknowledgeSimulation:true,expertReviewNote?}` → `{run}`；绑定当前round/hash/实际可解析文件，人工确认不是专业认证 |
+| POST `/universal/runs/:runId/accept` | `{artifactId,sha256,confirmCriteria:true,acknowledgeSimulation:true,expertReviewNote?,acknowledgeUnknownCost?}` → `{run}`；绑定当前round/hash/实际可解析文件，人工确认不是专业认证 |
 
 角色授权是以roleId为键的`rolePermissions`：`{approved:true,connectionId,allowedTools:[],maxTokens,maxCost}`。每角色必须批准准确连接、调用的工具和上限，不能用其他岗位权限替代。复用原共享预算，实际工具与Skill拿到该岗位缩减后的allowedTools。新通用入口仅允许策略白名单内已注册/当前可用的本地连接；远端费用硬上限未证明时返回`BLOCKED_UNENFORCEABLE_COST_CAP`。旧产品远端API策略没有因此被放宽，本轮测试仅Mock。
 
@@ -57,3 +57,11 @@ node tools/universal-workflow-r53/sources.js
 ## 用户旅程与诚实边界
 
 普通用户描述一个新目标→拿到带模拟标记的可编辑岗位/成果/缺失工具清单→选择自己的已登记本地模型与逐岗权限→明确批准→真实HTTP执行多岗和交接→查看因果事件/审查意见→输入反馈并重新批准返工→下载带来源hash与模拟标记的可打开文件→人工确认当前版本。没有连接只保存草案，缺专业工具/资格不能宣称已达专业质量。真实厂商E4、领域专家E5、正式无人值守开发接力均NOT_RUN，HALOFLUX上游商业授权/NOTICE边界不变。
+
+### 补充验证边界
+
+未知usage不仅是完全缺失，还包括估算/部分/重启未知用量；DTO供应商费用一直为null，验收此类账目需额外`acknowledgeUnknownCost:true`，确认不会清零预留。Office表格和演示文稿也嵌入E3未专业验收标记。英语只按通用output form词组产生离线建议；领域/标准不明确仍要求澄清，不宣称语言模型推理。
+
+逐岗授权映射使用无原型字典并验证自有键，角色ID如`__proto__`不能使权限在JSON持久化时丢失后回退到全局工具集合；有专门持久化负例。现有非通用项目事件保留MODEL_ADAPTER_UNVERIFIED，不因存在planning.goal就伪标为本地Mock。
+
+本地浏览器首轮因Playwright默认浏览器缓存缺失未执行；无需安装，改用已安装`/usr/bin/chromium`后原R44真实浏览器流程通过。源码不改变浏览器断言或生产权限。后续R52合流及真实后端联调另行记录，不能拿独立fixture浏览器PASS冒充最终整合用户旅程。
