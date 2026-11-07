@@ -1,0 +1,79 @@
+name: Independent CodeAudit R49 fixed source
+on:
+  push:
+    branches: [audit/codeaudit-r49-fcf52ed-20261107]
+    paths: [audit-evidence/r49/**, .github/workflows/codeaudit-r49-fixed.yml]
+permissions:
+  contents: read
+jobs:
+  independent-offline-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      AIJ_PILOT_LIVE: '0'
+      AIJ_AUTO_DISPATCH_ENABLED: 'false'
+    steps:
+      - name: Read auditor-owned evidence assets
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: audit-assets
+          persist-credentials: false
+      - name: Checkout the unique frozen source, never the auditor branch HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: fcf52ed855dfccacb16cef632d0e3eb202510718
+          fetch-depth: 0
+          path: reviewed
+          persist-credentials: false
+      - name: Checkout old R45 source for an offline contrast only
+        uses: actions/checkout@v4
+        with:
+          ref: 0b95251133d47fd7c0b9280d3ddb5287c2628307
+          path: old-r45
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Assert and record independent source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C reviewed rev-parse HEAD)" = fcf52ed855dfccacb16cef632d0e3eb202510718
+          test "$(git -C reviewed rev-parse 'HEAD^{tree}')" = f370470c5b25c83fdfced7d5a3d5172a1c6dfc70
+          { git -C reviewed show -s --format='%H %P %T' HEAD; node --version; git --version; } | tee evidence/source.txt
+      - name: Independent 30 V2 authorization and unknown-fee assertions
+        shell: bash
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+        run: |
+          set -euo pipefail
+          node audit-assets/audit-evidence/r49/independent-v2.cjs | tee evidence/independent-v2.log
+      - name: Independent security, provenance and real-Git probes
+        if: success() || failure()
+        shell: bash
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+          OLD_R45_ROOT: ${{ github.workspace }}/old-r45
+          AUDIT_OUT: ${{ github.workspace }}/evidence/independent-r49.json
+        run: |
+          set -euo pipefail
+          node audit-assets/audit-evidence/r49/independent-r49.cjs | tee evidence/independent-r49.log
+      - name: Independent re-execution of the frozen 689-test E2/E3 suite
+        if: success() || failure()
+        working-directory: reviewed
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/agent-scheduler/*.test.js tests/agent-executor/*.test.js tests/agent-pilot-r45/*.test.js tests/auto-handoff-r46/*.test.js tests/first-handoff-r49/*.test.js | tee ../evidence/frozen-suite.log
+          test "$(git rev-parse HEAD)" = fcf52ed855dfccacb16cef632d0e3eb202510718
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - name: Preserve independent evidence (never raw credentials)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: independent-codeaudit-r49-fcf52ed
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
