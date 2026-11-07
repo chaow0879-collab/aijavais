@@ -1,0 +1,75 @@
+name: Independent R51 ProductQA
+on:
+  push:
+    branches: [test/codex-productqa-r51]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: productqa-r51-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    name: R51 independent ${{ matrix.mode }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [automation, api, browser, delivery, browser-groups]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify exact frozen subject and isolated test delta
+        run: |
+          python3 - <<'PY'
+          import re,subprocess,os
+          base='3d6937348d94e585e44d567de05f14ecd0eb3636'
+          subprocess.run(['git','merge-base','--is-ancestor',base,'HEAD'],check=True)
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          assert paths and all(re.match(r'^(tests/productqa-r51/|product-acceptance/r51/|\.github/workflows/productqa-r51\.yml$)',p) for p in paths),paths
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['GITHUB_SHA']
+          print('BUSINESS_SHA='+base+' TEST_SHA='+os.environ['GITHUB_SHA'])
+          PY
+      - name: Install isolated browser dependency
+        if: matrix.mode == 'browser' || matrix.mode == 'delivery' || matrix.mode == 'browser-groups'
+        run: |
+          npm install --prefix "$RUNNER_TEMP/qa-browser" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/qa-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Install independent file parsers
+        if: matrix.mode == 'delivery'
+        run: python3 -m pip install --user --break-system-packages python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Execute concentrated acceptance
+        env:
+          NODE_PATH: ${{ runner.temp }}/qa-browser/node_modules
+          QA_GAPS_OUT: ${{ runner.temp }}/r51-${{ matrix.mode }}
+          QA_MODE: ${{ matrix.mode }}
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$QA_GAPS_OUT"
+          if [ -x "$RUNNER_TEMP/qa-browser/node_modules/.bin/playwright" ]; then
+            export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="$(node -e "process.stdout.write(require('playwright').chromium.executablePath())")"
+          fi
+          {
+            case "$QA_MODE" in
+              api|browser) node tests/productqa-r51/run.cjs --"$QA_MODE" ;;
+              *) node tests/productqa-r51/"$QA_MODE".cjs ;;
+            esac
+          } 2>&1 | tee "$QA_GAPS_OUT/runner.log"
+      - name: Finalize evidence hashes
+        if: always()
+        env:
+          QA_GAPS_OUT: ${{ runner.temp }}/r51-${{ matrix.mode }}
+        run: node -e "console.log('R51_HASHES '+JSON.stringify(require('./tests/productqa-r51/harness.cjs').manifest()))"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: productqa-r51-${{ matrix.mode }}
+          path: ${{ runner.temp }}/r51-${{ matrix.mode }}/
+          if-no-files-found: error

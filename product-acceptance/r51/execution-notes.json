@@ -1,0 +1,17 @@
+{
+  "test_failures": 0,
+  "environment": [
+    {
+      "action": "default sandbox git clone",
+      "result": "Failed to connect to proxy port8080; no checkout created",
+      "resolution": "Same authorized public Git read retried with approved require_escalated; clone/checkouts succeeded"
+    },
+    {
+      "action": "first API orchestration",
+      "result": "API process completed with exit0; orchestrator tried storing undefined session_id and raised serialization error",
+      "resolution": "Read actual API summary/log instead of rerunning; guard session storage for remaining tasks. Product tests unaffected and not counted twice."
+    }
+  ],
+  "local_test_permissions": "All localhost HTTP/SQLite/Chromium runs used supported approved execution; no policy bypass",
+  "model_calls": "0 real models; local synthetic HTTP and marked Node only"
+}

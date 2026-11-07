@@ -1,0 +1,19 @@
+{
+  "source_test_sha": "6a568dc05e6b5e2b60d28e6175b2972dd694f589",
+  "source_hashes": {
+    "harness.cjs": "26cd95182de45b31829b5180287a3235b1a11fecaf7bc67772e0ba331d5dd697",
+    "run.cjs": "632760a8498ce85784da4bf2b6f9ec70cefc113126639eb837e1f8be7ed143e9",
+    "fault-preload.cjs": "6ad5010dfcf71535c45f290c3997bef6825b7d563514e2cdda6ada47bca39c7e",
+    "sanitize-trace.py": "92a470c00972fde8e4e071db04c52a2c3bafabc379675a325a9574cb7764cd5e",
+    "delivery.cjs": "0073a48b928ce8121220612f7237d88b68ba08a3137626c52e0cb10da4ae12ed",
+    "browser-groups.cjs": "7c209551db03b7d58c94ac7a27a11ec9a0b1cfe1f42dc72e2000a5256fbafc59",
+    "fake-cli.cjs": "221292ba7c32152e4e1acff05a9fcf256a55bc4205d2d5ad2738d36092125784",
+    "flow-fixture.cjs": "35b4c79fdd763ce424e096511d031c5907498564b3f607ccbd6c5f2ee07cb005"
+  },
+  "changes": [
+    "Bind exact R51 subject",
+    "Own R49 fixture augmented with independently constructed R51 admission digest",
+    "Own marked process adds ignored/metadata/transient attack modes",
+    "Only minimum user regression; no R49 73-scene suite repeated"
+  ]
+}

@@ -1,0 +1,329 @@
+{
+  "reviewed_sha": "3d6937348d94e585e44d567de05f14ecd0eb3636",
+  "independent_pass": 41,
+  "auxiliary_browser_pass": 5,
+  "results": [
+    {
+      "id": "A00-source-and-real-NO_GO",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A01-new-entry-Git-protocol-HTTP-SQLite-success",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A02-loopback-receiver-event-and-fresh-OIDC-tick",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A03-two-R50-event-OIDC-processes",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A04-four-R51-processes-one-work",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A05-AUD-R49-01-actual-process-ignored",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A05-AUD-R49-01-actual-process-metadata",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A05-AUD-R49-01-actual-process-transient",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A06-full-filesystem-scope-ignored-audit",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A06-full-filesystem-scope-ignored-qa",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A06-full-filesystem-scope-metadata",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A06-full-filesystem-scope-allowed-qa",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A07-HALT-at-final-spawn-boundary",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A08-R50-revoke-before-spawn",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A09-R50-withdraw-running-process",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A10-source-veto-while-running",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A11-lease-expired-after-clone-before-spawn",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A12-Git-PATCH-commit-ACK-lost",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A13-Git-authority-SIGKILL-after-commit",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A14-runner-SIGKILL-after-claim-no-replay",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A15-real-HTTP-403",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A15-real-HTTP-429",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A16-cancel-after-process-start",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A17-parent-known-false",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A17-parent-known-true",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A18-admission-refusal-cross-sha",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A18-admission-refusal-money",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A18-admission-refusal-token",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A18-admission-refusal-signature",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A19-R50-identity-refusal-hmac",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A19-R50-identity-refusal-jwks",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A19-R50-identity-refusal-workflow",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A19-R50-identity-refusal-approval",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "A19-R50-identity-refusal-identity-lookalike",
+      "status": "PASS",
+      "mode": "automation",
+      "independent": true,
+      "detail": "automation/automation-results.json"
+    },
+    {
+      "id": "T2-10-API",
+      "status": "PASS",
+      "mode": "api",
+      "independent": true,
+      "detail": "api/api-results.json"
+    },
+    {
+      "id": "T2-13-after-http",
+      "status": "PASS",
+      "mode": "api",
+      "independent": true,
+      "detail": "api/api-results.json"
+    },
+    {
+      "id": "T2-09-cancel",
+      "status": "PASS",
+      "mode": "browser",
+      "independent": true,
+      "detail": "browser/browser-results.json"
+    },
+    {
+      "id": "T2-11-UI",
+      "status": "PASS",
+      "mode": "browser",
+      "independent": true,
+      "detail": "browser/browser-results.json"
+    },
+    {
+      "id": "T2-12-GAP",
+      "status": "PASS",
+      "mode": "browser",
+      "independent": true,
+      "detail": "browser/browser-results.json"
+    },
+    {
+      "id": "org",
+      "status": "PASS",
+      "mode": "delivery",
+      "independent": true,
+      "detail": "delivery/delivery-results.json"
+    },
+    {
+      "id": "independent-file-parsing",
+      "status": "PASS",
+      "mode": "delivery",
+      "independent": true,
+      "detail": "delivery/delivery-results.json"
+    },
+    {
+      "id": "admin",
+      "status": "PASS",
+      "mode": "browser-groups",
+      "independent": false,
+      "detail": "browser-groups/browser-groups.json"
+    },
+    {
+      "id": "workspace",
+      "status": "PASS",
+      "mode": "browser-groups",
+      "independent": false,
+      "detail": "browser-groups/browser-groups.json"
+    },
+    {
+      "id": "intake-draft",
+      "status": "PASS",
+      "mode": "browser-groups",
+      "independent": false,
+      "detail": "browser-groups/browser-groups.json"
+    },
+    {
+      "id": "industry",
+      "status": "PASS",
+      "mode": "browser-groups",
+      "independent": false,
+      "detail": "browser-groups/browser-groups.json"
+    },
+    {
+      "id": "claude-delivery",
+      "status": "PASS",
+      "mode": "browser-groups",
+      "independent": false,
+      "detail": "browser-groups/browser-groups.json"
+    }
+  ]
+}
