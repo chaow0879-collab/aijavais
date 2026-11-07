@@ -14,11 +14,11 @@
   // ---- Output forms the user can pick explicitly (or that are detected from their words) ----
   const OUTPUTS = {
     document:   { label: '报告/文档', re: /报告|文档|方案|手册|说明书|白皮书|指南|制度|word|docx|章程|规范文本/i, tools: ['docx_generation'], role: ['writer', '文档撰写与排版员', '把专业内容整理成结构清晰、可编辑的文档', '目录、摘要、结论与依据齐全，可直接编辑', 'writing'] },
-    spreadsheet:{ label: '表格/测算表', re: /表格|excel|xlsx|台账|测算表|清单表|数据表|价目表|报价单|一览表|统计表/i, tools: ['xlsx_generation'], role: ['sheet', '表格建模员', '建立可复核的表格结构、公式与校验', '公式可追溯、无来历不明的硬编码数字、含说明页', 'data_analysis'] },
+    spreadsheet:{ label: '表格/测算表', re: /表格|excel|xlsx|台账|测算表|清单表|数据表|价目表|报价单|一览表|统计表|定价表|成本表|库存表|通讯录|名录/i, tools: ['xlsx_generation'], role: ['sheet', '表格建模员', '建立可复核的表格结构、公式与校验', '公式可追溯、无来历不明的硬编码数字、含说明页', 'data_analysis'] },
     slides:     { label: '演示文稿', re: /ppt|幻灯片|演示稿|演示文稿|路演|汇报稿|课件/i, tools: ['pptx_generation'], role: ['slides', '演示文稿设计员', '把结论组织成面向听众的演示页面', '每页一个核心信息、可编辑、数据图表注明来源', 'writing'] },
     software:   { label: '软件/程序', re: /软件|程序|代码|网站|\bapp\b|小程序|接口开发|系统开发|插件|自动化工具|python|javascript/i, tools: ['repository_access', 'code_execution'], role: ['engineer', '软件实现工程师', '按确认的需求实现可运行的程序并附运行说明', '可运行、附自动化测试与运行说明，测试真实通过', 'coding'] },
     visual:     { label: '视觉/设计稿', re: /海报|图片|视觉|设计稿|logo|插画|包装设计|配图|版式/i, tools: ['image_generation'], role: ['visual', '视觉设计员', '形成与目标和对象一致的视觉方案', '尺寸/格式明确，文字可读，素材来源与授权说明清楚', 'vision'] },
-    schedule:   { label: '计划/排期', re: /计划表|排期|日程|路线图|时间表|里程碑|行程|甘特/i, tools: ['xlsx_generation'], role: ['planner', '计划编制员', '把工作拆成有时间、负责人和依赖关系的计划', '每项任务有负责人、起止时间、依赖与风险缓冲', 'reasoning'] },
+    schedule:   { label: '计划/排期', re: /计划表|排期|日程|路线图|时间表|里程碑|行程|甘特|轮班表|排班表|值班表/i, tools: ['xlsx_generation'], role: ['planner', '计划编制员', '把工作拆成有时间、负责人和依赖关系的计划', '每项任务有负责人、起止时间、依赖与风险缓冲', 'reasoning'] },
     curriculum: { label: '课程/培训材料', re: /课程|教案|培训|教学|讲义|练习册|工作坊/i, tools: ['docx_generation'], role: ['instructor', '课程与学习活动设计员', '设计学习目标、活动与评估方式', '学习目标可衡量、活动与时长匹配、含评估方法', 'writing'] },
     media:      { label: '文案/视频脚本', re: /文案|视频|短视频|直播|播客|脚本|推文|公众号|宣传语/i, tools: ['docx_generation'], role: ['editor', '内容脚本编辑', '撰写面向对象的文案或分镜脚本', '语气符合对象、事实可核查、无夸大与违规用语', 'writing'] }
   };
@@ -33,7 +33,7 @@
   };
   // ---- Risk domains: require a human professional; the platform never certifies them ----
   const RISKS = {
-    medical:     { label: '医疗健康', re: /医疗|医药|药品|药物|诊断|治疗|患者|临床|处方|保健品|心理咨询|护理|康复|疫苗/, boundary: '不得给出诊断、处方或治疗结论；只整理信息并提示由执业医务人员审查' },
+    medical:     { label: '医疗健康', re: /医疗|医药|药品|药物|诊断|治疗|患者|临床|处方|保健品|心理咨询|护理|康复|疫苗|体检|疾病|减压病|伤病/, boundary: '不得给出诊断、处方或治疗结论；只整理信息并提示由执业医务人员审查' },
     legal:       { label: '法律合规', re: /法律|合同|诉讼|法规|合规|许可证|资质|知识产权|劳动法|备案|监管|规定|条例|规章/, boundary: '不得出具法律意见；法规与条款引用须标注待执业律师/合规人员确认' },
     finance:     { label: '金融财税', re: /投资|证券|贷款|保险|理财|税务|审计|基金|融资|股权|信贷/, boundary: '不得给出个性化投资、税务或信贷建议；数字须注明来源与假设' },
     safety:      { label: '人身/生产安全', re: /安全|食品|化学|危险品|电气|施工|消防|结构|特种设备|辐射|农药|兽药|检疫|高空|有毒|急救/, boundary: '不得替代持证工程/安全人员签字；安全相关参数必须引用适用标准并人工复核' },
