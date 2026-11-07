@@ -23,6 +23,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - name: Assert exact unified candidate
         env:
           CANDIDATE_SHA: ${{ github.sha }}
