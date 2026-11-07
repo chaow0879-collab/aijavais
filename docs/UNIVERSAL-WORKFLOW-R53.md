@@ -65,3 +65,27 @@ node tools/universal-workflow-r53/sources.js
 逐岗授权映射使用无原型字典并验证自有键，角色ID如`__proto__`不能使权限在JSON持久化时丢失后回退到全局工具集合；有专门持久化负例。现有非通用项目事件保留MODEL_ADAPTER_UNVERIFIED，不因存在planning.goal就伪标为本地Mock。
 
 本地浏览器首轮因Playwright默认浏览器缓存缺失未执行；无需安装，改用已安装`/usr/bin/chromium`后原R44真实浏览器流程通过。源码不改变浏览器断言或生产权限。后续R52合流及真实后端联调另行记录，不能拿独立fixture浏览器PASS冒充最终整合用户旅程。
+
+## R52 精确合流与最终契约适配
+
+R52真正[READY报告](https://github.com/chaow0879-collab/aijavais/issues/35#issuecomment-6705287149)源`0532f606258d06bf5215907b1566dc419a86cab5`、父R44、CI42361149501 completed/success；17个增量路径只做单提交cherry-pick，不带其旧父链。所有Claude独占文件与原源blob/mode一致。
+
+新增认证GET `/api/v2/universal/runs/:id/workbench?after=0&limit=1000`由`lib/workbench-r53.js`输出原样R52 `aijavais.workbench.event/v1`及artifact/v1。每work内seq从1连续，持久event_id/parent/source SHA稳定，分页重放不重新编号旧记录；R52原projector可直接消费，倒序/重复输入有实际联调测试。费用事件绑定真实usage ledger ID且供应商账单null，不把本地价表零当真实厂商账单。非R53旧运行只标SERVER_RECORDED，不冒称E3或E4。
+
+补上原Engine平滑关停缺少run_cancelled事件的缺口。`rework`新增`fromStepId`：先验证前缀实际角色产出和hash，重用这些持久证据，从所选步骤到末尾执行依赖后缀；不选仍整轮重做，每轮都需全新授权，不自动重试。原R52 UI把重点步骤放进反馈文字，仍按整轮返工；精确步骤ID路径由新API提供，未私改Claude前端行为。
+
+新增POST `/api/v2/universal/runs/:id/criteria`：`{requestId,expectedRound,checks:{"criterion-1":{status:"passed|failed|unverified",note}}}`；标准文字来自运行快照，按当前round存不可变JSON证据文件与事件，不修改模型/账本。存在已保存检查时，任何未通过项都会阻断accept；没逐项保存时confirmCriteria是明确的批量用户声明，逐项结论进入review.acceptance，不是平台专业认证。原R52 UI本地检查仍是本地便签，服务器不会假称已同步这些本地值。
+
+### 原R52测试适用范围与失败记录
+
+冻结R52原12项整体在准确源SHA隔离普通clone执行，不创建worktree。其scope测试专门断言R44之后只有Claude路径，因此对联合R53树不适用；原E3测试还明确断言SIGTERM**没有**取消事件，这是一条上游缺口观察，本包已经修复，不能保留这个错误行为去迎合历史断言。直接在联合树运行原套件出现这两项失败，已完整保留日志；不删除、不篡改上游断言。
+
+统一CI分别执行：冻结R52完整12项、联合树纯模块10项（另2项按上述上下文仅在冻结整套中执行；Node过滤选择不计入skipped计数）、R53真实HTTP/事件/授权/定向返工/验收正负例、R52原完整11项真实Chromium。联合树作者scope由R53全树来源核验与17文件逐blob对照替代；修复后的关停行为在R53服务重启负例核对真实run_cancelled事件。不把原Frozen12算作联合源码12个运行时通过，也不把旧缺陷复现当当前安全成功。
+
+原R52页面继续使用已认证V2 API；R53增加的是同一Engine的更严格逐岗授权/幂等/版本验收API和直接事件DTO。R52原页面尚未消费新逐条服务器检查API和fromStepId字段，仍按原文案说明其本地检查/整轮返工限制。原页面的前端角色状态由保全的旧V2 snapshot适配器重建；新增量端点与原projector的真正联调单列，不冒称前端已全面改接新协议。
+
+## 已收到的R51最终独立结论（仅旧SHA）
+
+R51安全[#2#6706878270](https://github.com/chaow0879-collab/aijavais/issues/2#issuecomment-6706878270) ACCEPT_WITH_FOLLOWUP仅非live，0P0/0P1/2P2；审计CI42360045723 **completed/failure**，保留158 PASS/1 FAIL及额外symlink反例，不能说全绿。AUD-R51-01为V2 QA越界临时文件写后删除时忽略目录ctime；AUD-R51-02为允许目录链接绕出工作区。它们不由本产品分支修改：当前任务禁止改R51安全源码，真实路径仍编译期OFF。请规划AGENT另行聚合授予精确安全差异修复及复审，激活前两项都必须关闭。
+
+R51独立QA[#4#6705133661](https://github.com/chaow0879-collab/aijavais/issues/4#issuecomment-6705133661) PASS_WITH_FOLLOWUP，41 PASS/0FAIL；[补充说明#6706891475](https://github.com/chaow0879-collab/aijavais/issues/4#issuecomment-6706891475)明确这两项安全反例不在其41项PASS内。两份结论仅对R51准确SHA生效，不是本R53独立认可。真实官方身份/可信签署、金额+Token硬边界、OS隔离、保护ref与Owner GO继续缺失，E4/E5、生产/main/Secrets/真实持续调度全部NOT_RUN/NOT_ENABLED。

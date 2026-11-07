@@ -50,6 +50,14 @@ jobs:
         env:
           R53_EVIDENCE_DIR: ${{ runner.temp }}/r53-evidence
         run: node --test tests/universal-workflow-r53/*.test.js tests/claude-universal-intake.test.js
+      - name: Frozen R52 original suite including authorship and historical shutdown observation
+        if: success() || failure()
+        env:
+          R52_OUT: ${{ runner.temp }}/r53-evidence/r52-frozen
+        run: node tools/universal-workflow-r53/run-r52.js
+      - name: R52 pure modules against integrated tree (historical authorship/shutdown assumptions run only above)
+        if: success() || failure()
+        run: node --test --test-skip-pattern='scope:|E3_FAKE real server:' tests/haloflux-workbench-r52/workbench.test.js
       - name: "#15 semantic P2 guards (test:p2)"
         if: success() || failure()
         run: npm run test:p2
@@ -136,6 +144,12 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
           UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
         run: node tests/ui/claude-universal-intake.e2e.js
+      - name: R52 full real Chromium workbench against unified backend (local MOCK only)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: node tests/haloflux-workbench-r52/workbench.e2e.js
       - name: Hash screenshots
         if: always()
         run: cd "$RUNNER_TEMP/aij-ui-shots" && sha256sum * 2>/dev/null || true
