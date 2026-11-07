@@ -25,9 +25,11 @@ function demo(phase='integration',kind='claude',now=Date.now()){
   snapshot.issues[2].comments.push(comment('audit',{role:'CodeAudit',status:'READY_FOR_REVIEW',verdict:'ACCEPT',review_phase:'FINAL',reviewed_sha:SHA(3),branch:'integration'}));grant('audit',2,'integration',SHA(3));
  }
  const request={repo:REPO,issue:22,kind,role:{integration:'integrator',audit:'audit',qa:'qa'}[phase],phase,sha:SHA(3),observed_ref:SHA(3),branch:defaults.allowed_branches[0],approval_version:'FAKE-v1',fast_forward:true,clean_workspace:true,context:{context_pack:'#20 compact fixture; no real authorization',task:'#22 FAKE scenario only'}};
+ if(phase==='integration'){request.base_sha=request.sha;request.parent_shas=[SHA(1),SHA(2)];}
  request.context_digest=digest(request.context);
  const gate=evaluate(snapshot,gate_config,now);
  const payload={...Object.fromEntries(['repo','issue','kind','role','phase','sha','branch','approval_version','context_digest'].map(k=>[k,request[k]])),source_digest:digest(snapshot),fake_only:true,approved_scope:'fake_simulation',allowed_issues:[22],allowed_branches:[request.branch],permitted_roles:[request.role],identity:{actor:'FAKE_OPERATOR'},expires_at:now+60000,gate_digest:gateDigest(gate),max_job_runtime:100,max_tokens:100,max_model_spend:0,max_daily_model_spend:0,max_retries:1};
+ if(phase==='integration'){payload.base_sha=request.base_sha;payload.parent_shas=[...request.parent_shas];}
  const sign=()=>({payload,key_id:'fixture',signature:crypto.sign(null,Buffer.from(canonical(payload)),privateKey).toString('base64')});
  return {request,snapshot,policy,payload,approval:sign(),sign,now};
 }

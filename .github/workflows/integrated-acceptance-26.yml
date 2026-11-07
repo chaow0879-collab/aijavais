@@ -7,7 +7,7 @@ name: Unified R43 product and automation validation
 # Local MOCK models only; no secrets, no paid APIs, no deploy, no schedule.
 on:
   push:
-    branches: [feat/aijavais-v2-integrated-acceptance-26, integrate/r43-unified-product-autoexec]
+    branches: [feat/aijavais-v2-integrated-acceptance-26, integrate/r43-unified-product-autoexec, fix/codex-r47-r43-sha-binding-p1]
   workflow_dispatch:
 permissions:
   contents: read

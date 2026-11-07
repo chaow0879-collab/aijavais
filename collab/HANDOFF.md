@@ -1,3 +1,13 @@
+# R47 AUD-R43-01 定向修复候选（当前状态）
+
+- 唯一作者原Codex；分支fix/codex-r47-r43-sha-binding-p1，基线ab3e07979f67924e795426737e26c5c4d84b8501，原R43冻结分支不改。
+- R46已正式READY并冻结a1a258a41c2041ab8d6cebc622cfed0c690c3387，#30#6699403152；R47未合入R46/R45/R44。
+- 中央V2 verify在claim前强制audit/qa SHA匹配V1 integration候选；集成准备明确签双输入和目标base。仅policy.js、Fake demo、53项新测试、精确blob保全、现有联合CI和交接文档有必要变更。完整范围与阶段语义见docs/R43-SHA-BINDING-R47.md。
+- 本地53目标/436组合通过，最终准确40位SHA/CI及业务结果见#22 R47报告；仅作者READY，等待原CodeAudit和ProductQA定向差异复验。原R43 REJECT不撤回，三个P2保持延期未修复。
+- 真实执行/远端写仍编译期OFF，无收费模型、云端自动接力、生产/main/Secrets操作。后续完整自动化合流必须重绑新的修复源与真实权限，不移用旧SHA审计结论。
+
+---
+
 # R43 唯一联合候选（覆盖以下历史分叉状态）
 
 - 唯一写入者Codex-Integrator；分支 `integrate/r43-unified-product-autoexec`，复用现有隔离checkout。业务b377d427e6a018dc03fbf01c6ec1db40be156b4c与自动化e891978b46490bccf2c2282df24c8e7b2f4ced42已真实no-ff无冲突合流，merge 64b3df5c75548b0fda3e44d8f1a35a6a8ed25200保留双父链。
