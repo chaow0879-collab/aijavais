@@ -1,0 +1,32 @@
+{
+  "probe": {
+    "state": "METADATA_VERIFIED",
+    "reason": null,
+    "expected_version": "2.1.318",
+    "observed_version": "2.1.318 (Claude Code)",
+    "missing_flags": [],
+    "budget_flag_description": "--max-budget-usd <amount>             Maximum dollar amount to spend on API calls (only works with --print)",
+    "help_sha256": "5ca3a9dac2026e56c221fdd34380c7d7d45ebbb51c1d01b7c17c75cb076a0be8",
+    "probe_status": {
+      "version_exit": 0,
+      "help_exit": 0,
+      "version_error": null,
+      "help_error": null
+    },
+    "official_auth": "NOT_RUN",
+    "provider_hard_cap": "NOT_VERIFIED",
+    "model_calls": 0
+  },
+  "public_npm_distribution": {
+    "version": "2.1.318",
+    "dist.integrity": "sha512-OTJgLxcvWefv8IdTsq5n90Z2IxEhLwKqHUBhwZYE4odXzKA/Tb6p2Zb5Iy9Vq7JIVcNZzn9cPxW5sb42wLF95Q==",
+    "dist.tarball": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.318.tgz"
+  },
+  "official_readme": {
+    "url": "https://github.com/anthropics/claude-code/blob/main/README.md",
+    "blob": "70754c523454ad5fd94e5ef910cc347cf69e6f6b",
+    "sha256": "07445fe9698dd4e038fa5b30ea3bde5f8f1480068b2f275fdd20725cecda0a6c"
+  },
+  "supplier_billing_or_auth_test": "NOT_RUN",
+  "observed_on": "2026-11-07"
+}

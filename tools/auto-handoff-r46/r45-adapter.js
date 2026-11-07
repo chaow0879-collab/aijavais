@@ -24,9 +24,9 @@ const isFake=x=>instances.has(x)&&Object.getPrototypeOf(x)===FakeR45Runner.proto
 // key generation, callback injection or live mode exists in this adapter.
 const signedInstances=new WeakMap();
 class SignedFakeR45Runner {
- constructor({prepared,signed,policy,stateDir,sourceRepo,fakeExecutable,refs}) {
+ constructor({prepared,signed,policy,stateDir,sourceRepo,fakeExecutable,refs,beforeLaunchCheck}) {
   if(policy?.live_enabled!==false||policy?.allow_fake_cli!==true)reject('FAKE_RUNNER_REQUIRED');
-  signedInstances.set(this,{prepared:structuredClone(prepared),signed:structuredClone(signed),policy:structuredClone(policy),stateDir,sourceRepo,fakeExecutable,refs:structuredClone(refs),calls:0});Object.freeze(this);
+  signedInstances.set(this,{prepared:structuredClone(prepared),signed:structuredClone(signed),policy:structuredClone(policy),stateDir,sourceRepo,fakeExecutable,refs:structuredClone(refs),beforeLaunchCheck,calls:0});Object.freeze(this);
  }
  get calls(){return signedInstances.get(this).calls;}
  get previousRunId(){return signedInstances.get(this).previousRunId||null;}
@@ -34,7 +34,7 @@ class SignedFakeR45Runner {
   const x=signedInstances.get(this),P=require('../agent-pilot-r45/contract'),A=require('../agent-pilot-r45/policy'),B=require('./pilot-contract');
   if(P.canonical(P.unsigned(x.signed))!==P.canonical(x.prepared.unsigned_envelope)||x.signed.source.sha!==e.source_sha||x.signed.gate.gate_sha!==e.source_sha||x.prepared.dedupe_key!==P.dedupeKey(x.signed)||A.authorize(x.signed,x.policy))reject('RUNNER_OUTCOME_INVALID');
   x.calls++;
-  const outcome=await require('../agent-pilot-r45/runner').runOnce(x.signed,{mode:'fake',policy:x.policy,stateDir:x.stateDir,sourceRepo:x.sourceRepo,fakeExecutable:x.fakeExecutable,signal});
+  const outcome=await require('../agent-pilot-r45/runner').runOnce(x.signed,{mode:'fake',policy:x.policy,stateDir:x.stateDir,sourceRepo:x.sourceRepo,fakeExecutable:x.fakeExecutable,beforeLaunchCheck:x.beforeLaunchCheck,signal});
   if(outcome.state==='DUPLICATE'){
    const previous=outcome.evidence?.previous_run_id;if(!require('./contract').safeRunId(previous))reject('RUNNER_OUTCOME_INVALID');
    // A prior local receipt is not proof of remote settlement or a reconciled

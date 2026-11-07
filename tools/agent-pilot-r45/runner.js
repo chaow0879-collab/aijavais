@@ -86,6 +86,14 @@ async function runOnce(envelope, opts = {}) {
     DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' };
   if (mode === 'live') for (const name of CREDENTIAL_ENV[kind]) if (typeof env[name] === 'string' && env[name]) { childEnv[name] = env[name]; secrets.push(env[name]); }
   try {
+    // Privilege-reducing hook from the trusted in-process pilot composition.
+    // Recheck after clone/preflight, immediately before any process can start.
+    if (opts.beforeLaunchCheck) {
+      let allowed = false;
+      try { allowed = await opts.beforeLaunchCheck() === true; } catch { /* fail closed, no raw error */ }
+      if (!allowed) return settle({ state: 'BLOCKED', reason: 'PRE_LAUNCH_GATE_REVOKED', retry: 'never', cost: costBase });
+    }
+    if (opts.signal?.aborted || killed()) return settle({ state: 'BLOCKED', reason: 'CANCELLED_OR_KILLED_BEFORE_LAUNCH', retry: 'never', cost: costBase });
     journal.transition(key, 'RUNNING');
     const r = await S.run({ executable, args, cwd: ws.dir, env: childEnv, timeoutMs: envelope.task.max_runtime_ms, maxOutputBytes: policy.max_output_bytes, secrets, signal: opts.signal });
     const launched = r.pid !== null && r.reason !== 'SPAWN_FAILED' && r.reason !== 'CLI_NOT_FOUND';

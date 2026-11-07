@@ -1,0 +1,16 @@
+{
+  "base_sha": "fcf52ed855dfccacb16cef632d0e3eb202510718",
+  "r50": null,
+  "exceptions": {
+    "tools/agent-pilot-r45/runner.js": {
+      "from": "100644 blob 5f9a9a93f6a4be443d634ee26e4d75c9f1e4d153",
+      "to": "100644 blob 86d333ff7a48b5cb903feec3e0c3dfebcf9e7298",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "tools/auto-handoff-r46/r45-adapter.js": {
+      "from": "100644 blob 197fed00370239d357b767f09bfd7267069ce0e4",
+      "to": "100644 blob 039757167da1fd7bfd017e9d237814a6af3f1536",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    }
+  }
+}
