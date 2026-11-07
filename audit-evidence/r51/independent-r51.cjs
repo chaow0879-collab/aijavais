@@ -95,9 +95,10 @@ for(const role of ['audit','qa'])for(const attack of ['ignored','nested-ignore',
  if(attack==='ignored'||attack==='nested-ignore'){parent(path.join(base,'hidden'));const dir=path.join(base,attack==='ignored'?'ignored':'nested');fs.mkdirSync(dir);if(attack==='nested-ignore')fs.writeFileSync(path.join(dir,'.gitignore'),'*\n');fs.writeFileSync(path.join(dir,'unauthorized.js'),'outside tests');}
  if(attack==='transient'){unlock(base);const p=path.join(base,'transient');fs.writeFileSync(p,'unsafe');fs.unlinkSync(p);}
  if(attack.startsWith('git-')){const names={'git-config':'.git/config','git-hooks':'.git/hooks/independent','git-exclude':'.git/info/exclude','git-head':'.git/HEAD'},p=path.join(base,names[attack]);parent(p);if(fs.existsSync(p))unlock(p);fs.appendFileSync(p,'\n# unauthorized metadata\n');}
- if(attack==='delete'||attack==='rename'){const p=path.join(base,'protected.js');parent(p);if(attack==='delete')fs.unlinkSync(p);else fs.renameSync(p,path.join(base,'tests/renamed.js'));}
+ if(attack==='delete'||attack==='rename'){const p=path.join(base,'protected.js');parent(p);if(attack==='delete')fs.unlinkSync(p);else {parent(path.join(base,'tests/renamed.js'));fs.renameSync(p,path.join(base,'tests/renamed.js'));}}
  if(attack==='symlink'){unlock(base);fs.symlinkSync(tmp(),path.join(base,'ignored-external-link'));}
  for(const [p,mode]of changed.reverse())if(fs.existsSync(p))fs.chmodSync(p,mode);
+ if(role==='qa'&&attack==='transient'){let accepted=false;try{accepted=W.verifyChanges(w,role,['tests'])===true;}catch{}probes.push({name:'QA out-of-scope transient root write then delete',accepted,git_status_clean:git(['status','--porcelain=v1'],w.dir)==='',path:'transient',file_removed:!fs.existsSync(path.join(w.dir,'transient')),actual_agent_launches:0,live_entry:'DISABLED'});}
  assert.throws(()=>W.verifyChanges(w,role,role==='audit'?[]:['tests']),/WORKSPACE_SCOPE_VIOLATION/);return {seal:'REJECTED'};
 });
 await check('legitimate QA nested ignored tests are accepted with a clean initial audit positive',()=>{const f=scratch();assert.equal(W.verifyChanges(f.w,'audit',[]),true);fs.mkdirSync(path.join(f.w.dir,'tests/local'));fs.writeFileSync(path.join(f.w.dir,'tests/local/.gitignore'),'*\n');fs.writeFileSync(path.join(f.w.dir,'tests/local/generated.js'),'allowed tests');assert.equal(W.verifyChanges(f.w,'qa',['tests']),true);});
