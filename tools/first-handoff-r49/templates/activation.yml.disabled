@@ -1,0 +1,31 @@
+# NOT INSTALLED. Review and merge a separately approved activation change first.
+# This file is documentation, not an active workflow. No Secrets or credentials.
+# A trusted dispatcher must bind a fresh, collected snapshot to the approved SHA;
+# event payloads/comment text are triggers only, never prompts or authorization.
+name: Approved one-shot handoff (NOT_ENABLED)
+on:
+  issue_comment:
+    types: [created, edited]
+  workflow_run:
+    workflows: [Unified R49 validation]
+    types: [completed]
+  schedule:
+    - cron: '*/10 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: first-handoff-control
+  cancel-in-progress: false
+jobs:
+  no-go:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: node tools/first-handoff-r49/cli.js
+# Future separately approved activation needs a least-privilege GitHub App token
+# restricted to the state ref, FF-only writes and verified protection/CAS. Do not
+# elevate this template to contents:write or add any credential until authorized.
+# Missing broker/official identity/enforceable budget/final reviews => NO_GO.

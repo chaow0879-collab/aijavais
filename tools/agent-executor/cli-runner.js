@@ -14,12 +14,12 @@ function buildCommand(kind,limits,role='developer'){
 }
 function verifyReadiness(request,proofs,trustedKeys){
  if(!request||!proofs||!trustedKeys)reject('BLOCKED_READINESS');
- if(request.repo!==REPO||!Number.isSafeInteger(request.issue)||!request.allowed_issues?.includes(request.issue)||!/^(?:feat|fix|test)\/[A-Za-z0-9_./-]+$/.test(request.branch||'')||request.branch.includes('..')||!request.allowed_branches?.includes(request.branch)||request.production===true)reject('LIVE_SCOPE_DENIED');
+ if(request.repo!==REPO||!Number.isSafeInteger(request.issue)||!request.allowed_issues?.includes(request.issue)||!/^(?:feat|fix|test|integrate)\/[A-Za-z0-9_./-]+$/.test(request.branch||'')||request.branch.includes('..')||!request.allowed_branches?.includes(request.branch)||request.production===true)reject('LIVE_SCOPE_DENIED');
  const identities=new Set();
  for(const role of ['v1_audit','v2_audit','operator']){
   const p=proofs[role];try{if(!p||!trustedKeys[role]?.[p.key_id]||!crypto.verify(null,Buffer.from(canonical(p.payload)),trustedKeys[role][p.key_id],Buffer.from(p.signature,'base64')))reject('BLOCKED_READINESS');}catch{reject('BLOCKED_READINESS');}
   const identity=crypto.createPublicKey(trustedKeys[role][p.key_id]).export({type:'spki',format:'der'}).toString('base64');if(identities.has(identity))reject('READINESS_IDENTITY_CONFLICT');identities.add(identity);
-  if(p.payload.manifest_digest!==digest(request)||p.payload.role!==role||p.payload.expires_at<=Date.now())reject('BLOCKED_READINESS');
+  if(p.payload.manifest_digest!==digest(request)||p.payload.role!==role||!Number.isSafeInteger(p.payload.expires_at)||p.payload.expires_at<=Date.now())reject('BLOCKED_READINESS');
  }
  if(!/^[a-f0-9]{40}$/.test(request.fixed_gate_sha||'')||request.fixed_gate_sha==='6363e8d10595a566a1ba266cb70017711cc806be'||proofs.v1_audit.payload.verdict!=='ACCEPT'||proofs.v2_audit.payload.verdict!=='ACCEPT'||proofs.operator.payload.approved!==true)reject('BLOCKED_GATE_OR_AUDIT');
  if(request.isolation!=='ephemeral_github_hosted'||request.credentials_verified!==true||request.cli_version_verified!==true||request.native_token_cap_verified!==true||request.native_spend_cap_verified!==true||request.role_scope_verified!==true||request.state_ref_protection_verified!==true)reject('BLOCKED_CREDENTIALS_OR_LIMIT_ENFORCEMENT');

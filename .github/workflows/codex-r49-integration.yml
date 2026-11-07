@@ -1,0 +1,250 @@
+name: Unified R49 validation
+# Reused #23 workflow: R43 unifies frozen product and automation in one exact SHA.
+# No new execution workflow or scheduler is activated. It runs every
+# existing gate of both packages on one exact SHA: the full suite, #15 semantic
+# guards and strict release Office parsing, #17 delivery checks (also under the
+# release gate), all Chromium suites and the container health check.
+# Local MOCK models only; no secrets, no paid APIs, no deploy, no schedule.
+on:
+  push:
+    branches: [integrate/codex-r49-first-real-handoff]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: integrated-r49-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Assert exact unified candidate
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install poppler and LibreOffice (existing suite needs them)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Record exact SHA and sandbox isolation support (smoke tests are NOT_RUN where unsupported)
+        run: |
+          echo "integrated_sha=$GITHUB_SHA"
+          pdftotext -v; soffice --version
+          node -e "console.log(JSON.stringify(require('./lib/code-exec').codeExecStatus()))"
+      - name: Full existing suite (npm test)
+        env:
+          INDUSTRY_E2E_OUT: ${{ runner.temp }}/industry-e2e
+        run: npm test
+      - name: "#15 semantic P2 guards (test:p2)"
+        if: success() || failure()
+        run: npm run test:p2
+      - name: "#15 strict release industry parsing (test:release-industry)"
+        if: success() || failure()
+        env:
+          INDUSTRY_E2E_OUT: ${{ runner.temp }}/industry-e2e-release
+        run: npm run test:release-industry
+      - name: "#17 delivery checks under the release parsing gate (test:release-delivery)"
+        if: success() || failure()
+        env:
+          CLAUDE_DELIVERY_OUT: ${{ runner.temp }}/claude-delivery
+        run: npm run test:release-delivery
+      - name: Hash evidence
+        if: always()
+        run: |
+          for d in industry-e2e industry-e2e-release claude-delivery; do
+            if [ -d "$RUNNER_TEMP/$d" ]; then echo "== $d"; (cd "$RUNNER_TEMP/$d" && find . -type f -print0 | sort -z | xargs -0 sha256sum); fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integrated-26-evidence
+          path: |
+            ${{ runner.temp }}/industry-e2e
+            ${{ runner.temp }}/industry-e2e-release
+            ${{ runner.temp }}/claude-delivery
+          if-no-files-found: ignore
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Assert exact unified candidate
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install isolated, pinned browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/aij-ui-deps" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/aij-ui-deps/node_modules/.bin/playwright" install --with-deps chromium
+          mkdir -p "$RUNNER_TEMP/aij-ui-shots"
+      - name: Admin walkthrough (test:ui)
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:ui
+      - name: Workspace walkthrough (test:workspace)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:workspace
+      - name: Editable AI team draft (test:intake)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:intake
+      - name: Three-industry MOCK walkthrough (test:industry)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:industry
+      - name: "#19 cost attribution + #17 workspace delivery checks (test:delivery-ui)"
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:delivery-ui
+      - name: Hash screenshots
+        if: always()
+        run: cd "$RUNNER_TEMP/aij-ui-shots" && sha256sum * 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integrated-26-browser
+          path: ${{ runner.temp }}/aij-ui-shots
+          if-no-files-found: ignore
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Assert exact unified candidate
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
+      - name: Build independent production image
+        run: docker build --tag aijavais:ci .
+      - name: Verify pdftotext is present in the image
+        run: docker run --rm --entrypoint pdftotext aijavais:ci -v
+      - name: Start isolated backend and verify health (no public host port)
+        run: |
+          docker run --detach --name aij-ci aijavais:ci
+          for attempt in $(seq 1 30); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' aij-ci)" = healthy ]; then exit 0; fi
+            if [ "$(docker inspect --format '{{.State.Status}}' aij-ci)" = exited ]; then exit 1; fi
+            sleep 2
+          done
+          exit 1
+      - name: Remove isolated container
+        if: always()
+        run: docker rm --force --volumes aij-ci || true
+
+  automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Confirm exact candidate source
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
+      - name: Verify both frozen runtime and test sources are preserved
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node tools/integration/verify-r43-sources.js > "$RUNNER_TEMP/agent-executor-evidence/source-provenance.json"
+          cat "$RUNNER_TEMP/agent-executor-evidence/source-provenance.json"
+      - name: Integrated V1 regression including real process races (serial test files)
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node --test --test-concurrency=1 --test-reporter=tap tests/agent-scheduler/*.test.js | tee "$RUNNER_TEMP/agent-executor-evidence/v1.tap"
+      - name: Fake executor plus integrated V1 regression
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node --test --test-reporter=tap tests/agent-executor/*.test.js tests/agent-scheduler/*.test.js | tee "$RUNNER_TEMP/agent-executor-evidence/tests.tap"
+      - name: Public CLI version metadata only (no model request or authentication read)
+        run: node tools/agent-executor/runner-entry.js --probe > "$RUNNER_TEMP/agent-executor-evidence/environment.json"
+      - name: Default OFF and explicit offline demo only
+        run: |
+          node tools/agent-executor/cli.js
+          node tools/agent-executor/cli.js --fake-demo
+          node tools/agent-executor/runner-entry.js --stub
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-executor-offline-evidence
+          path: ${{ runner.temp }}/agent-executor-evidence
+          if-no-files-found: error
+
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Exact candidate and selected source provenance
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$RUNNER_TEMP/r49"
+          node tools/first-handoff-r49/sources.js > "$RUNNER_TEMP/r49/sources.json"
+      - name: All R45 R46 and R49 E2 E3 tests (Fake CLI only)
+        run: node --test tests/agent-pilot-r45/*.test.js tests/auto-handoff-r46/*.test.js tests/first-handoff-r49/*.test.js
+      - name: R48 source dependency status (never claim absent conformance PASS)
+        run: |
+          node -e "const s=require('./tools/first-handoff-r49/sources.json');console.log(s.r48 ? 'R48_SOURCE_PRESENT' : 'WAIT_R48: conformance NOT_RUN; not a complete frozen candidate')"
+      - name: Pinned public CLI metadata only (no model authentication or request)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/public-cli" --no-package-lock --ignore-scripts @anthropic-ai/claude-code@2.1.318 @openai/codex@0.167.0
+          export PATH="$RUNNER_TEMP/public-cli/node_modules/.bin:$PATH"
+          node tools/agent-pilot-r45/cli.js preflight > "$RUNNER_TEMP/r49/preflight.json"
+          node -e "const p=require(process.env.RUNNER_TEMP+'/r49/preflight.json');console.log(JSON.stringify({clis:p.clis,credentials:p.credentials,runner:p.runner,model_calls:p.model_calls_made}));if(p.model_calls_made!==0||p.live_ready.claude||p.live_ready.codex)process.exit(1)"
+      - name: All live entrypoints remain closed
+        run: |
+          node tools/first-handoff-r49/cli.js | tee "$RUNNER_TEMP/r49/no-go.json"
+          node -e "const r=require(process.env.RUNNER_TEMP+'/r49/no-go.json');if(r.state!=='BLOCKED'||r.actual_agent_launches!==0||!r.blockers.includes('LIVE_BUILD_DISABLED'))process.exit(1)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r49-source-and-no-go
+          path: ${{ runner.temp }}/r49

@@ -13,12 +13,12 @@ function prepare({envelope:e,authorization,snapshot,config,trigger,now=Date.now(
 }
 function normalize(o,prepared,e,refs){
  const frame=prepared?.unsigned_envelope;
- if(!frame||prepared.evidence!=='E2_E3_FAKE'||prepared.signature_status!=='NOT_SIGNED'||prepared.envelope_digest!==C.digest(frame)||prepared.dedupe_key!==C.pilotWorkKey(e)||o?.schema!==outcomeSchema||o.dispatch_id!==e.dispatch_id||o.dedupe_key!==prepared.dedupe_key||o.envelope_digest!==prepared.envelope_digest||o.source_sha!==e.source_sha||o.gate_sha!==e.source_sha||!['never','manual_only','none'].includes(o.retry)||o.agent_launch?.real_agent_launch!==false||o.agent_launch?.actual_agent_launches!==0||!['E2','E3_FAKE'].includes(o.evidence?.level)||!C.safeRunId(o.run_id)||typeof o.cost?.known!=='boolean')C.reject('RUNNER_OUTCOME_INVALID');
+ if(!frame||prepared.evidence!=='E2_E3_FAKE'||prepared.signature_status!=='NOT_SIGNED'||prepared.envelope_digest!==C.digest(frame)||prepared.dedupe_key!==C.pilotWorkKey(e)||o?.schema!==outcomeSchema||o.dispatch_id!==e.dispatch_id||o.dedupe_key!==prepared.dedupe_key||o.envelope_digest!==prepared.envelope_digest||o.source_sha!==e.source_sha||o.gate_sha!==e.source_sha||!['never','manual_only','none'].includes(o.retry)||o.agent_launch?.real_agent_launch!==false||o.agent_launch?.actual_agent_launches!==0||!['E2','E3_FAKE','E3_FAKE_CLI'].includes(o.evidence?.level)||!C.safeRunId(o.run_id)||typeof o.cost?.known!=='boolean')C.reject('RUNNER_OUTCOME_INVALID');
  // Local log_file is never read or published. Refs must be supplied by a trusted
  // evidence publisher; shape validation is not proof those remote artifacts exist.
  if(!C.keys(refs,'log_ref ci_ref report_ref')||!Object.values(refs).every(C.safeRef))C.reject('RUNNER_OUTCOME_INVALID');
  const state=({SUCCESS:'SUCCESS',FAILED:'FAILED',TIMEOUT:'UNKNOWN',CANCELLED:'STOPPED',BLOCKED:'FAILED',REJECTED:'FAILED',HUMAN_REVIEW_REQUIRED:'UNKNOWN'}[o.state]);if(!state)C.reject('RUNNER_OUTCOME_INVALID');
- const result={schema:1,dispatch_id:e.dispatch_id,idempotency_key:e.idempotency_key,run_id:o.run_id,source_sha:e.source_sha,fixed_sha:e.source_sha,state,exit_code:o.process?.exit??null,cost_known:o.cost.known,cost:o.cost.known?o.cost.usd:null,...refs,retry:'NEVER',evidence:'E2_E3_FAKE',actual_agent_launches:0};
+ const result={schema:1,dispatch_id:e.dispatch_id,idempotency_key:e.idempotency_key,run_id:o.run_id,source_sha:e.source_sha,fixed_sha:e.source_sha,state,exit_code:o.process?.exit_code??o.process?.exit??null,cost_known:o.cost.known,cost:o.cost.known?o.cost.usd:null,...refs,retry:'NEVER',evidence:'E2_E3_FAKE',actual_agent_launches:0};
  return C.outcome(result,e);
 }
 module.exports={prepare,normalize,envelopeSchema,outcomeSchema};

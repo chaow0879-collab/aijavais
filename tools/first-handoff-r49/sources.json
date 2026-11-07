@@ -1,0 +1,66 @@
+{
+  "base_sha": "3c37035befab9e411724686ff22e44333174e217",
+  "excluded_r44": "4c198c430806836bb289cd5da57b7fad44c7b0dc",
+  "r48": null,
+  "selected": {
+    "R46": {
+      "base": "ab3e07979f67924e795426737e26c5c4d84b8501",
+      "head": "a1a258a41c2041ab8d6cebc622cfed0c690c3387",
+      "parent": "363ed48579dc35b52b24ad8338335b0491c67ab5",
+      "prefixes": [
+        "tools/auto-handoff-r46/",
+        "tests/auto-handoff-r46/",
+        "docs/AUTO-HANDOFF-R46.md",
+        ".github/workflows/auto-handoff-r46.yml"
+      ]
+    },
+    "R45": {
+      "base": "4c198c430806836bb289cd5da57b7fad44c7b0dc",
+      "head": "0b95251133d47fd7c0b9280d3ddb5287c2628307",
+      "parent": "4c198c430806836bb289cd5da57b7fad44c7b0dc",
+      "prefixes": [
+        "tools/agent-pilot-r45/",
+        "tests/agent-pilot-r45/",
+        "docs/AGENT-PILOT-R45.md",
+        ".github/workflows/claude-agent-pilot-r45.yml"
+      ]
+    }
+  },
+  "exceptions": {
+    "tools/agent-executor/cli-runner.js": {
+      "from": "100644 blob 826449feb5ba565b7a1df5142ab3c026d5b5e379",
+      "to": "100644 blob bfa32c815df26735f50fc192d9c7fb2909febf5e",
+      "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
+    },
+    "tools/agent-executor/github-ref-backend.js": {
+      "from": "100644 blob ab052d903966d4d0a872a5bc82bdd589e6469c80",
+      "to": "100644 blob 3e74bbc86139a761c539e178c3859a9cb2b19b40",
+      "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
+    },
+    "tools/agent-executor/workspace.js": {
+      "from": "100644 blob 20bab4a6f3745efb245028ac7fc57cce19a11efe",
+      "to": "100644 blob 128e755edc6aa5e95af305bf2e48c75cc88360d8",
+      "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
+    },
+    "tools/auto-handoff-r46/contract.js": {
+      "from": "100644 blob 9acfc51f3cfbfc72176fb0a8b3b6e8057fd557e8",
+      "to": "100644 blob 490088781dcd6165fead3a028455acafe415919f",
+      "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
+    },
+    "tools/auto-handoff-r46/pilot-contract.js": {
+      "from": "100644 blob e1738f0bed3d4eeb003857370f1904ea8ff79e25",
+      "to": "100644 blob dd0e7433082b021e7e9cefd981643c11fb34c40f",
+      "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
+    },
+    "tools/auto-handoff-r46/r45-adapter.js": {
+      "from": "100644 blob cd3f7885b39ae79d23ec77b004d796280d68d4e9",
+      "to": "100644 blob 0d224423b2721e512b21617a156b57469505da7c",
+      "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
+    },
+    "tools/integration/verify-r43-sources.js": {
+      "from": "100644 blob 6411b0ca74a3a60f40b45332cebe3ad9163ea2e4",
+      "to": "100644 blob 55542277ef29cf058e1ba5124d4656ab51a54952",
+      "status": "AUTHOR_PROPOSED_PENDING_INDEPENDENT_REVIEW"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 'use strict';
 const {digest,REPO,reject}=require('./policy');
+const {parseState}=require('./strict-json');
 const LIVE_REMOTE_BUILD_ENABLED=false;
 const BRANCH='heads/feat/agent-executor-state-v2';
 function valid(doc){
@@ -19,7 +20,7 @@ class GitHubRefProtocol{
   if(tree.truncated===true||!Array.isArray(tree.tree))reject('REMOTE_TREE_UNKNOWN');
   const item=tree.tree.find(x=>x.path==='jobs.json');if(item?.type!=='blob'||item.mode!=='100644')reject('REMOTE_DOCUMENT_UNKNOWN');
   const blob=await this.#call('GET','/git/blobs/'+item.sha);if(blob.encoding!=='base64'||typeof blob.content!=='string'||blob.content.length>5500000)reject('REMOTE_DOCUMENT_UNKNOWN');
-  const doc=JSON.parse(Buffer.from(blob.content,'base64').toString('utf8'));if(!valid(doc))reject('REMOTE_DOCUMENT_UNKNOWN');return {version:sha,document:doc};
+  const doc=parseState(Buffer.from(blob.content,'base64').toString('utf8'));if(!valid(doc))reject('REMOTE_DOCUMENT_UNKNOWN');return {version:sha,document:doc};
  }
  async compareAndSwap(version,doc){
   if(!/^[a-f0-9]{40}$/.test(version||'')||!valid(doc))reject('REMOTE_DOCUMENT_UNKNOWN');
