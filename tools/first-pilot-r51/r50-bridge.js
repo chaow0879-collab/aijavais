@@ -4,6 +4,7 @@
 const fs=require('node:fs'),crypto=require('node:crypto');
 const E=require('./entry'),O=require('./official-port'),A=require('./admission'),R49=require('../first-handoff-r49/control'),C=require('../auto-handoff-r46/contract'),P=require('../agent-pilot-r45/contract');
 const {verifyDelivery}=require('../trusted-trigger-r50/intake'),{verifyOidc}=require('../trusted-trigger-r50/oidc'),{tickRecord}=require('../trusted-trigger-r50/pipeline'),{Broker,TestSigner,verifyApproval}=require('../trusted-trigger-r50/broker');
+const {isMinted}=require('../trusted-trigger-r50/identity');
 const blocked=reason=>({...O.blocked(),reason});
 async function handleTrusted(input={}){
  if(input.mode!=='fake')return O.blocked();
@@ -21,6 +22,12 @@ async function handleTrusted(input={}){
   const originalHashes=Object.fromEntries(['config','snapshot','policy','admission','authorization'].map(k=>[k,C.digest(bound[k])]));
   let record;
   if(kind==='event')record=verifyDelivery(input.delivery,{secret:input.webhookSecret,r46config:bound.config,policy:r50Policy,store:broker.store,now});
+  else if(kind==='verified-event'){
+   // R50's loopback receiver has already consumed the delivery nonce. Accept
+   // only its in-process identity, never a deserialized lookalike or re-check
+   // that would incorrectly consume the same delivery a second time.
+   if(!isMinted(input.record)||input.record.kind!=='github_webhook')return blocked('UNTRUSTED_TRIGGER');record=input.record;
+  }
   else if(kind==='tick'){
    if(input.jwks?.synthetic!==true)return blocked('BLOCKED_IDENTITY_PROVIDER');
    const identity=verifyOidc(input.oidcToken,{jwks:input.jwks,policy:r50Policy,now});record=tickRecord(identity,now,bound.config);

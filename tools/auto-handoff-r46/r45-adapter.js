@@ -30,11 +30,12 @@ class SignedFakeR45Runner {
  }
  get calls(){return signedInstances.get(this).calls;}
  get previousRunId(){return signedInstances.get(this).previousRunId||null;}
- async run(e,signal){
+ async run(e,signal,beforeProcess){
   const x=signedInstances.get(this),P=require('../agent-pilot-r45/contract'),A=require('../agent-pilot-r45/policy'),B=require('./pilot-contract');
   if(P.canonical(P.unsigned(x.signed))!==P.canonical(x.prepared.unsigned_envelope)||x.signed.source.sha!==e.source_sha||x.signed.gate.gate_sha!==e.source_sha||x.prepared.dedupe_key!==P.dedupeKey(x.signed)||A.authorize(x.signed,x.policy))reject('RUNNER_OUTCOME_INVALID');
   x.calls++;
-  const outcome=await require('../agent-pilot-r45/runner').runOnce(x.signed,{mode:'fake',policy:x.policy,stateDir:x.stateDir,sourceRepo:x.sourceRepo,fakeExecutable:x.fakeExecutable,beforeLaunchCheck:x.beforeLaunchCheck,signal});
+  const beforeLaunchCheck=async()=>{if(x.beforeLaunchCheck&&await x.beforeLaunchCheck()!==true)return false;return beforeProcess?await beforeProcess()===true:true;};
+  const outcome=await require('../agent-pilot-r45/runner').runOnce(x.signed,{mode:'fake',policy:x.policy,stateDir:x.stateDir,sourceRepo:x.sourceRepo,fakeExecutable:x.fakeExecutable,beforeLaunchCheck,signal});
   if(outcome.state==='DUPLICATE'){
    const previous=outcome.evidence?.previous_run_id;if(!require('./contract').safeRunId(previous))reject('RUNNER_OUTCOME_INVALID');
    // A prior local receipt is not proof of remote settlement or a reconciled

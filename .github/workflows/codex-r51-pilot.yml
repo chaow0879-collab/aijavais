@@ -231,6 +231,7 @@ jobs:
       - name: All R45 R46 and R49 E2 E3 tests (Fake CLI only)
         env:
           R49_EVIDENCE_DIR: ${{ runner.temp }}/r49
+          R51_EVIDENCE_DIR: ${{ runner.temp }}/r49/r51
         run: node --test tests/agent-pilot-r45/*.test.js tests/auto-handoff-r46/*.test.js tests/first-handoff-r49/*.test.js tests/trusted-trigger-r50/*.test.js tests/first-pilot-r51/*.test.js
       - name: R48 original 49 tests at exact source SHA (historical gaps remain observations)
         env:

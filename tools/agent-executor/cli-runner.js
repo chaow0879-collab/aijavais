@@ -66,7 +66,7 @@ async function runLive(request,proofs,keys,options){
  const claim=await remote.claim(request);if(claim.state!=='CLAIMED')return {state:'BLOCKED',reason:'REMOTE_CLAIM_REQUIRED',actual_dispatch:false};
  if((await remote.update(claim.key,'RUNNING')).state!=='RUNNING')return {state:'BLOCKED',reason:'REMOTE_RUNNING_ACK_REQUIRED',actual_dispatch:false};
  const workspace=require('./workspace');
- const isolated=workspace.prepare(request.source,request.branch,request.sha);
+ const isolated=workspace.prepare(request.source,request.branch,request.sha,{role:request.role});
  try {
   const command=buildCommand(request.kind,request.limits,request.role);
   const result=await supervise(command.executable,command.args,request.context,{...options,cwd:isolated.dir,timeoutMs:request.limits.max_job_runtime,maxTokens:request.limits.max_tokens,maxSpend:request.limits.max_model_spend},'live');

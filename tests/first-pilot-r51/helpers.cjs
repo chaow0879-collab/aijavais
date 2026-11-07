@@ -10,4 +10,12 @@ function setup(t,mode='success',options={}){
  f.refresh=()=>{prior();f.admission=admission(f);f.signPilot();return f;};
  return f.signPilot();
 }
-module.exports={setup,admission};
+function evidence(f,r){
+ const dest=process.env.R51_EVIDENCE_DIR;if(!dest)return;
+ const fs=require('node:fs'),path=require('node:path'),key=require('../../tools/agent-pilot-r45/contract').dedupeKey(f.signed);
+ const receipt=JSON.parse(fs.readFileSync(path.join(f.stateDir,'outcome-'+key+'.json'),'utf8')),log=fs.readFileSync(path.join(f.stateDir,receipt.evidence.log_file));
+ if(crypto.createHash('sha256').update(log).digest('hex')!==receipt.evidence.log_sha256)throw Error('R51_EVIDENCE_HASH_MISMATCH');
+ fs.mkdirSync(dest,{recursive:true});fs.writeFileSync(path.join(dest,'r51-fake-sanitized.log'),log,{flag:'wx',mode:0o600});
+ fs.writeFileSync(path.join(dest,'r51-e3-receipt.json'),JSON.stringify({schema:'aijavais.r51.e3-evidence/v1',head_sha:f.candidate_sha,entry:'first-pilot-r51/entry.runPilot',state:r.state,process:receipt.process,log_sha256:receipt.evidence.log_sha256,fake_process_launches:f.cli.launches(),synthetic_identity_and_reviews:true,fake_meter:receipt.cost,provider_cost:null,provider_hard_cap:'NOT_VERIFIED',actual_agent_launches:0,real_github_state_writes:0,cron:'NOT_ENABLED'},null,2)+'\n',{flag:'wx',mode:0o600});
+}
+module.exports={setup,admission,evidence};

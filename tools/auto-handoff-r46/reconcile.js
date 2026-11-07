@@ -44,7 +44,15 @@ async function reconcile({simulate=false,config,envelope:e,authorization,snapsho
   const check=await ledger.read(clock()),j=check.document.jobs[key];
   if(check.document.halted||signal?.aborted||j?.state!=='DISPATCHING'||j.owner_hash!==C.digest(owner)||j.envelope_hash!==C.digest(e)||clock()>=j.lease_until)C.reject('DISPATCH_READBACK_OR_STOP');
   C.validateEnvelope(e,config,clock());G.verify(e,authorization,snapshot,config,clock());
-  const raw=await runner.run(e,signal),o=C.outcome(raw,e),next=!o.cost_known?'UNKNOWN':({SUCCESS:'SUCCEEDED',FAILED:'FAILED',STOPPED:'STOPPED',UNKNOWN:'UNKNOWN'}[o.state]);
+  // A signed R45 runner may spend time preparing a workspace. Recheck the
+  // SAME owner's durable lease and authorization at its actual spawn boundary.
+  // Legacy fixed Node Stub adapters ignore this privilege-reducing third arg.
+  const beforeProcess=async()=>{
+   const current=await ledger.read(clock()),job=current.document.jobs[key];
+   if(current.document.halted||signal?.aborted||job?.state!=='DISPATCHING'||job.owner_hash!==C.digest(owner)||job.envelope_hash!==C.digest(e)||clock()>=job.lease_until)C.reject('DISPATCH_READBACK_OR_STOP');
+   C.validateEnvelope(e,config,clock());G.verify(e,authorization,snapshot,config,clock());return true;
+  };
+  const raw=await runner.run(e,signal,beforeProcess),o=C.outcome(raw,e),next=!o.cost_known?'UNKNOWN':({SUCCESS:'SUCCEEDED',FAILED:'FAILED',STOPPED:'STOPPED',UNKNOWN:'UNKNOWN'}[o.state]);
   await ledger.change(clock(),(d,at)=>{
    const j=d.jobs[key];if(!j||j.owner_hash!==C.digest(owner)||j.state!=='DISPATCHING')C.reject('RESULT_OWNER_OR_STATE');
    j.state=d.halted||signal?.aborted?'STOPPED':next;j.reason=!o.cost_known?'COST_UNKNOWN_NO_REPLAY':null;j.heartbeat=at;

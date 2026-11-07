@@ -20,7 +20,7 @@ R51 `entry.runPilot`→现有R49 prepare/execute→原R46 Ledger/FF-only CAS/lea
 
 `app-state.ProtectedAppState`复用原R46 Git对象协议（固定repo/ref、单父、force:false、无自动写重试）。App transport编译期OFF，先拒绝再读credential context。候选包含限时App上下文、固定HTTPS API/禁止redirect、响应上限及请求超时的最薄实现；不安装App、不获取token、不调用真实写API。未来verified身份和受保护ref必须来自经审计的可信实现，不能凭caller boolean认定。
 
-执行过程中仅运行短命安全watch（非持续调度器），读同一R46权威状态；HALT、状态读不确定、有效期结束会取消自己的进程组。输入克隆后保持签名来源；每次backend read/CAS有界，无自动重试。**新增的两处共享接缝**：R46 SignedFakeR45Runner传递beforeLaunchCheck，R45在clone完成、真正spawn前执行此权限缩减复核并检查abort/KILL。既有HMAC/审批/HALT域分离、source/gate强绑定、NUL文件名保护均保留。
+执行过程中仅运行短命安全watch（非持续调度器），读同一R46权威状态；HALT、状态读不确定、有效期结束会取消自己的进程组。输入克隆后保持签名来源；每次backend read/CAS有界，无自动重试。**共享接缝**：R46 SignedFakeR45Runner传递beforeLaunchCheck，R45在clone完成、真正spawn前执行此权限缩减复核并检查abort/KILL；随后R46核心再读取同一owner/lease/envelope/HALT及有效期，防止clone或较慢的复核耗尽租约后仍启动。精确文件及blob在sources.json，均需最终独立复审。既有HMAC/审批/HALT域分离、source/gate强绑定、NUL文件名保护均保留。
 
 远端失ACK/崩溃保留claim、UNKNOWN费用null与上界；无法证明跨host/断电耐久则NOT_VERIFIED。不保证exactly-once，允许零次且禁止盲目重发。已有成功receipt不等于已核对供应商账单。
 
@@ -61,3 +61,19 @@ R50已核[真实READY报告](https://github.com/chaow0879-collab/aijavais/issues
 失败历史：首个联合撤回测试少传TriggerStore.revoke的reason参数，SQLite拒绝第三参数绑定（63/64）；修正**测试调用**为(id, reason, at)后通过，未改R50实现或撤回断言。官方CLI占位入口失败与原生二进制元数据成功分开保留；不把初次失败或历史来源计数删掉。
 
 默认分支只使用本R51的`templates/r50-trusted-trigger.yml.disabled`作为后续唯一启用候选；R50原样例是保全的上游资料，不同时注册第二个dispatcher。R51模板job常false、固定运行时SHA占位、无模型Secrets，需另一次owner审批的default-branch activation commit对准冻结runtime SHA，与R50 trusted_workflow_ref精确一致。这里不存在“复制就自动启动”。
+
+## R49独立门禁反馈与R51增量修复
+
+R49固定SHA `fcf52ed855dfccacb16cef632d0e3eb202510718`：独立[CodeAudit ACCEPT_WITH_FOLLOWUP](https://github.com/chaow0879-collab/aijavais/issues/2#issuecomment-6703392470)，0 P0/0 P1/1 P2；独立[ProductQA PASS_WITH_FOLLOWUP](https://github.com/chaow0879-collab/aijavais/issues/4#issuecomment-6703334140)，73 PASS/0 FAIL，另有原5组Chromium通过。它们只对R49生效，不是R51认可，也不准许E4/E5。
+
+AUD-R49-01：忽略文件可绕过原Git状态核对，激活前必须修复。本R51在原V2及R45工作区加入完整文件系统清单（忽略文件、权限、内容hash、ctime及Git元数据），在调用任何验收Git命令**之前**拒绝敏感元数据篡改。保留原提交历史/NUL路径检查；QA仍可按原范围正常提交，只有index/当前分支ref和日志/objects/COMMIT_EDITMSG允许配合Git提交变化，不能改HEAD/config/hooks/exclude。R45只读工作区及V2 audit启动路径预先移除全部文件/目录写权限；HOME/TMP留在仓库外。清理只恢复本实例临时目录权限，不跟随符号链接。扫描有限额，异常一律失败关闭。
+
+**限制**：POSIX权限不是同UID强沙箱；同UID可chmod，清单用于拒绝篡改后的成功回执，不证明从未发生瞬时写入或外部I/O。V2 QA/developer的实际OS写范围、主机隔离、真实网络封锁尚未实证，真实执行继续NO_GO。未做生产部署或内核沙箱启用。
+
+新增17项AUD-R49-01测试涵盖原复现忽略目录data/ignored、审核和QA/开发角色、合法QA提交、Git配置/HEAD/exclude、权限模式、先写后删、符号链接清理及真实R51入口下同UID恶意Fake；三个恶意Fake的成功JSON均不能产生SUCCEEDED，且不可重派。首轮85/86失败原因是测试文件mode受环境umask收窄，显式设置fixture模式后通过，未放宽清理断言。原R50实现和测试逐blob保留。
+
+R51新入口的真实进程PID/exit/命令类别、脱敏日志及SHA256由测试在R51_EVIDENCE_DIR归档；标注E3_FAKE、供应商费用null与真实Agent启动0，不上传私钥/原始数据库。最终准确测试数量、SHA、同SHA五job CI见#34最终报告；原R48 49项作为历史冻结来源单列，不重复累计。
+
+### 数据及回滚
+
+本包不改变业务Schema v4、R46 ledger schema1或R50 TriggerStore表结构，无迁移。回滚仅切回已冻结的源码/禁用模板，先HALT、禁止新派发并停止自己的进程。保留原state/journal/永久墓碑及UNKNOWN费用和reservation；禁止删除状态后重新派工。没有模型费用或生产数据操作可回滚。

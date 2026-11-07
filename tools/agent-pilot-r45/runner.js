@@ -110,6 +110,7 @@ async function runOnce(envelope, opts = {}) {
     if (cost.usd !== null && cost.usd > cap) { state = 'FAILED'; reason = 'COST_CAP_EXCEEDED'; retry = 'never'; }
     const violation = W.verifyUnchanged(ws);
     if (violation) { state = 'FAILED'; reason = violation; retry = 'never'; }
+    else if (r.exit_code !== 0 && /EACCES|EROFS/.test(text) && text.includes(ws.dir + path.sep)) { state='FAILED';reason='READONLY_VIOLATION';retry='never'; }
     const log = journal.saveLog(runId, ['# sanitized log (secrets redacted; raw output not persisted elsewhere)', '## stdout', r.stdout.slice(0, 65536), '## stderr', r.stderr.slice(0, 65536)].join('\n'));
     const real = mode === 'live' && launched;
     return settle({ state, reason, retry,
