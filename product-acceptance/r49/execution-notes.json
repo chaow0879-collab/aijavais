@@ -1,0 +1,17 @@
+{
+  "initial_test_harness_failure": {
+    "path": "/workspace/work/qa-r49-evidence/flows/F06-authority-sigkill-after-sqlite-commit/evidence.json",
+    "sha256": "3738b48f91f15ed275f9b2ed99c3b2f7add7624f2f29f0128c8ce2e3d35b2ad1",
+    "classification": "QA assertion race, not product defect",
+    "error": "child.signalCode still null before Node exit event",
+    "fix": "await actual child signalCode before asserting SIGKILL",
+    "subsequent_result": "36/36 flows PASS",
+    "initial_raw_runner": "QA49_FLOW {\"id\":\"F00-default-off-even-optimistic-facts\",\"status\":\"PASS\"}\nQA49_FLOW {\"id\":\"F01-signed-event-success-repeat-and-ten-minute-tick\",\"status\":\"PASS\"}\nQA49_FLOW {\"id\":\"F02-event-tick-race-one-process\",\"status\":\"PASS\"}\nQA49_FLOW {\"id\":\"F03-four-real-processes-independent-journals\",\"status\":\"PASS\"}\nQA49_FLOW {\"id\":\"F04-new-task-id-same-work-key\",\"status\":\"PASS\"}\nQA49_FLOW {\"id\":\"F05-commit-before-ack-loss-no-process\",\"status\":\"PASS\"}\nQA49_FLOW {\"id\":\"F06-authority-sigkill-after-sqlite-commit\",\"status\":\"FAIL\",\"error\":\"Expected values to be strictly equal:\\n\\nnull !== 'SIGKILL'\\n\",\"stack\":\"AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\\n\\nnull !== 'SIGKILL'\\n\\n    at /workspace/work/aijavais-productqa-r49/tests/productqa-r49/flows.cjs:30:191\\n    at async scenario (/workspace/work/aijavais-productqa-r49/tests/productqa-r49/flows.cjs:7:18)\\n    at async /workspace/work/aijavais-productqa-r49/tests/productqa-r49/flows.cjs:30:2\"}\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\nnull !== 'SIGKILL'\n\n    at /workspace/work/aijavais-productqa-r49/tests/productqa-r49/flows.cjs:30:191\n    at async scenario (/workspace/work/aijavais-productqa-r49/tests/productqa-r49/flows.cjs:7:18)\n    at async /workspace/work/aijavais-productqa-r49/tests/productqa-r49/flows.cjs:30:2\nQA49_FLOW_SUMMARY {\"cases\":7,\"pass\":6,\"fail\":1}\n"
+  },
+  "local_extra_command": {
+    "status": "BLOCKED / NOT_EXECUTED",
+    "reason": "Automatic approval review failed due account usage limit; action not executed because review could not complete; not determination of unsafe action.",
+    "affected": "optional new local R48 broker checks and combined edits; no mutation or test occurred in rejected command",
+    "continuation": "No bypass. Normal filesystem edits/read-only checks and already-authorized GitHub publication/CI remain available. Interop local NOT_RUN; independent hosted CI must supply actual evidence."
+  }
+}

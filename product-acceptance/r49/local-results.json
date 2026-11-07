@@ -1,0 +1,540 @@
+{
+  "reviewed_sha": "fcf52ed855dfccacb16cef632d0e3eb202510718",
+  "independent_pass": 71,
+  "auxiliary_pass": 5,
+  "results": [
+    {
+      "mode": "flows",
+      "id": "F00-default-off-even-optimistic-facts",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F01-signed-event-success-repeat-and-ten-minute-tick",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F02-event-tick-race-one-process",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F03-four-real-processes-independent-journals",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F04-new-task-id-same-work-key",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F05-commit-before-ack-loss-no-process",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F06-authority-sigkill-after-sqlite-commit",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F07-runner-sigkill-after-durable-dispatch-marker",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F08-cancel-after-process-launch",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F09-unknown-fee-no-replay-or-zero",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F10-preexisting-local-receipt-not-remote-success",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F11-parent-handoff-known-true",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F11-parent-handoff-known-false",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F12-daily-reservation-budget",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F13-envelope-runtime-over-limit",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F13-envelope-tokens-over-limit",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F13-envelope-cost-over-limit",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F14-pre-dispatch-cancel",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F15-signed-persistent-halt",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F16-untrusted-sender-and-forged-tick",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F17-no-broker",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F17-bad-signature",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F17-cross-sha",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F17-missing-ci",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F17-audit-veto",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F17-qa-veto",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F17-expired",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F17-expiry-string",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F18-real-http-403",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F18-real-http-429",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F18-real-http-500",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F19-real-process-403",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F19-real-process-429",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F19-real-process-fail",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F19-real-process-hang",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "flows",
+      "id": "F19-real-process-overcost",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "flows-retry/flows-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q00-exact-sources-product-and-r48-preservation",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q01-R47-fully-resigned-cross-SHA-audit",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q01-R47-fully-resigned-cross-SHA-qa",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q02-R48-S01-resigned-source-B-gate-A",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q03-duplicate-json-0",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q03-duplicate-json-1",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q03-duplicate-json-2",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q04-unambiguous-json-positive",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-v1_audit-missing",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-v1_audit-null",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-v1_audit-string",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-v1_audit-expired",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-v2_audit-missing",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-v2_audit-null",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-v2_audit-string",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-v2_audit-expired",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-operator-missing",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-operator-null",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-operator-string",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q05-expiry-operator-expired",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q06-valid-three-distinct-expiry-signatures",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q07-scope-allowed-test",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q07-scope-audit-test-write",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q07-scope-committed-outside",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q07-scope-committed-reverted",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q07-scope-newline-untracked",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q07-scope-newline-staged",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "boundaries",
+      "id": "Q07-scope-newline-committed",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "boundaries/boundaries-results.json"
+    },
+    {
+      "mode": "api",
+      "id": "T2-10-API",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "api/api-results.json"
+    },
+    {
+      "mode": "api",
+      "id": "T2-13-after-http",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "api/api-results.json"
+    },
+    {
+      "mode": "browser",
+      "id": "T2-09-cancel",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "browser/browser-results.json"
+    },
+    {
+      "mode": "browser",
+      "id": "T2-11-UI",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "browser/browser-results.json"
+    },
+    {
+      "mode": "browser",
+      "id": "T2-12-GAP",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "browser/browser-results.json"
+    },
+    {
+      "mode": "delivery",
+      "id": "org",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "delivery/delivery-results.json"
+    },
+    {
+      "mode": "delivery",
+      "id": "independent-file-parsing",
+      "status": "PASS",
+      "source": "independent ProductQA",
+      "evidence": "delivery/delivery-results.json"
+    },
+    {
+      "mode": "browser-groups",
+      "id": "admin",
+      "status": "PASS",
+      "source": "developer-authored auxiliary rerun",
+      "evidence": "browser-groups/browser-groups.json"
+    },
+    {
+      "mode": "browser-groups",
+      "id": "workspace",
+      "status": "PASS",
+      "source": "developer-authored auxiliary rerun",
+      "evidence": "browser-groups/browser-groups.json"
+    },
+    {
+      "mode": "browser-groups",
+      "id": "intake-draft",
+      "status": "PASS",
+      "source": "developer-authored auxiliary rerun",
+      "evidence": "browser-groups/browser-groups.json"
+    },
+    {
+      "mode": "browser-groups",
+      "id": "industry",
+      "status": "PASS",
+      "source": "developer-authored auxiliary rerun",
+      "evidence": "browser-groups/browser-groups.json"
+    },
+    {
+      "mode": "browser-groups",
+      "id": "claude-delivery",
+      "status": "PASS",
+      "source": "developer-authored auxiliary rerun",
+      "evidence": "browser-groups/browser-groups.json"
+    }
+  ],
+  "interop_local": "NOT_RUN: last extra-permission command rejected because approval reviewer could not complete due usage limit; no execution occurred. Two new interop scenarios will be exercised by the separate authorized GitHub CI."
+}

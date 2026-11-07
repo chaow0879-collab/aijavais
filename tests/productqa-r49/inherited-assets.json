@@ -1,0 +1,15 @@
+{
+  "productqa_r47_test_sha": "8b6d74022b43215fc75c390c914236d2fa5edc60",
+  "original_hashes": {
+    "harness.cjs": "440f8746f42b5573da8747ca1087e789181f7d3991084ffd3bd4a5dcf1ed03d5",
+    "run.cjs": "632760a8498ce85784da4bf2b6f9ec70cefc113126639eb837e1f8be7ed143e9",
+    "fault-preload.cjs": "6ad5010dfcf71535c45f290c3997bef6825b7d563514e2cdda6ada47bca39c7e",
+    "sanitize-trace.py": "92a470c00972fde8e4e071db04c52a2c3bafabc379675a325a9574cb7764cd5e",
+    "delivery.cjs": "0073a48b928ce8121220612f7237d88b68ba08a3137626c52e0cb10da4ae12ed"
+  },
+  "browser_groups_wrapper_source": "10c6d9a9d8e160c2f11b10472bb5f6647983a582",
+  "changes": [
+    "Exact R49 business SHA only; same minimum product regression",
+    "Developer-authored five browser groups explicitly labeled auxiliary"
+  ]
+}
