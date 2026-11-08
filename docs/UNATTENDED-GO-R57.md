@@ -76,3 +76,12 @@ R56已正式READY并冻结于`2b53e350d3b147b9216f8241a3e63350ceaf6b67`，专属
 新增联合E3实际连接R56的HTTP/SQLite GitHub模拟器/原事实读取/签名评审/机器ticket，与R57的临时Git bare、HTTP/SQLite CAS、R50/R51/R45和回收器，完成3个原Fake只读阶段，产生3条机器报告，event+tick重复不重派；另验证末阶段缺审核、晚到signed REJECT运行中停下、假trigger与live getter拒绝。它仍是E3，GitHub模拟器的CI状态不是外部真实GH流水线，KMS与官方模型未运行。
 
 原R56 `scope:`断言检验作者独占分支，不能在联合树声称成立；**完整9项含scope原断言**在`run-r56.cjs`精确冻结clone运行；其余**8项行为原断言**在联合HEAD再跑。没有编辑/删除原断言。联合fixture首次失败来自误用了stats.reports（原emulator字段是post_report）以及重复插入旧评审主键；已改为读取真实计数并append新REJECT，R56原件不动。最终本地/CI计数和明确限制以#40最终报告为准。
+
+
+## 未完成的远端验证与恢复点
+
+联合检查点`01784930617ced9f15a40c36b9ef371ec3323cf8`的CI42457936960并非全绿：新R57 E3步骤及历史R48步骤失败，不能提交READY或复用旧R55成功CI。原始Actions日志的签名下载地址被当前网络拒绝；新增`ci-tests.cjs`仅包装两条固定测试命令，把真实计数/失败摘要写入GitHub check annotations，保留全部原stdout与退出码，便于通过允许的API取证，绝不continue-on-error。
+
+另一本地实际复现：将TMPDIR与RUNNER_TEMP置于不同自有临时目录，旧R57 worker未继承两者，SIGKILL清理对os.tmpdir的假设失败。已仅在自有测试传递这两个目录配置（仍不传凭据/代理/宿主session），并按原R45 workspace的RUNNER_TEMP优先规则验证精确cleanup根。修后两个针对性测试2/2；必须等待远端日志才能确定它是否为CI的唯一原因。历史R48原件在默认和分离临时目录两环境均49/49，未复现原CI失败，不能声称已修复或跳过。
+
+2026-11-08后续GitHub访问实际HTTP401 Bad credentials，git push同样Authentication failed。使用标准gh credential helper也未恢复，未读取/输出任何Token、未配置新凭据或扩大网络权限。代码诊断/本地修复会提交保存在本分支，**远端未推送的提交不冒充已推送**。恢复只需项目负责人在环境重新连接已有GitHub授权；随后推送待发提交、通过check annotations定位剩余失败，完成同最终SHA全部CI并提交#40唯一最终报告，再冻结。当前仍BLOCKED/非最终；不得宣称R57已正式READY或真实自动执行成功。

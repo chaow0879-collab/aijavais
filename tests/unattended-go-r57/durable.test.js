@@ -8,7 +8,7 @@ function wire(f){const s=f.stages[0],base={};for(const k of ['candidate_sha','co
   privatePairs:Object.fromEntries(Object.entries(s.f.pairs).map(([role,p])=>[role,p.privateKey.export({type:'pkcs8',format:'pem'})]))};
  const file=path.join(f.dir,'synthetic-worker-input.json');fs.writeFileSync(file,JSON.stringify(x),{mode:0o600});return file;
 }
-function worker(file){const child=spawn(process.execPath,[path.join(__dirname,'worker.cjs'),file],{env:{PATH:process.env.PATH,LANG:'C.UTF-8'},stdio:['ignore','pipe','pipe']});let out='';child.stdout.on('data',b=>out+=b);const done=once(child,'close').then(([code,signal])=>({code,signal,report:out?JSON.parse(out):null}));return {child,done};}
+function worker(file){const child=spawn(process.execPath,[path.join(__dirname,'worker.cjs'),file],{env:{PATH:process.env.PATH,LANG:'C.UTF-8',...(process.env.RUNNER_TEMP?{RUNNER_TEMP:process.env.RUNNER_TEMP}:{}),...(process.env.TMPDIR?{TMPDIR:process.env.TMPDIR}:{})},stdio:['ignore','pipe','pipe']});let out='';child.stdout.on('data',b=>out+=b);const done=once(child,'close').then(([code,signal])=>({code,signal,report:out?JSON.parse(out):null}));return {child,done};}
 test('four real controller processes race on original HTTP SQLite CAS; one Fake, one durable work key',async t=>{
  const f=await fixture(t,{count:1,durable:true}),file=wire(f),workers=Array.from({length:4},()=>worker(file));const rs=await Promise.all(workers.map(w=>w.done));
  assert.ok(rs.every(r=>r.code===0),JSON.stringify(rs));assert.equal(f.launches(),1);assert.equal(rs.filter(r=>r.report.state==='DONE').length>=1,true,JSON.stringify(rs));
@@ -27,7 +27,7 @@ test('SIGKILL after dispatch + expired lease recovers UNKNOWN with reservation, 
  for(let n=0;n<300&&(f.launches()===0||!fs.existsSync(path.join(path.dirname(f.stages[0].f.cli.counter),'hang-pids.json')));n++)await new Promise(r=>setTimeout(r,10));assert.equal(f.launches(),1);
  const ownedPids=JSON.parse(fs.readFileSync(path.join(path.dirname(f.stages[0].f.cli.counter),'hang-pids.json'),'utf8'));
  const cwd=fs.readlinkSync('/proc/'+ownedPids[0]+'/cwd'),workspaceRoot=path.dirname(cwd);
- assert.equal(path.dirname(workspaceRoot),require('node:os').tmpdir());assert.match(path.basename(workspaceRoot),/^aij-pilot-/);assert.equal(path.basename(cwd),'repo');
+ assert.equal(path.dirname(workspaceRoot),path.resolve(process.env.RUNNER_TEMP||require('node:os').tmpdir()));assert.match(path.basename(workspaceRoot),/^aij-pilot-/);assert.equal(path.basename(cwd),'repo');
  t.after(()=>{require('../../tools/first-pilot-r51/workspace-seal').restore(workspaceRoot);fs.rmSync(workspaceRoot,{recursive:true,force:true});});
  w.child.kill('SIGKILL');await w.done;
  // Kill only PIDs written by this owned Fake fixture, including its grandchild.
