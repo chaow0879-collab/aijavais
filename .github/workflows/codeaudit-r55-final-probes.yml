@@ -1,0 +1,42 @@
+name: Independent R55 product prototype counterexample
+on:
+  push:
+    branches: [audit/codeaudit-r55-8e95841-20261108]
+    paths: [audit-evidence/r55-supplement/**, .github/workflows/codeaudit-r55-final-probes.yml]
+permissions:
+  contents: read
+jobs:
+  prototype-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: audit-assets
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 8e9584149cccac02fa0b5c39a68c1983ec60170e
+          path: reviewed
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Independent user-controlled event prototype boundary
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+          AUDIT_OUT: ${{ github.workspace }}/evidence/prototype.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C reviewed rev-parse HEAD)" = 8e9584149cccac02fa0b5c39a68c1983ec60170e
+          node audit-assets/audit-evidence/r55-supplement/prototype-repro.cjs | tee evidence/prototype.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-r55-prototype-failure
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
