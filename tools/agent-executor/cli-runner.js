@@ -30,11 +30,13 @@ function verifyReadiness(request,proofs,trustedKeys){
 function supervise(executable,args,input,options,label){
  const {cwd,timeoutMs=1000,maxOutputBytes=8192,maxTokens=10000,maxSpend=0,secrets=[],signal}=options;
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>60000||!Number.isSafeInteger(maxOutputBytes)||maxOutputBytes<1||maxOutputBytes>1048576)reject('INVALID_PROCESS_LIMITS');
+ if(label==='live'&&!options.isolation)reject('BLOCKED_OS_WRITE_ISOLATION');
  return new Promise(resolve=>{
   let child,stdout=[],stderr=[],bytes=0,reason=null,finished=false,meterBuffer='';const started=Date.now();
   const env={PATH:process.env.PATH||'',LANG:'C.UTF-8',TMPDIR:process.env.TMPDIR||'/tmp'};
   if(label==='live'){for(const [key,value] of Object.entries(options.credentialEnv||{})){if(!['OPENAI_API_KEY','ANTHROPIC_API_KEY','CODEX_HOME','CLAUDE_CONFIG_DIR'].includes(key)||typeof value!=='string'||value.length>16384)reject('CREDENTIAL_ENV_DENIED');env[key]=value;}}
-  try{child=spawn(executable,args,{cwd,env,stdio:['pipe','pipe','pipe'],shell:false});}catch{resolve({state:'BLOCKED',reason:'SPAWN_FAILED',actual_dispatch:false});return;}
+  let command;
+  try{command=options.isolation?require('./workspace-isolation').command(options.isolation,executable,args):{executable,args,cwd,env,stdio:['pipe','pipe','pipe']};child=spawn(command.executable,command.args,{cwd:command.cwd,env:command.env,stdio:command.stdio,shell:false});}catch{resolve({state:'BLOCKED',reason:'BLOCKED_OS_WRITE_ISOLATION',actual_dispatch:false});return;}finally{command?.close?.();}
   let hardKill;
   const terminate=why=>{if(finished)return;reason=reason||why;child.kill('SIGTERM');if(!hardKill)hardKill=setTimeout(()=>{if(!finished)child.kill('SIGKILL');},100);};
   const watchdog=setTimeout(()=>terminate('TIMEOUT'),timeoutMs);
@@ -54,13 +56,15 @@ function supervise(executable,args,input,options,label){
  });
 }
 function runStub(scenario,options={}){
- const allowed=['success','hang','fail','secret','output-limit','usage'];
+ const allowed=['success','hang','fail','secret','output-limit','usage','filesystem-probe'];
  if(!allowed.includes(scenario?.mode))reject('INVALID_STUB_SCENARIO');
+ if(scenario.mode==='filesystem-probe'&&!options.isolation)reject('BLOCKED_OS_WRITE_ISOLATION');
  return supervise(process.execPath,[path.join(__dirname,'stub-program.cjs')],JSON.stringify(scenario),{...options,secrets:[...(options.secrets||[]),scenario.secret].filter(Boolean)},'stub');
 }
 async function runLive(request,proofs,keys,options){
  if(!LIVE_BUILD_ENABLED)reject('LIVE_BUILD_DISABLED');
  verifyReadiness(request,proofs,keys);
+ if(!require('./workspace').isolationStatus().available)reject('BLOCKED_OS_WRITE_ISOLATION');
  const {RemoteJobs,LiveGithubRefTransport}=require('./remote-state');
  const remote=new RemoteJobs(new LiveGithubRefTransport(options.controlPlaneToken));
  const claim=await remote.claim(request);if(claim.state!=='CLAIMED')return {state:'BLOCKED',reason:'REMOTE_CLAIM_REQUIRED',actual_dispatch:false};
@@ -69,7 +73,8 @@ async function runLive(request,proofs,keys,options){
  const isolated=workspace.prepare(request.source,request.branch,request.sha,{role:request.role});
  try {
   const command=buildCommand(request.kind,request.limits,request.role);
-  const result=await supervise(command.executable,command.args,request.context,{...options,cwd:isolated.dir,timeoutMs:request.limits.max_job_runtime,maxTokens:request.limits.max_tokens,maxSpend:request.limits.max_model_spend},'live');
+  const isolation=workspace.isolation(isolated,request.role,request.allowed_paths);
+  const result=await supervise(command.executable,command.args,request.context,{...options,isolation,cwd:isolated.dir,timeoutMs:request.limits.max_job_runtime,maxTokens:request.limits.max_tokens,maxSpend:request.limits.max_model_spend},'live');
   workspace.verifyChanges(isolated,request.role,request.allowed_paths);
   const final=['SUCCESS','FAILED','STOPPED'].includes(result.state)?result.state:'UNKNOWN';
   if((await remote.update(claim.key,final)).state!==final){result.state='HUMAN_REVIEW_REQUIRED';result.reason='REMOTE_SETTLEMENT_UNKNOWN';}

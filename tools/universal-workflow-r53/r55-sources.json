@@ -1,0 +1,41 @@
+{
+  "base": "397b46c18e25aaddc3e92886693da4ef3f2528d3",
+  "r54": null,
+  "deltas": {
+    "tools/agent-executor/workspace.js": {
+      "from": "100644 blob 4b49029d7d408ecec0b15f21ce9fb6bb12f2ee09",
+      "to": "100644 blob 6d28174e0560087b5af67100136212ac71090809",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "tools/agent-executor/cli-runner.js": {
+      "from": "100644 blob 8df21c7f052d16d4b993ab2e92a203d4ed41d675",
+      "to": "100644 blob c4e16afdb4d62f19cc7e5075ee5fab7b406e7b57",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "tools/agent-executor/stub-program.cjs": {
+      "from": "100644 blob 524588b0d12e8244000aa577f453ed33b8fb6310",
+      "to": "100644 blob 0a27c537b03e0c587a6a8cc9aeba9db123cf5099",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "tools/agent-executor/workspace-isolation.js": {
+      "from": null,
+      "to": "100644 blob 2c7ba6895043558d28c7d480193d8a8d445f16ea",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "lib/project-engine.js": {
+      "from": "100644 blob a9a764a7d0bcdffe3dfd41c77080bc3db6d6168f",
+      "to": "100644 blob 26d47e7b97c208a291e6704fdb21545389cc7a33",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "lib/universal-workflow.js": {
+      "from": "100644 blob b5b6e7e3ada4bbe5b9e300dee92aa717f82f4969",
+      "to": "100644 blob 8a10dfeb84a151648b34fb703db18749d1ffcab6",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "lib/workbench-r53.js": {
+      "from": "100644 blob 5e20639fefe91515eb52eff4d00fb2ef2ce0f767",
+      "to": "100644 blob fd54fce7b7514b66b592d88757b97ac53c706cfc",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    }
+  }
+}
