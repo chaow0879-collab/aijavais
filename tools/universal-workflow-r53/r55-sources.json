@@ -9,17 +9,17 @@
     },
     "tools/agent-executor/cli-runner.js": {
       "from": "100644 blob 8df21c7f052d16d4b993ab2e92a203d4ed41d675",
-      "to": "100644 blob c4e16afdb4d62f19cc7e5075ee5fab7b406e7b57",
+      "to": "100644 blob f595cf87c9b4d587c79369103731703fadf2a795",
       "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
     },
     "tools/agent-executor/stub-program.cjs": {
       "from": "100644 blob 524588b0d12e8244000aa577f453ed33b8fb6310",
-      "to": "100644 blob 0a27c537b03e0c587a6a8cc9aeba9db123cf5099",
+      "to": "100644 blob c327348ca8da08223e015cb1b8b14178ae1f5ac5",
       "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
     },
     "tools/agent-executor/workspace-isolation.js": {
       "from": null,
-      "to": "100644 blob 2c7ba6895043558d28c7d480193d8a8d445f16ea",
+      "to": "100644 blob 5d3e60bb028453133b85b64dfddb93f41f813173",
       "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
     },
     "lib/project-engine.js": {
@@ -34,7 +34,7 @@
     },
     "lib/workbench-r53.js": {
       "from": "100644 blob 5e20639fefe91515eb52eff4d00fb2ef2ce0f767",
-      "to": "100644 blob fd54fce7b7514b66b592d88757b97ac53c706cfc",
+      "to": "100644 blob fb2fdc630563abd3c8699f42dfa417a6b0f27b0b",
       "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
     }
   }

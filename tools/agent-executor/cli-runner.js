@@ -1,5 +1,5 @@
 'use strict';
-const {spawn}=require('node:child_process');
+const {spawn,spawnSync}=require('node:child_process');
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {reject,canonical,digest,REPO}=require('./policy');
 const LIVE_BUILD_ENABLED=false; // Future audited source revision, never a config/env bypass.
@@ -82,4 +82,13 @@ async function runLive(request,proofs,keys,options){
   return result;
  }catch{await remote.update(claim.key,'UNKNOWN');reject('LIVE_EXECUTION_REQUIRES_HUMAN_REVIEW');}
 }
-module.exports={redact,buildCommand,verifyReadiness,runStub,runLive};
+// Fixed OS self-test stays in the existing process-capable supervisor; the
+// policy/plan module has no process or network capability of its own.
+function probeWriteIsolation(){
+ const root=fs.mkdtempSync(path.join(require('node:os').tmpdir(),'r55-os-proof-'));fs.mkdirSync(path.join(root,'tests'));fs.writeFileSync(path.join(root,'protected'),'safe');
+ try{const command=require('./workspace-isolation').selfTestCommand(root);if(!command)return {available:false,reason:'BLOCKED_OS_WRITE_ISOLATION',mechanism:'bubblewrap',detail:'MISSING_BINARY'};
+  const r=spawnSync(command.executable,command.args,{encoding:'utf8',timeout:5000,env:{PATH:'/usr/bin:/bin',HOME:'/tmp/home',TMPDIR:'/tmp/private-tmp',LANG:'C.UTF-8'}}),verified=r.status===0&&fs.readFileSync(path.join(root,'protected'),'utf8')==='safe'&&fs.existsSync(path.join(root,'tests/allowed'));
+  return {available:verified,reason:verified?null:'BLOCKED_OS_WRITE_ISOLATION',mechanism:'bubblewrap_user_pid_network_mount_namespaces',detail:verified?'WRITE_DENIAL_AND_ALLOWED_WRITE_PROBED':'NAMESPACE_OR_READONLY_MOUNT_UNAVAILABLE'};
+ }catch{return {available:false,reason:'BLOCKED_OS_WRITE_ISOLATION',mechanism:'bubblewrap',detail:'PROBE_FAILED'};}finally{fs.rmSync(root,{recursive:true,force:true});}
+}
+module.exports={redact,buildCommand,verifyReadiness,runStub,runLive,probeWriteIsolation};

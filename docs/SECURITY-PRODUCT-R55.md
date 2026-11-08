@@ -49,3 +49,5 @@ npm test
 新增8个未在实现中硬编码的陌生/跨域目标，实际Node HTTP+临时SQLite+本地Mock，多岗执行→来源事件→DOCX/XLSX/PPTX→服务器criteria→hash/round验收。全部文件ZIP CRC与独立python-docx/openpyxl/python-pptx解析；只是Mock流程/真实文件，不是领域专家或真实厂商质量通过。`R55_EVIDENCE_DIR`归档8任务计数/回执/文件；精确最终计数、SHA、CI及R54状态由#38唯一最终报告给出。
 
 回滚无DDL迁移，仍Schema v4；先停唯一实例、保留完整DATA/WAL/费用/请求墓碑/历史文件和unknown预留，不删除锁/墓碑后重派。隔离不可用时保持BLOCKED。任何真实试点仍需同SHA独立审计/QA、官方合法身份、可强制USD/Token上限、可信签署/受保护ref、Owner单次GO及停止机制。
+
+检查点CI42437074558的原V2静态安全断言正确发现新策略模块引入进程API；未改断言，已把固定OS自测的spawnSync移回原cli-runner，隔离策略只生成计划/FD，无进程或网络能力。新增并发链接替换子进程、内层namespace不可用真实BLOCKED、实际SQLite unknown/tombstone不被越界写损坏的测试。首次并发fixture将合法在scope内的空隙文件写误判为逃逸，修正为只按受保护目标实际改变或内核拒绝判断；未放宽哨兵不变断言。小Git fixture还需显式带上被测模块文件，缺文件的失败与OS失败分开记录。
