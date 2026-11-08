@@ -161,12 +161,12 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
           UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
         run: node tests/ui/claude-universal-intake.e2e.js
-      - name: R52 full real Chromium workbench against unified backend (local MOCK only)
+      - name: Unchanged R52 legacy V2 assertions (explicit discovery 404; default R54 tested below)
         if: success() || failure()
         env:
           NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
           UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
-        run: node tests/haloflux-workbench-r52/workbench.e2e.js
+        run: node tools/universal-workflow-r53/run-r52-legacy.cjs
       - name: Unchanged R54 Chromium journey against this exact R55 backend
         if: success() || failure()
         env:
