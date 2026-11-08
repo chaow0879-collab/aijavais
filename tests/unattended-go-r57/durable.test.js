@@ -25,6 +25,10 @@ test('SIGKILL after dispatch + expired lease recovers UNKNOWN with reservation, 
  const f=await fixture(t,{count:1,durable:true,mode:'hang'}),w=worker(wire(f));
  t.after(()=>{try{w.child.kill('SIGKILL');}catch{}});
  for(let n=0;n<300&&(f.launches()===0||!fs.existsSync(path.join(path.dirname(f.stages[0].f.cli.counter),'hang-pids.json')));n++)await new Promise(r=>setTimeout(r,10));assert.equal(f.launches(),1);
+ const ownedPids=JSON.parse(fs.readFileSync(path.join(path.dirname(f.stages[0].f.cli.counter),'hang-pids.json'),'utf8'));
+ const cwd=fs.readlinkSync('/proc/'+ownedPids[0]+'/cwd'),workspaceRoot=path.dirname(cwd);
+ assert.equal(path.dirname(workspaceRoot),require('node:os').tmpdir());assert.match(path.basename(workspaceRoot),/^aij-pilot-/);assert.equal(path.basename(cwd),'repo');
+ t.after(()=>{require('../../tools/first-pilot-r51/workspace-seal').restore(workspaceRoot);fs.rmSync(workspaceRoot,{recursive:true,force:true});});
  w.child.kill('SIGKILL');await w.done;
  // Kill only PIDs written by this owned Fake fixture, including its grandchild.
  const pids=JSON.parse(fs.readFileSync(path.join(path.dirname(f.stages[0].f.cli.counter),'hang-pids.json'),'utf8'));

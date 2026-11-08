@@ -29,7 +29,7 @@
 
 - branch仍指向原SHA；commit和tree真实存在。当前只读任务work_sha==source_sha，**没有生成开发代码提交**。
 - CI的id/attempt/head_sha/branch/repo/head repo/fork/event/workflow path/结论与回执一致；PR、其他SHA和其他workflow不能代替。
-- 报告必须是原R45 outcome JSON，出自批准的developer identity，run/dispatch/source/gate/known cost/实际Fake进程/log hash匹配持久R46结果。自由文本“READY”不算证据。CI和报告被绑定到完整receipt digest。
+- 报告必须是原R45 outcome JSON，出自批准的developer identity，run/dispatch/source/gate/known cost/实际Fake进程/log hash匹配持久R46结果。自由文本“READY”不算证据。CI和报告被绑定到完整receipt digest。原R45的evidence.ci_ref是执行生产者workflow，可能不同于后续验证CI；单独保存在producer_ci_ref并绑定签名，不能替代对目标验证CI的固定SHA/workflow检查。检查点CI42440725126暴露了此前将两者等同的契约错误，已用带公开CI环境变量的本地负/正对照复现并修正，不删SHA断言。
 - 回收签名继续使用原`{manifest,proofs}`，`control_operation=COLLECT`和`r57_receipt_digest`隔离执行授权域；不是第三套签名格式。原verifyReadiness验证三把不同密钥；审核/QA的reviewed_sha及各自login白名单、QA PASS、expiry均需成立，developer不能自审。
 
 没有完整独立身份/签名时`REVIEW_PENDING / WAIT_AUTHORIZED_REVIEWER`，已签但QA尚PENDING时`QA_PENDING`。负面/过期/错误/同身份签名不推进。Receipt和签名均为E3 synthetic测试时，输出明确SYNTHETIC_ONLY_NOT_REAL_ACCEPT。

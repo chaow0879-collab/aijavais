@@ -47,11 +47,12 @@ async function collect({ envelope: e, outcome: o, read, policy }) {
       report.cost.known !== true || report.cost.usd !== o.cost || report.agent_launch.mode !== 'fake' ||
       report.agent_launch.process_launches !== 1 || report.agent_launch.actual_agent_launches !== 0 ||
       report.agent_launch.cli !== e.kind || report.gate_sha !== e.source_sha ||
-      (report.evidence.ci_ref !== null && report.evidence.ci_ref !== o.ci_ref) ||
+      (report.evidence.ci_ref !== null && !/^https:\/\/github\.com\/chaow0879-collab\/aijavais\/actions\/runs\/[1-9][0-9]*$/.test(report.evidence.ci_ref)) ||
       !C.HASH.test(report.evidence.log_sha256 || '')) fail('COLLECT_REPORT_BINDING');
   const receipt = { repo: C.REPO, issue: e.issue, branch: e.branch, work_key: C.pilotWorkKey(e), task_id: e.task_id,
     source_sha: e.source_sha, work_sha: commit.sha, tree_sha: commit.commit.tree.sha, run_id: o.run_id,
     ci: { id: ci.id, attempt: ci.run_attempt, sha: ci.head_sha, path: ci.path, conclusion: ci.conclusion },
+    producer_ci_ref: report.evidence.ci_ref,
     report_ref: o.report_ref, report_digest: C.digest(report), developer: comment.user.login,
     log_sha256: report.evidence.log_sha256, evidence: 'E3_FAKE', real_agent_launches: 0 };
   return { state: 'REVIEW_PENDING', receipt, digest: C.digest(receipt) };

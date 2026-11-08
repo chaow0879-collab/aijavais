@@ -8,6 +8,8 @@ const Receipts = require('./receipts');
 const result = (state, reason, more = {}) => ({ state, reason, evidence: 'E3_FAKE_ONLY',
   actual_agent_launches: 0, real_schedule: 'NOT_ENABLED', real_state_ref_write: 'NOT_RUN', ...more });
 const fake = input => Object.getOwnPropertyDescriptor(input || {}, 'mode')?.value === 'fake';
+const readReviews = (input, collected) => typeof input.readReviews === 'function'
+  ? E.boundedBackend({ read: () => input.readReviews(collected) }, 1000).read() : null;
 async function parentGate(input, now) {
   const base = input.packet.base, e = base.envelope;
   if (!e.after) return true;
@@ -18,7 +20,7 @@ async function parentGate(input, now) {
       !job.outcome?.cost_known || state.document.halted) return false;
   const c = await Receipts.collect({ envelope: p, outcome: job.outcome, read: input.readGitHub, policy: input.collectionPolicy });
   if (!c.receipt || !input.readReviews) return false;
-  return Receipts.reviews(await input.readReviews(c), c, input.collectionPolicy, now).state === 'DONE';
+  return Receipts.reviews(await readReviews(input, c), c, input.collectionPolicy, now).state === 'DONE';
 }
 async function runOnce(input = {}) {
   // Never enumerate the context, fetch credentials, call a transport or spawn a
@@ -53,7 +55,7 @@ async function runOnce(input = {}) {
     const collected = await Receipts.collect({ envelope: base.envelope, outcome: job.outcome,
       read: input.readGitHub, policy });
     if (!collected.receipt) return result(collected.state, collected.reason, { execution, history, next_allowed: false });
-    const proofs = input.readReviews ? await input.readReviews(collected) : null;
+    const proofs = await readReviews(input, collected);
     if (!await authorityCheck(packet.now ?? Date.now())) return result('BLOCKED', 'COLLECTION_AUTHORITY_CHANGED', { execution, next_allowed: false });
     const gate = Receipts.reviews(proofs, collected, policy, packet.now ?? Date.now());
     return result(gate.state, gate.reason || null, { execution, history: [...history, 'REVIEW_PENDING', ...(gate.state === 'DONE' ? ['QA_PENDING', 'REWORK_OR_NEXT', 'DONE'] : [gate.state])], collected, ...gate });
