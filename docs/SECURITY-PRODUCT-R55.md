@@ -6,7 +6,7 @@
 
 R51独立审计[#6706878270](https://github.com/chaow0879-collab/aijavais/issues/2#issuecomment-6706878270)仅非live ACCEPT_WITH_FOLLOWUP，0P0/0P1/2P2；独立CI42360045723是failure，不能改写为全绿。原SHA3d693734/后续R53继承的QA终态检查抹去目录ctime，导致AUD-R51-01越界文件先写后删被接受；AUD-R51-02允许tests/内链接指向外部/非授权内部并修改实际哨兵。
 
-本轮先在未修改的397b46c实际Git临时仓库复现，两次verifyChanges均错误true，外部**自有临时**sentinel确实从safe变changed。记录`/tmp/r55-original-reproduction.json`，没有生产/宿主敏感路径操作。后续通过拒绝终态坏例与运行时内核边界双重修复，不拿mtime推断当运行隔离。
+本轮先在未修改的397b46c实际Git临时仓库复现，两次verifyChanges均错误true，外部**自有临时**sentinel确实从safe变changed。初次记录`/tmp/r55-original-reproduction.json`；`reproduce-r51-audit.cjs`可在精确冻结397b46c临时clone中重放同两坏例，CI归档`original-r51-vulnerabilities.json`并明确标为历史漏洞观察（不是安全PASS），没有生产/宿主敏感路径操作。后续通过拒绝终态坏例与运行时内核边界双重修复，不拿mtime推断当运行隔离。
 
 ## 运行时保护与失败关闭
 

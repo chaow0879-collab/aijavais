@@ -59,6 +59,7 @@ jobs:
         run: |
           mkdir -p "$R55_EVIDENCE_DIR"
           node -e "console.log(JSON.stringify(require('./tools/agent-executor/workspace').isolationStatus()))" > "$R55_EVIDENCE_DIR/os-isolation.json"
+          node tools/universal-workflow-r53/reproduce-r51-audit.cjs
           node --test tests/security-r55/*.test.js
       - name: Unchanged R54 Node assertions against this exact R55 backend (not historical R53)
         if: success() || failure()
