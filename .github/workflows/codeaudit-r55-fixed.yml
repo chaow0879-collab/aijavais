@@ -1,0 +1,104 @@
+name: Independent CodeAudit R55 fixed source
+on:
+  push:
+    branches: [audit/codeaudit-r55-8e95841-20261107]
+    paths: [audit-evidence/r55/**, .github/workflows/codeaudit-r55-fixed.yml]
+permissions:
+  contents: read
+jobs:
+  independent-offline-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      AIJ_PILOT_LIVE: '0'
+      AIJ_AUTO_DISPATCH_ENABLED: 'false'
+    steps:
+      - name: Read auditor-owned evidence assets
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: audit-assets
+          persist-credentials: false
+      - name: Checkout the unique frozen source, never the auditor branch HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: 8e9584149cccac02fa0b5c39a68c1983ec60170e
+          fetch-depth: 0
+          path: reviewed
+          persist-credentials: false
+      - name: Checkout old R51 source for an offline contrast only
+        uses: actions/checkout@v4
+        with:
+          ref: 3d6937348d94e585e44d567de05f14ecd0eb3636
+          path: old-r51
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install offline test dependencies (no kernel or security policy changes)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap
+          python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+          bwrap --version
+      - name: Assert and record independent source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C reviewed rev-parse HEAD)" = 8e9584149cccac02fa0b5c39a68c1983ec60170e
+          test "$(git -C reviewed rev-parse 'HEAD^{tree}')" = d0ebc0b559aca1e51922692db4e3888786153514
+          { git -C reviewed show -s --format='%H %P %T' HEAD; node --version; git --version; } | tee evidence/source.txt
+      - name: Independent 30 V2 authorization and unknown-fee assertions
+        shell: bash
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+        run: |
+          set -euo pipefail
+          node audit-assets/audit-evidence/r55/independent-v2.cjs | tee evidence/independent-v2.log
+      - name: Independent security, provenance and real-Git probes
+        if: success() || failure()
+        shell: bash
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+          OLD_R51_ROOT: ${{ github.workspace }}/old-r51
+          AUDIT_OUT: ${{ github.workspace }}/evidence/independent-r55.json
+        run: |
+          set -euo pipefail
+          node audit-assets/audit-evidence/r55/independent-r55.cjs | tee evidence/independent-r55.log
+      - name: Independent re-execution of the frozen 888-test E2/E3 suite
+        if: success() || failure()
+        working-directory: reviewed
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/agent-scheduler/*.test.js tests/agent-executor/*.test.js tests/agent-pilot-r45/*.test.js tests/auto-handoff-r46/*.test.js tests/first-handoff-r49/*.test.js tests/trusted-trigger-r50/*.test.js tests/first-pilot-r51/*.test.js tests/security-r55/*.test.js | tee ../evidence/frozen-suite.log
+          test "$(git rev-parse HEAD)" = 8e9584149cccac02fa0b5c39a68c1983ec60170e
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - name: Independent authenticated product security and durable evidence
+        if: success() || failure()
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+          AUDIT_OUT: ${{ github.workspace }}/evidence/independent-product.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          node audit-assets/audit-evidence/r55/independent-product.cjs | tee evidence/independent-product.log
+      - name: Re-execute R53 R55 product regressions against the frozen source
+        if: success() || failure()
+        working-directory: reviewed
+        shell: bash
+        env:
+          R55_EVIDENCE_DIR: ${{ github.workspace }}/evidence/product
+        run: |
+          set -euo pipefail
+          node --test tests/universal-workflow-r53/*.test.js tests/claude-universal-intake.test.js | tee ../evidence/product-suite.log
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - name: Preserve independent evidence (never raw credentials)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: independent-codeaudit-r55-8e95841
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
