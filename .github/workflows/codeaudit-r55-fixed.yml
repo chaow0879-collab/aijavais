@@ -1,7 +1,7 @@
 name: Independent CodeAudit R55 fixed source
 on:
   push:
-    branches: [audit/codeaudit-r55-8e95841-20261107]
+    branches: [audit/codeaudit-r55-8e95841-20261108]
     paths: [audit-evidence/r55/**, .github/workflows/codeaudit-r55-fixed.yml]
 permissions:
   contents: read
