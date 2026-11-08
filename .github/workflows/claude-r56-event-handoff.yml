@@ -24,6 +24,10 @@ jobs:
           node-version: "24"
       - name: Record exact SHA
         run: echo "tested_sha=$GITHUB_SHA"
+      - name: Install poppler and LibreOffice (existing suite needs them; avoids environment skips)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
       - name: Scope — only R56-owned paths differ from the R55 base
         run: |
           git diff --name-only 8e9584149cccac02fa0b5c39a68c1983ec60170e HEAD | tee "$RUNNER_TEMP/changed.txt"
@@ -31,10 +35,10 @@ jobs:
       - name: R56 hand-off (E2 decisions + E3 local GitHub emulator / Git-ref CAS / R50 store / child processes)
         env:
           R56_OUT: ${{ runner.temp }}/r56-out
-        run: mkdir -p "$R56_OUT" && node --test --test-concurrency=1 tests/event-handoff-r56/handoff.test.js
+        run: mkdir -p "$R56_OUT" && node --test --test-concurrency=1 tests/event-handoff-r56/handoff.test.js 2>&1 | tee "$RUNNER_TEMP/r56.log"; test "${PIPESTATUS[0]}" = 0
       - name: Reused chain regression (R46, R49, R50, R51)
         if: success() || failure()
-        run: node --test --test-concurrency=1 tests/auto-handoff-r46/*.test.js tests/first-handoff-r49/*.test.js tests/trusted-trigger-r50/*.test.js tests/first-pilot-r51/*.test.js
+        run: node --test --test-concurrency=1 tests/auto-handoff-r46/*.test.js tests/first-handoff-r49/*.test.js tests/trusted-trigger-r50/*.test.js tests/first-pilot-r51/*.test.js 2>&1 | tee "$RUNNER_TEMP/chain.log"; test "${PIPESTATUS[0]}" = 0
       - name: Readiness must stay BLOCKED (no live path in this source)
         if: success() || failure()
         run: |
@@ -42,7 +46,10 @@ jobs:
           node -e "const r=require(process.argv[1]);if(r.state!=='BLOCKED'||r.actual_agent_launches!==0||!r.blockers.includes('BLOCKED_ACTUAL_RUNNER_IDENTITY'))process.exit(1)" "$RUNNER_TEMP/r56-out/readiness.json"
       - name: Full existing suite (npm test)
         if: success() || failure()
-        run: npm test
+        run: npm test 2>&1 | tee "$RUNNER_TEMP/npm.log"; test "${PIPESTATUS[0]}" = 0
+      - name: Test counts summary
+        if: always()
+        run: for f in r56 chain npm; do echo "== $f"; grep -E '^ℹ (tests|pass|fail|skipped) ' "$RUNNER_TEMP/$f.log" || true; done
       - name: Hash evidence
         if: always()
         run: cd "$RUNNER_TEMP/r56-out" && sha256sum * 2>/dev/null || true
