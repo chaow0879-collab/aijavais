@@ -30,10 +30,12 @@ QA可以读整个已批准源码、写tests授权子树；runtime库只读；HOM
 - review/deliver/accept可携带`runId`和`expectedRound`，不一致409 `round_conflict`；criteria仍必须有expectedRound。
 - GET universal/run增加`criteria:{round,artifactId,checks}`。未保存时unverified，服务端已存逐条检查可刷新恢复；批准后也可读批量声明，专业质量仍NOT_VERIFIED。
 - 重复deliver返回已有文件完整metadata+downloadUrl+`duplicate/noReplay`，不重新生成。跨run/round/hash验收保护保持。
-- GET workbench保留原R52 event/artifact schema及seq。snapshot新增project_id/round，artifact带round/source_artifact_id/source_sha256；事件补actor/round/message_id。cursor/limit必须合法整数，超出本work历史409，不静默接受错误ref；超过5000历史可读后续页，50000为明确限额，不能无声截断。
+- GET workbench保留原R52 event/artifact schema及seq。snapshot新增project_id/round，artifact带round/format/source_artifact_id/source_sha256；事件补actor/round/message_id。cursor/limit必须合法整数，超出本work历史409，不静默接受错误ref；超过5000历史可读后续页，50000为明确限额，不能无声截断。
 - 成本USD仍null、vendorInvoiceReconciled=false。正规模型/工具缺口和PLAN_SIMULATED如实展示，未验证供应商额度不自动放行。
 
-R54待其真实READY/准确SHA/CI后才精确引入相对R52的增量，保持Claude专属blob/mode，不直接merge旧父链。
+R54已正式READY且冻结于`3fbd6ff5db2f1a9032a02f9b48a965abc461d500`，原CI42436933716两job成功。相对R52的唯一提交精确cherry-pick为`48bef2a8e861caa355d1abba2d7248016029013e`，13路径专属blob/mode不改，`r55-sources.js`逐一核对；没有merge其旧父链。
+
+R54原overlay固定跑历史397b46c后端；不能拿它冒充最终R55验证。`run-r54-integrated.cjs --node|--browser`仅在内存中将原helper的固定后端SHA替换为当前HEAD，仍运行原件Node/Chromium断言，临时Git clone精确最终后端，保留所有Claude文件字节。证据另记原helper散列、R54来源、实际backend SHA。它不是生产执行器，不启动真实模型。验收/取消重复请求仍由原状态机409安全拒绝，并未新增请求级幂等协议；start/rework/deliver/criteria保留持久requestId。
 
 ## 验证与交付口径
 

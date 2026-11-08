@@ -60,6 +60,11 @@ jobs:
           mkdir -p "$R55_EVIDENCE_DIR"
           node -e "console.log(JSON.stringify(require('./tools/agent-executor/workspace').isolationStatus()))" > "$R55_EVIDENCE_DIR/os-isolation.json"
           node --test tests/security-r55/*.test.js
+      - name: Unchanged R54 Node assertions against this exact R55 backend (not historical R53)
+        if: success() || failure()
+        env:
+          R54_OUT: ${{ runner.temp }}/r55-evidence/r54-node
+        run: node tools/universal-workflow-r53/run-r54-integrated.cjs --node
       - name: Frozen R52 original suite including authorship and historical shutdown observation
         if: success() || failure()
         env:
@@ -161,6 +166,12 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
           UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
         run: node tests/haloflux-workbench-r52/workbench.e2e.js
+      - name: Unchanged R54 Chromium journey against this exact R55 backend
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: node tools/universal-workflow-r53/run-r54-integrated.cjs --browser
       - name: Hash screenshots
         if: always()
         run: cd "$RUNNER_TEMP/aij-ui-shots" && sha256sum * 2>/dev/null || true
