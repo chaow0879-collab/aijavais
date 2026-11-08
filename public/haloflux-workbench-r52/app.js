@@ -4,13 +4,18 @@
  * accepts or refuses, and the refusal is shown verbatim. All user/AI text goes in via textContent. */
 (function () {
   'use strict';
-  const C = window.R52Contract, P = window.R52Planner, E = window.R52Editor, J = window.R52Projector, A = window.R52Acceptance, H = window.R52Halo, D = window.R52Demo;
+  const C = window.R52Contract, P = window.R52Planner, E = window.R52Editor, J = window.R52Projector, A = window.R52Acceptance, H = window.R52Halo, D = window.R52Demo, L = window.R54Live;
   const $ = id => document.getElementById(id);
   const qs = new URLSearchParams(location.search);
   const POLL = Math.max(100, Math.min(5000, Number(qs.get('poll')) || 800));
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const S = { backend: false, models: [], tools: null, toolIdMap: {}, plan: null, projector: J.createProjector({}), artifacts: [], runId: null, runStatus: null, projectId: null,
-    savedDigest: null, marks: {}, staticHalo: reduce, timer: null, demoTimer: null, lastHalo: '', unknownRunCost: false, failures: 0 };
+    savedDigest: null, marks: {}, staticHalo: reduce, timer: null, demoTimer: null, lastHalo: '', unknownRunCost: false, failures: 0,
+    // R54: contract 'r53' (universal backend) or 'v2' (older servers); server facts for the current run.
+    contract: null, ids: L.requestIds(Date.now().toString(36) + Math.random().toString(36).slice(2, 8)), projectVersion: null, startGen: 0, run: null, wb: { cursor: 0 },
+    crit: {}, critSaved: null, critSavedId: null };
+  const r53 = () => S.contract === 'r53';
+  function refused(r, what) { const e = L.explain(r.status, r.json); say((what ? what + '：' : '') + e.human + '［' + e.code + '］', 'warn'); return e; }
 
   function node(tag, attrs, kids) {
     const n = document.createElement(tag);
@@ -45,8 +50,19 @@
     const inp = inputs();
     let r = P.plan({ ...inp, models: S.models });
     if (!r.ok) { say(r.error, 'warn'); $('goal').focus(); return; }
-    S.tools = null; S.toolIdMap = {};
+    S.tools = null; S.toolIdMap = {}; S.contract = null;
     if (S.backend) {
+      // R54: prefer the R53 universal backend (server plan, per-role grants, criteria, acceptance).
+      try {
+        const ur = await api('/api/v2/universal/plan', 'POST', L.planRequest(inp));
+        if (ur.status === 200) {
+          S.contract = 'r53'; S.plan = L.fromServerPlan(ur.json, r.plan, S.models); S.projectId = null; S.projectVersion = null; S.savedDigest = null;
+          say('服务器生成了团队草案（PLAN_SIMULATED，离线规则，未调用 AI）。你可以直接修改，然后逐岗批准。', 'ok');
+          S.lastOut = null; renderPlan(); renderAuth(); renderAll(); $('plan-card').hidden = false; $('auth-card').hidden = false; return;
+        }
+        if (ur.status !== 404) refused(ur, '服务器方案接口拒绝，改用离线草案');
+      } catch { /* fall through to the older V2 path */ }
+      S.contract = 'v2';
       // Server truth for tools (existing intake API, no model call). Failure keeps "unchecked", never "available".
       try {
         const sr = await api('/api/v2/intake/plan', 'POST', { templateId: 'universal', description: inp.goal, audience: inp.audience,
@@ -77,7 +93,7 @@
     const p = S.plan; if (!p) return;
     keepFocus(() => {
       $('plan-label').textContent = p.label + (p.edited ? ' · 已编辑' : '');
-      $('plan-summary').textContent = '目标：' + p.goal + (p.domain ? '｜领域：' + p.domain : '｜领域待你确认') + '｜风险：' + ({ low: '低', medium: '中', high: '高' }[p.risk] || p.risk) + '｜' + p.roles.length + ' 个岗位、' + p.steps.length + ' 个步骤';
+      $('plan-summary').textContent = '目标：' + p.goal + (p.domain ? '｜领域：' + p.domain : '｜领域待你确认') + '｜风险：' + ({ low: '低', medium: '中', high: '高', unknown: '见服务器快照' }[p.risk] || '—') + '｜' + p.roles.length + ' 个岗位、' + p.steps.length + ' 个步骤';
       $('confidence').replaceChildren(node('p', {}, [node('span', { class: 'badge ' + (p.confidence.level === 'low' ? 'block' : p.confidence.level === 'medium' ? 'warn' : 'good'), id: 'confidence-level', 'data-level': p.confidence.level,
         text: '理解程度：' + ({ high: '较高', medium: '一般', low: '低' }[p.confidence.level]) + '（' + p.confidence.score + '/100）' })]),
         node('ul', { class: 'sub' }, p.confidence.reasons.map(t => node('li', { text: t }))));
@@ -110,6 +126,9 @@
       node('span', { class: 'num', text: String(i + 1) }),
       node('div', {}, [inp('title', '步骤名称', 120), node('label', { class: 'lbl', text: '成果' }), inp('deliverable', '成果', 200), node('label', { class: 'lbl', text: '检查标准' }), inp('quality', '检查标准', 400),
         node('label', { class: 'lbl', text: '负责岗位' }), roleSel,
+        r53() ? node('label', { class: 'lbl', text: '步骤类型' }) : null,
+        r53() ? node('select', { 'data-op': 'stepKind', 'data-step': s.step_id, 'data-fkey': 'sk-' + s.step_id, 'aria-label': '步骤“' + s.title + '”的类型' },
+          [node('option', { value: 'work', selected: s.kind !== 'peer_review', text: '工作' }), node('option', { value: 'peer_review', selected: s.kind === 'peer_review', text: '独立复核（复核其他岗位的成果）' })]) : null,
         node('div', {}, s.tools.map(t => node('span', { class: 'tool badge', 'data-status': t.status, 'data-tool': t.tool_id }, [node('span', { text: t.tool_id + '：' + ({ available: '可用', unchecked: '未核对', unknown: '平台没有', needs_setup: '需配置' }[t.status] || t.status) + ' ' }),
           node('button', { class: 'small', 'data-op': 'removeTool', 'data-step': s.step_id, 'data-tool': t.tool_id, 'data-fkey': 'rt-' + s.step_id + '-' + t.tool_id, 'aria-label': '从步骤移除工具 ' + t.tool_id, text: '移除' })])))]),
       node('div', { class: 'row', style: 'flex-direction:column' }, [
@@ -127,7 +146,8 @@
       removeRole: () => ({ op: 'removeRole', role_id: d.role }), editRole: () => ({ op: 'editRole', role_id: d.role, [d.key]: t.value }), setModel: () => ({ op: 'setModel', role_id: d.role, connection_id: t.value || null }),
       up: () => ({ op: 'moveStep', step_id: d.step, delta: -1 }), down: () => ({ op: 'moveStep', step_id: d.step, delta: 1 }), removeStep: () => ({ op: 'removeStep', step_id: d.step }),
       editStep: () => ({ op: 'editStep', step_id: d.step, [d.key]: t.value }), stepRole: () => ({ op: 'editStep', step_id: d.step, role_id: t.value }),
-      removeTool: () => ({ op: 'removeTool', step_id: d.step, tool_id: d.tool }), removeCheck: () => ({ op: 'editAcceptance', remove: d.id })
+      removeTool: () => ({ op: 'removeTool', step_id: d.step, tool_id: d.tool }), removeCheck: () => ({ op: 'editAcceptance', remove: d.id }),
+      stepKind: () => ({ op: 'editStep', step_id: d.step, kind: t.value })
     };
     if (!map[op]) return;
     if (!edit(map[op]())) renderPlan(); // restore the last valid values on refusal
@@ -147,6 +167,21 @@
       ...ids.map(id => node('div', { class: 'grid2', 'data-price': id }, [node('input', { type: 'number', min: 0, step: '0.01', 'data-price-in': id, 'aria-label': id + ' 输入单价', placeholder: id + ' 输入单价', value: perm.prices[id] ? perm.prices[id].inputPerMillion : '' }),
         node('input', { type: 'number', min: 0, step: '0.01', 'data-price-out': id, 'aria-label': id + ' 输出单价', placeholder: id + ' 输出单价', value: perm.prices[id] ? perm.prices[id].outputPerMillion : '' })]))] : []));
     $('confirm-auth').checked = perm.confirmed;
+    $('r53-auth').hidden = !r53(); $('ops-box').hidden = r53(); if (r53()) $('paid-box').replaceChildren();
+    if (r53()) {
+      const st = S.projector.state();
+      $('role-grants').replaceChildren(...p.roles.map(r => {
+        const rs = L.roleStatus(p, r, st), g = (perm.roles || {})[r.role_id] || {};
+        return node('li', { 'data-grant-role': r.role_id, 'data-role-status': rs.status, 'data-unknown-cost': String(rs.unknown_cost) }, [
+          node('div', { class: 'role-head' }, [node('strong', { text: r.name }),
+            node('span', { class: 'badge ' + ({ approved: 'good', blocked: 'block', pending: 'warn' }[rs.status] || 'info'), text: { approved: '已批准 approved', blocked: '受阻 blocked', pending: '待批准' }[rs.status] }),
+            rs.unknown_cost ? node('span', { class: 'badge warn', text: '费用未知 unknown_cost' }) : null]),
+          node('p', { class: 'sub', text: '模型：' + (r.model && (r.model.display_name || r.model.connection_id) || '无') + '（' + (r.model && r.model.pricing_mode || '—') + '）｜' + rs.reason }),
+          node('div', { class: 'row' }, [
+            node('label', { class: 'row' }, [node('input', { type: 'checkbox', 'data-grant': r.role_id, checked: g.approved === true, disabled: rs.status === 'blocked', 'aria-label': '批准岗位 ' + r.name }), node('span', { text: '批准此岗位' })]),
+            node('label', { class: 'row' }, [node('span', { class: 'sub', text: 'Token 上限' }), node('input', { type: 'number', min: 1000, max: 1000000, step: 1000, value: g.max_tokens || 100000, 'data-grant-tokens': r.role_id, 'aria-label': r.name + ' Token 上限', style: 'width:130px' })])])]);
+      }));
+    }
     const rr = E.runRequest(p, S.toolIdMap);
     const active = !!S.runId && (S.starting || ['running', 'queued', null, undefined].includes(S.runStatus));
     $('start-run').disabled = !rr.ok || !S.backend || active || !!S.starting;
@@ -159,6 +194,9 @@
     const t = ev.target;
     if (t.id === 'confirm-auth') { S.plan = E.confirm(S.plan, t.checked); renderPlan(); renderAuth(); renderAll(); return; }
     let action = null;
+    if (t.dataset.grant) action = { op: 'setRoleGrant', role_id: t.dataset.grant, approved: t.checked };
+    else if (t.dataset.grantTokens) action = { op: 'setRoleGrant', role_id: t.dataset.grantTokens, max_tokens: t.value };
+    if (action) { if (!edit(action)) renderAuth(); return; }
     if (t.dataset.opid) action = { op: 'setPermissions', allowed_ops: [...document.querySelectorAll('[data-opid]')].filter(x => x.checked).map(x => x.dataset.opid) };
     else if (t.id === 'max-cost') action = { op: 'setPermissions', max_cost_usd: t.value };
     else if (t.id === 'max-tokens') action = { op: 'setPermissions', max_tokens: t.value };
@@ -175,6 +213,7 @@
   }
   async function saveProject() {
     if (!S.backend || !S.plan) return null;
+    if (r53()) return saveUniversal();
     let body;
     try { body = E.toProject(S.plan, S.toolIdMap); } catch (e) { say(e.message, 'warn'); return null; }
     const digest = JSON.stringify(body);
@@ -185,8 +224,36 @@
     say('已保存为项目（未运行、未调用模型）。也可以在“项目工作台”里查看。', 'ok');
     return S.projectId;
   }
+  async function saveUniversal() {
+    if (S.plan.readOnly) { say('这是服务器上已运行任务的快照，不能另存为新方案；请重新生成团队。', 'warn'); return null; }
+    const v = E.validate(S.plan); if (!v.ok) { say(v.errors.join('；'), 'warn'); return null; }
+    const body = L.toUniversalProject(S.plan), digest = JSON.stringify(body);
+    if (S.projectId && S.savedDigest === digest) return S.projectId;
+    const r = S.projectId ? await api('/api/v2/projects/' + encodeURIComponent(S.projectId), 'PUT', { ...body, expectedVersion: S.projectVersion })
+      : await api('/api/v2/universal/projects', 'POST', { project: body });
+    if (!(r.status === 201 || r.status === 200)) { refused(r, '服务器没有保存'); return null; }
+    S.projectId = r.json.project.projectId; S.projectVersion = r.json.project.version; S.savedDigest = digest;
+    say('已保存到服务器（第 ' + S.projectVersion + ' 版；未运行、未调用模型）。', 'ok');
+    return S.projectId;
+  }
+  async function startUniversal() {
+    const rr = E.runRequest(S.plan, S.toolIdMap);
+    if (!rr.ok) { $('run-refusal').textContent = '暂不能开始：' + rr.reason; return; }
+    const pid = await saveUniversal(); if (!pid) return;
+    // Same content + same generation = same request ID: a retry after a network drop cannot dispatch twice.
+    const body = L.approvalBody(S.plan, S.ids('start', { pid, v: S.projectVersion, gen: S.startGen }));
+    let r;
+    try { r = await api('/api/v2/universal/projects/' + encodeURIComponent(pid) + '/runs', 'POST', body); }
+    catch { say('网络中断：不确定服务器是否已收到。再次点击会用同一个请求编号，服务器不会重复派发。', 'warn'); return; }
+    if (r.status !== 202) { const e = refused(r, '服务器拒绝开始，没有派发任何工作'); $('run-refusal').textContent = '服务器拒绝开始：' + e.human + '［' + e.code + '］'; return; }
+    const run = r.json.run || {};
+    if (run.duplicate) { if (run.runId) { follow(run.runId); say('这是重复请求：服务器没有重新派发，已显示原来的任务。', 'info'); } else say('这是重复请求：服务器没有重新派发（状态 ' + run.state + '）。', 'warn'); return; }
+    S.startGen++; follow(run.runId);
+    say('服务器已接受逐岗授权并开始工作。HALOFLUX 只显示服务器记录的事件。', 'ok');
+  }
   async function startRun() {
     if (S.starting) return;
+    if (r53()) { S.starting = true; renderAuth(); try { await startUniversal(); } finally { S.starting = false; renderAuth(); } return; }
     const rr = E.runRequest(S.plan, S.toolIdMap);
     if (!rr.ok) { $('run-refusal').textContent = '暂不能开始：' + rr.reason; return; }
     S.starting = true; renderAuth();
@@ -205,12 +272,57 @@
   function stopFeeds() { clearTimeout(S.timer); S.timer = null; clearInterval(S.demoTimer); S.demoTimer = null; }
   function follow(runId) {
     stopFeeds();
+    if (r53()) {
+      S.runId = runId; S.artifacts = []; S.run = null; S.wb = { cursor: 0 }; S.crit = {}; S.critSaved = null; S.critSavedId = null; S.runStatus = null;
+      S.projector = J.createProjector({ mode: 'LIVE', connection: 'connected', staleMs: Math.max(POLL * 6, 5000) });
+      try { history.replaceState(null, '', location.pathname + '?run=' + encodeURIComponent(runId) + (qs.get('poll') ? '&poll=' + qs.get('poll') : '')); } catch { /* cosmetic */ }
+      if (getComputedStyle($('side')).position !== 'sticky') $('halo-h').scrollIntoView({ block: 'start' }); else $('side').scrollTop = 0;
+      poll(); return;
+    }
     S.runId = runId; S.artifacts = []; S.snapSig = null; S.seenAt = Date.now(); S.projector = J.createProjector({ mode: 'LIVE', connection: 'connected', staleMs: Math.max(POLL * 6, 5000), seenAt: S.seenAt });
     S.marks = loadMarks('v2:' + runId);
     poll();
   }
+  async function pollUniversal() {
+    try {
+      // Incremental, cursor-based pull of the server's stable per-work sequence; overlap is de-duplicated.
+      // Events first, then the run view, so the status that gates buttons is never older than the events.
+      const last = await L.pull(async (after, limit) => {
+        const w = await api('/api/v2/universal/runs/' + encodeURIComponent(S.runId) + '/workbench?after=' + after + '&limit=' + limit);
+        if (!w.ok) throw Object.assign(new Error('workbench'), { r: w });
+        return w.json;
+      }, S.projector, S.wb);
+      const r = await api('/api/v2/universal/runs/' + encodeURIComponent(S.runId));
+      if (!r.ok) throw Object.assign(new Error('run'), { r });
+      S.run = r.json.run; S.runStatus = S.run.status; S.unknownRunCost = !!(S.run.cost && S.run.cost.unknown);
+      S.artifacts = (last.artifacts || []).map(C.validateArtifact).filter(x => x.ok).map(x => x.artifact);
+      S.projector.setConnection('connected'); S.failures = 0;
+      await loadSavedCriteria();
+    } catch (e) {
+      if (e && e.r && e.r.status === 401) { S.failures = 99; say('登录已失效，请重新登录后刷新页面。', 'warn'); }
+      else S.failures++;
+      S.projector.setConnection('disconnected');
+    }
+    renderAll();
+    const authKey = S.runStatus + '|' + (S.run && S.run.round) + '|' + JSON.stringify(S.projector.state().cost_by_role);
+    if (S.plan && authKey !== S.authStatus) { S.authStatus = authKey; renderAuth(); }
+    const active = S.run && S.run.executionActive;
+    if (S.failures === 99) return;
+    if (active || S.failures || ['running', 'queued'].includes(S.runStatus)) S.timer = setTimeout(poll, S.failures ? Math.min(POLL * 2 ** S.failures, 10000) : POLL);
+  }
+  async function loadSavedCriteria() {
+    const a = L.savedCriteria(S.run);
+    if (!a || a.artifactId === S.critSavedId) { if (!a) { S.critSaved = null; S.critSavedId = null; } return; }
+    const r = await fetch('/api/v2/runs/' + encodeURIComponent(S.runId) + '/artifacts/' + encodeURIComponent(a.artifactId) + '/download', { credentials: 'same-origin' });
+    if (!r.ok) return;
+    let data = null; try { data = await r.json(); } catch { data = null; }
+    if (!data || !Array.isArray(data.checks)) return;
+    S.critSavedId = a.artifactId; S.critSaved = { round: data.round, checks: data.checks };
+    S.crit = Object.fromEntries(data.checks.map(c => [c.criterionId, { status: c.status, note: c.note || '' }]));
+  }
   async function poll() {
     if (!S.runId) return;
+    if (r53()) return pollUniversal();
     try {
       const r = await api('/api/v2/runs/' + encodeURIComponent(S.runId));
       if (!r.ok) throw new Error(serverError(r));
@@ -290,7 +402,54 @@
     }
     $('cost').replaceChildren(...kids);
   }
+  function renderOutputsR53(st) {
+    const run = S.run, v = A.view({ plan: S.plan, projection: st, artifacts: S.artifacts, marks: {} });
+    $('r53-out').hidden = false; $('review-box').hidden = true; $('marks-note').hidden = true; $('checks').hidden = true;
+    const meta = new Map((run && run.artifacts || []).map(a => [a.artifactId, a]));
+    const files = v.files.filter(f => { const m = meta.get(f.artifact_id); return m && ['universal_delivery', 'human_criteria'].includes(m.producer); });
+    $('files').replaceChildren(...(files.length ? files.map(f => { const m = meta.get(f.artifact_id), current = run && m.round === run.round;
+      return node('li', { 'data-file': f.artifact_id, 'data-mock': 'false', 'data-round': String(m.round), 'data-current': String(current), 'data-producer': m.producer }, [
+        node('span', {}, [node('strong', { text: f.filename }), node('span', { class: 'sub', text: ' · 第 ' + m.round + ' 轮' + (current ? '（当前）' : '（旧轮次，不能验收）') + ' · ' + f.kind + (f.bytes != null ? ' · ' + f.bytes + ' 字节' : '') + (f.sha256 ? ' · sha256 ' + f.sha256.slice(0, 12) + '…' : '') })]),
+        node('span', { class: 'badge ' + (m.producer === 'human_criteria' ? 'info' : 'good'), text: m.producer === 'human_criteria' ? '你的逐项检查记录' : '服务器生成的交付文件 · 专业质量未验证' }),
+        node('a', { href: f.download_url, download: f.filename, 'data-download': f.artifact_id, text: '下载' })]); })
+      : [node('li', { class: 'sub', text: '还没有交付文件。任务交付后，点“生成 Word/Excel/演示交付”由服务器从实际产出生成文件。没有文件时不会显示“已完成”。' })]));
+    const accepted = run && run.status === 'approved';
+    const cur = run ? L.deliveries(run, S.artifacts).filter(a => a.current) : [];
+    let status = v.status, headline = v.headline;
+    if (accepted && st.phase !== 'accepted') { status = 'accepted_pending_event'; headline = '服务器显示已验收，正在同步事件…'; }
+    $('out-headline').textContent = headline; $('out-headline').dataset.status = status;
+    if (!run) { $('round-info').textContent = '还没有运行。'; $('reviews').replaceChildren(); }
+    else {
+      $('round-info').textContent = '第 ' + run.round + ' 轮｜状态：' + run.status + (run.executionActive ? '（进行中）' : '') + '｜证据：' + (run.evidence || 'E3') + '｜专业质量：未验证（NOT_VERIFIED）｜厂商账单：' + (run.cost && run.cost.usd === null ? '未知' : '$' + run.cost.usd) + (run.cost && Number.isFinite(run.cost.estimatedUpperBound) ? '｜本地估算上界 $' + run.cost.estimatedUpperBound : '');
+      $('reviews').replaceChildren(...(run.reviews || []).map(rv => node('li', { 'data-review-round': String(rv.round), 'data-decision': rv.decision }, [node('span', { text: '第 ' + rv.round + ' 轮 · ' + (rv.decision === 'approve' ? '验收通过' : '返工') + '：' + (rv.feedback || '') +
+        (rv.acceptance ? '｜文件 ' + String(rv.acceptance.sha256 || '').slice(0, 12) + '…｜人工审查：' + (rv.acceptance.expertVerification || '—') + '｜专业质量：' + (rv.acceptance.professionalQuality || 'NOT_VERIFIED') : '') })])));
+    }
+    const settledReview = run && run.status === 'review_required' && !run.executionActive;
+    for (const f of ['docx', 'xlsx', 'pptx']) $('deliver-' + f).disabled = !settledReview;
+    $('cancel-run').disabled = !(run && (run.executionActive || ['running', 'queued', 'review_required'].includes(run.status)));
+    const standards = run && run.projectSnapshot ? run.projectSnapshot.standards : [];
+    $('r53-checks').replaceChildren(...standards.map((t, i) => { const id = 'criterion-' + (i + 1), c = S.crit[id] || { status: 'unverified', note: '' };
+      return node('li', { 'data-crit': id, 'data-crit-status': c.status }, [node('span', { text: t + ' ' }),
+        node('select', { 'data-crit-status-for': id, 'aria-label': '检查结果：' + t, disabled: !settledReview }, [['unverified', '未核实'], ['passed', '通过'], ['failed', '不通过']].map(([v2, l]) => node('option', { value: v2, selected: c.status === v2, text: l }))),
+        node('input', { type: 'text', 'data-crit-note-for': id, value: c.note || '', maxlength: 2000, placeholder: '说明（可选）', 'aria-label': '检查说明：' + t, disabled: !settledReview })]); }));
+    const saved = S.critSaved;
+    const dirty = saved ? JSON.stringify(Object.fromEntries(saved.checks.map(c => [c.criterionId, { status: c.status, note: c.note || '' }]))) !== JSON.stringify(Object.fromEntries(standards.map((_, i) => ['criterion-' + (i + 1), S.crit['criterion-' + (i + 1)] || { status: 'unverified', note: '' }]))) : Object.keys(S.crit).length > 0;
+    $('criteria-saved').textContent = saved ? '服务器已保存第 ' + saved.round + ' 轮的检查结果' + (dirty ? '；你有未保存的修改' : '') : (dirty ? '尚未保存到服务器' : '服务器上还没有逐项检查记录（验收时将以你的批量确认代替）');
+    $('criteria-saved').dataset.dirty = String(dirty);
+    $('save-criteria').disabled = !settledReview;
+    const prevFile = $('accept-file').value;
+    $('accept-file').replaceChildren(...(cur.length ? cur.map(a => node('option', { value: a.artifact_id, selected: a.artifact_id === prevFile, text: a.filename + ' · 第 ' + a.round + ' 轮 · sha256 ' + a.sha256.slice(0, 12) + '…' })) : [node('option', { value: '', text: '当前轮次还没有交付文件' })]));
+    $('ack-cost-box').hidden = !(run && run.cost && run.cost.unknown);
+    $('expert-box').hidden = !(run && run.projectSnapshot && run.projectSnapshot.planning && run.projectSnapshot.planning.expertReviewRequired);
+    $('accept-r53').disabled = !(settledReview && cur.length);
+    const prevFrom = $('rework-from').value;
+    $('rework-from').replaceChildren(node('option', { value: '', text: '整轮重做（从第一步开始）' }), ...((run && run.projectSnapshot ? run.projectSnapshot.steps : []).map((x, i) => node('option', { value: x.stepId, selected: x.stepId === prevFrom, text: '从第 ' + (i + 1) + ' 步“' + x.title + '”开始' }))));
+    $('rework-r53').disabled = !settledReview;
+    $('accept').dataset.status = status;
+  }
   function renderOutputs(st) {
+    if (r53()) return renderOutputsR53(st);
+    $('r53-out').hidden = true; $('review-box').hidden = false; $('marks-note').hidden = false; $('checks').hidden = false;
     const v = A.view({ plan: S.plan, projection: st, artifacts: S.artifacts, marks: S.marks });
     $('out-headline').textContent = v.headline; $('out-headline').dataset.status = v.status;
     $('files').replaceChildren(...(v.files.length ? v.files.map(f => node('li', { 'data-file': f.artifact_id, 'data-mock': String(f.mock) }, [
@@ -314,7 +473,8 @@
     renderHalo(st);
     const ck = JSON.stringify([st.mode, st.cost, S.unknownRunCost, !!S.runId]);
     if (ck !== S.lastCost) { S.lastCost = ck; renderCost(st); }
-    const ok = JSON.stringify([st.phase, st.mode, S.artifacts, S.marks, S.runStatus, !!S.runId, S.plan && S.plan.steps.map(x => x.step_id + x.title), S.plan && S.plan.acceptance]);
+    const ok = JSON.stringify([st.phase, st.mode, S.artifacts, S.marks, S.runStatus, !!S.runId, S.plan && S.plan.steps.map(x => x.step_id + x.title), S.plan && S.plan.acceptance, S.contract,
+      S.run && [S.run.status, S.run.round, S.run.executionActive, (S.run.reviews || []).length, (S.run.artifacts || []).length, S.run.cost], S.crit, S.critSavedId]);
     if (ok !== S.lastOut) { S.lastOut = ok; renderOutputs(st); }
   }
   function loadMarks(key) { try { return JSON.parse(localStorage.getItem('r52-marks:' + key) || '{}') || {}; } catch { return {}; } }
@@ -347,6 +507,38 @@
     clearTimeout(S.timer); poll();
   }
 
+  async function r53Action(path, body, what, okText) {
+    if (!S.runId) return null;
+    let r;
+    try { r = await api('/api/v2/universal/runs/' + encodeURIComponent(S.runId) + path, 'POST', body); }
+    catch { say('网络中断：不确定服务器是否收到。再次点击会用同一个请求编号，服务器不会重复执行。', 'warn'); return null; }
+    if (!r.ok) { refused(r, what); return null; }
+    if (r.json && (r.json.run && r.json.run.duplicate || r.json.artifact && r.json.artifact.duplicate)) say('重复请求：服务器没有重复执行，显示原有结果。', 'info'); else say(okText, 'ok');
+    clearTimeout(S.timer); await poll();
+    return r.json;
+  }
+  const deliver = f => r53Action('/deliver', { requestId: S.ids('deliver', { run: S.runId, round: S.run && S.run.round, f }), format: f }, '生成交付文件失败', '服务器已从实际产出生成 ' + f.toUpperCase() + ' 文件（标记为未经专业验证）。');
+  function saveCriteria() {
+    if (!S.run) return;
+    const body = L.criteriaBody(S.run, S.crit, S.ids('criteria', { run: S.runId, round: S.run.round, c: S.crit }));
+    return r53Action('/criteria', body, '保存检查结果失败', '逐项检查已保存到服务器（第 ' + S.run.round + ' 轮）。');
+  }
+  function acceptR53() {
+    const id = $('accept-file').value, a = L.deliveries(S.run, S.artifacts).find(x => x.artifact_id === id && x.current);
+    if (!a) { say('请选择当前轮次的交付文件', 'warn'); return; }
+    return r53Action('/accept', L.acceptBody(a, { confirmCriteria: $('ack-criteria').checked, acknowledgeSimulation: $('ack-sim').checked, acknowledgeUnknownCost: $('ack-cost').checked, expertReviewNote: $('expert-note').value }),
+      '服务器拒绝验收', '已验收：服务器记录了你对当前轮次文件的确认（专业质量仍为未验证）。');
+  }
+  function reworkR53() {
+    if (!S.plan) return;
+    const rr = E.runRequest(S.plan, S.toolIdMap);
+    if (!rr.ok) { say('返工是一次新的授权，请先在“授权与预算”里重新批准各岗位并确认：' + rr.reason, 'warn'); return; }
+    const from = $('rework-from').value || null, fb = $('rework-note-r53').value;
+    const b = L.reworkBody(S.plan, { requestId: S.ids('rework', { run: S.runId, round: S.run && S.run.round, from, fb }), feedback: fb, fromStepId: from });
+    if (!b.ok) { say(b.reason, 'warn'); return; }
+    return r53Action('/rework', b.body, '服务器拒绝返工', from ? '已从所选步骤开始返工（之前步骤复用已有成果）。' : '已开始整轮返工。');
+  }
+  const cancelR53 = () => r53Action('/cancel', {}, '取消失败', '已请求取消。已发生的费用仍以账本为准。');
   /* ---------------- wiring ---------------- */
   $('make-team').addEventListener('click', () => { makeTeam().catch(e => say('生成失败：' + e.message, 'warn')); });
   $('goal').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('make-team').click(); });
@@ -364,7 +556,30 @@
   $('accept').addEventListener('click', () => review('approve'));
   $('rework').addEventListener('click', () => review('rework'));
   for (const f of ['docx', 'xlsx', 'pptx']) $('export-' + f).addEventListener('click', () => exportFile(f));
+  for (const f of ['docx', 'xlsx', 'pptx']) $('deliver-' + f).addEventListener('click', () => deliver(f));
+  $('save-criteria').addEventListener('click', () => saveCriteria());
+  $('accept-r53').addEventListener('click', () => acceptR53());
+  $('rework-r53').addEventListener('click', () => reworkR53());
+  $('cancel-run').addEventListener('click', () => cancelR53());
+  $('r53-checks').addEventListener('change', e => {
+    const id = e.target.dataset.critStatusFor || e.target.dataset.critNoteFor; if (!id) return;
+    const c = { ...(S.crit[id] || { status: 'unverified', note: '' }) };
+    if (e.target.dataset.critStatusFor) c.status = e.target.value; else c.note = e.target.value;
+    S.crit = { ...S.crit, [id]: c }; renderAll();
+  });
   setInterval(() => renderAll(), 1000); // staleness only; never advances state
-  detect().then(() => { renderAll(); const run = qs.get('run'); if (run && /^[\w-]{1,80}$/.test(run) && S.backend) follow(run); });
-  window.__r52 = { state: () => S.projector.state(), plan: () => S.plan };
+  detect().then(async () => {
+    renderAll();
+    const run = qs.get('run');
+    if (!(run && /^[\w-]{1,80}$/.test(run) && S.backend)) return;
+    // Refresh / reconnect: rebuild everything from the server (plan snapshot, events, files, criteria).
+    const r = await api('/api/v2/universal/runs/' + encodeURIComponent(run)).catch(() => null);
+    if (r && r.ok && r.json && r.json.run) {
+      S.contract = 'r53';
+      if (!S.plan) { S.plan = L.planFromSnapshot(r.json.run); if (S.plan) { renderPlan(); renderAuth(); $('plan-card').hidden = false; $('auth-card').hidden = false; } }
+      say('已从服务器恢复任务 ' + run + '（第 ' + r.json.run.round + ' 轮）。', 'ok');
+    } else S.contract = 'v2';
+    follow(run);
+  });
+  window.__r52 = { state: () => S.projector.state(), plan: () => S.plan, contract: () => S.contract, run: () => S.run };
 })();

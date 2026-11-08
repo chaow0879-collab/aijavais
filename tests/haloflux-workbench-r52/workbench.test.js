@@ -227,7 +227,9 @@ test('scope: R52 only writes Claude-owned paths; R44 base paths elsewhere are by
   let untracked = [];
   try { untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n').filter(Boolean); } catch { untracked = []; }
   const allowed = [/^public\/project-intake\.html$/, /^public\/project-intake\//, /^public\/haloflux-workbench-r52\//, /^tests\/claude-universal-intake\.test\.js$/, /^tests\/ui\/claude-universal-intake\.e2e\.js$/,
-    /^tests\/haloflux-workbench-r52\//, /^docs\/UNIVERSAL-WORKBENCH-R52\.md$/, /^\.github\/workflows\/claude-r52-workbench\.yml$/];
+    /^tests\/haloflux-workbench-r52\//, /^docs\/UNIVERSAL-WORKBENCH-R52\.md$/, /^\.github\/workflows\/claude-r52-workbench\.yml$/,
+    // R54 (#37) Claude-owned additions on the same frontend lane.
+    /^tests\/haloflux-workbench-r54\//, /^docs\/UNIVERSAL-WORKBENCH-R54\.md$/, /^\.github\/workflows\/claude-r54-workbench\.yml$/];
   for (const f of [...changed, ...untracked]) assert.ok(allowed.some(re => re.test(f)), 'R52 must not write ' + f);
   for (const f of ['server.js', 'lib', 'public/panel.html', 'public/workspace.js', 'tools']) assert.ok(!changed.some(c => c === f || c.startsWith(f + '/')), f + ' untouched');
   const app = fs.readFileSync(path.join(ROOT, 'public/haloflux-workbench-r52/app.js'), 'utf8');

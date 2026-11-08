@@ -127,7 +127,11 @@ th,td{border-bottom:1px solid #233b52;padding:5px 6px;text-align:left;vertical-a
     <section class="card" id="auth-card" aria-labelledby="auth-h" hidden>
       <h2 id="auth-h">授权与预算</h2>
       <p class="sub">这里只是你的授权申请。服务器会再次检查模型、工具、费用和权限；浏览器里的按钮不能绕过服务器。</p>
-      <fieldset style="border:0;padding:0;margin:0"><legend class="lbl">允许团队做的操作</legend><div id="ops"></div></fieldset>
+      <div id="r53-auth" hidden>
+        <p class="banner" id="r53-auth-note">通用工作流后端：每个岗位都要你单独批准（模型、Token 与费用上限）。只允许已验证的本地模型；远程/收费模型因费用硬上限未被证明而被服务器阻断。没有模型时只能保存模拟方案或看演示。</p>
+        <h3>逐岗授权</h3><ul id="role-grants" class="list"></ul>
+      </div>
+      <fieldset id="ops-box" style="border:0;padding:0;margin:0"><legend class="lbl">允许团队做的操作</legend><div id="ops"></div></fieldset>
       <div class="grid2">
         <div><label class="lbl" for="max-cost">本次最高费用（美元）</label><input id="max-cost" type="number" min="0" max="10000" step="0.01"></div>
         <div><label class="lbl" for="max-tokens">Token 上限</label><input id="max-tokens" type="number" min="1000" max="1000000" step="1000"></div>
@@ -162,6 +166,25 @@ th,td{border-bottom:1px solid #233b52;padding:5px 6px;text-align:left;vertical-a
       <p id="out-headline"></p>
       <ul id="files" class="list files"></ul>
       <h3>逐条检查</h3><p class="sub" id="marks-note"></p><ul id="checks" class="list"></ul>
+      <div id="r53-out" hidden>
+        <p id="round-info" class="sub"></p>
+        <ul id="reviews" class="list sub"></ul>
+        <div class="row"><button id="deliver-docx" class="small">生成 Word 交付</button><button id="deliver-xlsx" class="small">生成 Excel 交付</button><button id="deliver-pptx" class="small">生成演示交付</button><button id="cancel-run" class="small">取消任务</button></div>
+        <h3>逐项检查（保存到服务器）</h3><ul id="r53-checks" class="list"></ul>
+        <div class="row"><button id="save-criteria" class="small">保存逐项检查到服务器</button><span id="criteria-saved" class="sub"></span></div>
+        <h3>验收当前轮次</h3>
+        <label class="lbl" for="accept-file">要验收的文件（只列当前轮次）</label><select id="accept-file"></select>
+        <label class="row"><input id="ack-criteria" type="checkbox"> 我确认已按验收标准检查（这是我的声明，不是平台认证）</label>
+        <label class="row"><input id="ack-sim" type="checkbox"> 我知道这些内容来自模拟或本地 Mock 模型（E3），专业质量未验证</label>
+        <label class="row" id="ack-cost-box" hidden><input id="ack-cost" type="checkbox"> 我知道这次运行有未知/估算的用量，费用未知（不会被清零）</label>
+        <div id="expert-box" hidden><label class="lbl" for="expert-note">具备资质的人工审查说明（必填；平台不认证）</label><textarea id="expert-note" rows="2" maxlength="2000"></textarea></div>
+        <div class="row" style="margin-top:8px"><button id="accept-r53" class="primary">验收当前轮次文件</button></div>
+        <h3>定向返工</h3>
+        <label class="lbl" for="rework-from">从哪一步开始返工（之前的步骤复用已有成果）</label><select id="rework-from"></select>
+        <label class="lbl" for="rework-note-r53">需要返工的地方</label><textarea id="rework-note-r53" rows="2" maxlength="2000"></textarea>
+        <div class="row" style="margin-top:8px"><button id="rework-r53" class="small">提交返工（需要重新批准各岗位）</button></div>
+        <p class="sub" id="quality-note">人工验收只代表你确认了当前轮次的文件；“专业质量”始终标为未验证，结构能打开不等于专业合格。</p>
+      </div>
       <div id="review-box">
         <label class="lbl" for="rework-note">需要返工的地方</label><textarea id="rework-note" rows="2" maxlength="2000"></textarea>
         <div id="rework-steps" class="row"></div>
@@ -179,6 +202,7 @@ th,td{border-bottom:1px solid #233b52;padding:5px 6px;text-align:left;vertical-a
 <script src="/haloflux-workbench-r52/acceptance.js"></script>
 <script src="/haloflux-workbench-r52/halo.js"></script>
 <script src="/haloflux-workbench-r52/demo.js"></script>
+<script src="/haloflux-workbench-r52/live-r53.js"></script>
 <script src="/haloflux-workbench-r52/app.js"></script>
 </body>
 </html>
