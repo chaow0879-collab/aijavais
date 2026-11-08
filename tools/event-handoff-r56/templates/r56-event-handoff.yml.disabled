@@ -1,0 +1,50 @@
+# DISABLED SAMPLE — NOT LOADED BY GITHUB (wrong directory and extension).
+# R56 event hand-off: GitHub events + 10-minute fallback for the existing R50/R51/R46 chain.
+# Install ONLY after: final independent CodeAudit + ProductQA of the integrated SHA, GitHub App +
+# webhook secret, KMS/HSM broker signer, reviewer keys, protected state ref, an audited source change
+# that opens the compiled live guards, and an explicit owner GO. Until then this file stays disabled.
+# GitHub may delay scheduled runs; correctness never depends on the 10-minute timing — every run is
+# one idempotent R46 CAS reconcile, duplicates and late runs are DUPLICATE_NO_REPLAY.
+name: r56-event-handoff
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_run:
+    workflows: ["integrated-candidate-ci"]
+    types: [completed]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "reconcile | halt (privilege-reducing; needs an operator-signed HALT)"
+        required: true
+        default: reconcile
+permissions:
+  contents: read        # no write to code
+  issues: write         # post the structured stage report only
+  id-token: write       # OIDC identity for the R50 tick verifier; no long-lived secret
+concurrency:
+  group: r56-event-handoff
+  cancel-in-progress: false   # never abort an in-flight R46 claim; the CAS decides, not the runner
+jobs:
+  reconcile:
+    # Default branch only; never for pull requests or forks. R50 intake + R46 scope decide which events count.
+    if: >
+      github.ref == 'refs/heads/main' &&
+      github.event_name != 'pull_request' && github.event_name != 'pull_request_target' &&
+      (github.event_name != 'issue_comment' || github.event.issue.pull_request == null)
+    runs-on: ubuntu-latest
+    environment: r56-handoff-protected   # required reviewers + branch restriction in repo settings
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Readiness (must list no blockers before any live step exists)
+        run: node tools/event-handoff-r56/cli.js readiness
+      - name: One reconcile pass (live path compiled OFF in this source revision)
+        run: node tools/event-handoff-r56/cli.js tick
