@@ -1,0 +1,67 @@
+{
+  "run": 42459094848,
+  "reviewed_sha": "049a3376a2d08042fcac1833b324bc87b0137ba1",
+  "scope": "Author evidence inspected; NOT independent test PASS",
+  "logs": [
+    {
+      "job": 128664327419,
+      "checkoutConfirmed": true,
+      "tap": [],
+      "artifact": [
+        "2026-11-08T07:31:22.3718204Z SHA256 digest of uploaded artifact zip is 5257b4d1fde50da5fec46209600ca940ea69af9204fbfad8067e5d0909b6a9dd",
+        "2026-11-08T07:31:22.7853746Z Artifact r51-source-and-no-go has been successfully uploaded! Final size is 12177 bytes. Artifact ID is 13609106702"
+      ]
+    },
+    {
+      "job": 128664327633,
+      "checkoutConfirmed": true,
+      "tap": [],
+      "artifact": []
+    },
+    {
+      "job": 128664327663,
+      "checkoutConfirmed": true,
+      "tap": [],
+      "artifact": [
+        "2026-11-08T07:32:39.1437066Z SHA256 digest of uploaded artifact zip is 1f31b0f74457cee3478afa84e8f41fb2091dbfedd71894d5881787c94b36c5ad",
+        "2026-11-08T07:32:39.5640049Z Artifact integrated-26-browser has been successfully uploaded! Final size is 35892222 bytes. Artifact ID is 13609176717"
+      ]
+    },
+    {
+      "job": 128664327667,
+      "checkoutConfirmed": true,
+      "tap": [
+        "2026-11-08T07:32:25.4896078Z # tests 23",
+        "2026-11-08T07:32:25.4896446Z # pass 6",
+        "2026-11-08T07:32:25.4896620Z # fail 0",
+        "2026-11-08T07:32:25.4896988Z # skipped 17",
+        "2026-11-08T07:32:47.0277354Z # tests 45",
+        "2026-11-08T07:32:47.0278120Z # pass 45",
+        "2026-11-08T07:32:47.0278332Z # fail 0",
+        "2026-11-08T07:32:47.0278718Z # skipped 0"
+      ],
+      "artifact": [
+        "2026-11-08T07:33:27.7150544Z SHA256 digest of uploaded artifact zip is 5a82de36601ab0075b2967309b8b5fc59a3e4cc52092a2e571fc8679dbf292ee",
+        "2026-11-08T07:33:28.1158325Z Artifact integrated-26-evidence has been successfully uploaded! Final size is 148488 bytes. Artifact ID is 13608962365"
+      ]
+    },
+    {
+      "job": 128664327705,
+      "checkoutConfirmed": true,
+      "tap": [
+        "2026-11-08T07:30:56.0207535Z # tests 260",
+        "2026-11-08T07:30:56.0214387Z # pass 260",
+        "2026-11-08T07:30:56.0215181Z # fail 0",
+        "2026-11-08T07:30:56.0216058Z # skipped 0",
+        "2026-11-08T07:30:57.5786259Z # tests 436",
+        "2026-11-08T07:30:57.5787223Z # pass 436",
+        "2026-11-08T07:30:57.5787382Z # fail 0",
+        "2026-11-08T07:30:57.5788024Z # skipped 0"
+      ],
+      "artifact": [
+        "2026-11-08T07:30:58.8456392Z SHA256 digest of uploaded artifact zip is 42b87362d9babf57b8a32c04d9227a0a31da4c6f828cb9c720ac11b8f98708d9",
+        "2026-11-08T07:30:59.2637597Z Artifact agent-executor-offline-evidence has been successfully uploaded! Final size is 23251 bytes. Artifact ID is 13608897166"
+      ]
+    }
+  ]
+}

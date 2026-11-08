@@ -1,0 +1,38 @@
+[
+  {
+    "scope": "api",
+    "file": "qa57.pptx",
+    "bytes": 15986,
+    "sha256": "50088113b4c097525426e1f89490ac948b6519681f20128dc0c87348c06b36d1"
+  },
+  {
+    "scope": "api",
+    "file": "qa57.xlsx",
+    "bytes": 5333,
+    "sha256": "2e23445bd7f923100c5a62407dae1f25b76301c52fa369a854a579c0d931c07d"
+  },
+  {
+    "scope": "api",
+    "file": "qa57.docx",
+    "bytes": 4820,
+    "sha256": "bdab1c48e2aece0c91d6c36fba58232850689250acdc6b1c1e44e3f69cd358c4"
+  },
+  {
+    "scope": "browser",
+    "file": "browser-round1.docx",
+    "bytes": 4808,
+    "sha256": "768e01fd89470c724fa31bfbf931830cfc18b60417a218068eef9527085105ad"
+  },
+  {
+    "scope": "browser",
+    "file": "main-journey.webm",
+    "bytes": 1087566,
+    "sha256": "fbdbbe17b72f4463d6151079449c66fd849bce7967b5651624608e11300fc428"
+  },
+  {
+    "scope": "browser",
+    "file": "trace.zip",
+    "bytes": 11564486,
+    "sha256": "fbf947590f787b88724f012c0e0fe88ec434a16fef79a6b1ea9b30c1f9570329"
+  }
+]

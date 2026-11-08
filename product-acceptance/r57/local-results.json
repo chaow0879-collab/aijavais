@@ -1,0 +1,163 @@
+{
+  "reviewed_sha": "049a3376a2d08042fcac1833b324bc87b0137ba1",
+  "scope": "Independent local E2/E3; no developer test assertions counted",
+  "cases": [
+    {
+      "id": "P0-frozen-source-R56-exact-delta",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "P1-real-HTTP-edited-goal-authorized-chain",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "P2-three-Office-downloads-hashes-and-independent-content-parsing",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "P3-server-criteria-exact-round-hash-and-restart-no-replay",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "B1-real-UI-natural-goal-edit-grants-no-dispatch",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B2-real-dispatch-reload-disconnect-reconnect-events",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B3-actual-download-server-criteria-not-local-notes",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B4-targeted-rework-fresh-permission-round-SHA-acceptance",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B5-mobile-reduced-motion-and-server-state",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B7-offline-import-fixture-file-visibility",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: P2 QA55-01: valid offline fixture delivered event replays, imported file absent\n    at /workspace/work/aijavais-productqa-r57/tests/productqa-r57/browser.cjs:48:792\n    at async test (/workspace/work/aijavais-productqa-r57/tests/productqa-r57/browser.cjs:6:45)\n    at async /workspace/work/aijavais-productqa-r57/tests/productqa-r57/browser.cjs:45:2",
+      "mode": "browser"
+    },
+    {
+      "id": "A01-live-default-boundary-before-getters",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A02-real-event-tick-three-stages-and-final-review-wait",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A03-post-execution-HTTP429-then-read-only-recovery",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A04-wrong-ref-CI-SHA-author-report-cannot-be-collected",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A05-CI-running-failed-and-review-pending-no-success",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A06-receipt-review-identity-SHA-expiry-and-signature-negative",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A07-unknown-Fake-cost-stops-whole-chain-no-retry",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A08-Fake-failure-is-permanent-no-unapproved-retry",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A09-persisted-claim-ACK-loss-does-not-respawn",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A10-three-controller-OS-processes-one-CAS-job-one-Fake",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A11-persistent-HALT-during-process-retains-unknown-reservation",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A12-late-R56-signed-veto-stops-existing-Fake",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A13-direct-child-cannot-skip-parent-QA",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A14-policy-swapped-after-completion-is-not-final-success",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A15-budget-and-approved-policy-denials-before-child",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A17-HTTP-SQLite-service-restart-retains-completed-tombstone",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A18-controller-SIGKILL-expired-persisted-lease-never-replays",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "A16-frozen-machine-GO-card-stays-NO_GO",
+      "status": "PASS",
+      "mode": "automation"
+    },
+    {
+      "id": "I1-actual-host-namespace-probe-no-silent-fallback",
+      "status": "PASS",
+      "probe": {
+        "available": true,
+        "reason": null,
+        "mechanism": "bubblewrap_user_pid_network_mount_namespaces",
+        "detail": "WRITE_DENIAL_AND_ALLOWED_WRITE_PROBED"
+      },
+      "mode": "isolation"
+    },
+    {
+      "id": "I2-actual-OS-scoped-write-and-protected-file-denial",
+      "status": "PASS",
+      "mode": "isolation"
+    }
+  ]
+}
