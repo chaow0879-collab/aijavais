@@ -1,0 +1,62 @@
+name: Independent R55 native OS evidence
+on:
+  push:
+    branches: [audit/codeaudit-r55-8e95841-20261108]
+    paths: [.github/workflows/codeaudit-r55-os-native.yml]
+permissions:
+  contents: read
+jobs:
+  native-os-evidence:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      AIJ_PILOT_LIVE: '0'
+      AIJ_AUTO_DISPATCH_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: audit-assets
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 8e9584149cccac02fa0b5c39a68c1983ec60170e
+          fetch-depth: 0
+          path: reviewed
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 3d6937348d94e585e44d567de05f14ecd0eb3636
+          path: old-r51
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install namespace tool without changing host security policy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap
+          bwrap --version
+      - name: Independently exercise exact source and OS denial on a second stock image
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+          OLD_R51_ROOT: ${{ github.workspace }}/old-r51
+          AUDIT_OUT: ${{ github.workspace }}/evidence/independent-r55.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C reviewed rev-parse HEAD)" = 8e9584149cccac02fa0b5c39a68c1983ec60170e
+          node audit-assets/audit-evidence/r55/independent-r55.cjs | tee evidence/native-os.log
+          test -z "$(git -C reviewed status --porcelain=v1 --untracked-files=all)"
+      - name: Distinguish a real OS proof from unavailable namespaces
+        if: success() || failure()
+        run: |
+          node -e "const r=require('./evidence/independent-r55.json'),p=r.additional_probes.find(p=>p.name==='R55 OS runtime status');console.log(JSON.stringify(p));if(!p.available){console.error('BLOCKED_OS_WRITE_ISOLATION');process.exit(3)}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-r55-native-os
+          path: evidence/
+          retention-days: 14
+          if-no-files-found: error
