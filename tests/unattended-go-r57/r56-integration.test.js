@@ -42,3 +42,9 @@ test('R56/R57 default/live and forged trigger never reach preparation/getters',a
  let reads=0;const r=await Adapter.step({mode:'live',get provision(){reads++;throw Error('secret');},get pipeline(){reads++;throw Error('secret');}});assert.equal(r.reason,'LIVE_BUILD_DISABLED');assert.equal(reads,0);
  const fake=await Adapter.step({mode:'fake',pipeline:{},item:{},trigger:{kind:'github_webhook'},readSnapshot:()=>{throw Error('must not read');}});assert.equal(fake.reason,'UNTRUSTED_TRIGGER');
 });
+test('final callback cannot swap the signed pipeline after all execution jobs succeeded',async t=>{
+ const f=await world(t);for(let i=0;i<3;i++)assert.equal((await f.step(f.tick())).state,'STAGE_SUCCEEDED');
+ const find=key=>f.stages.find(s=>s.f.envelope.idempotency_key===key);let calls=0;
+ const r=await f.step(f.tick(),{lookupCompleted:async key=>{if(++calls===4)f.pipeline.actors.audit=['untrusted-replacement'];return find(key);}});
+ assert.equal(r.state,'BLOCKED');assert.equal(r.reason,'R56_FINAL_POLICY_CHANGED');assert.equal(f.launches(),3);
+});

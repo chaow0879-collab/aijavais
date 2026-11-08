@@ -37,6 +37,7 @@ async function step(input = {}) {
       }
     });
     if (result.state !== 'HANDOFF_COMPLETE') return result;
+    if (pipelineHash !== C.digest({ pipeline: publicClone(input.pipeline), item: publicClone(input.item) })) return blocked('R56_FINAL_POLICY_CHANGED');
     // R56's durable SUCCEEDED means execution settled, not final acceptance.
     // Re-read every completion so a last-stage missing review cannot turn into
     // HANDOFF_COMPLETE merely because all R46 jobs are SUCCEEDED.
@@ -44,11 +45,13 @@ async function step(input = {}) {
     for (const stage of result.decision.stages) {
       const item = await call(() => input.lookupCompleted(stage.key));
       if (item?.packet?.base?.envelope?.idempotency_key !== stage.key || C.identity(item.packet.base.envelope) !== stage.key) return blocked('COMPLETION_LOOKUP_BINDING');
+      if (item.collectionPolicy?.r56_pipeline_digest !== pipelineHash) return blocked('R56_POLICY_NOT_AUTHORIZED');
       const check = await Control.collectCompleted({ ...item, mode: 'fake' });
       if (check.state !== 'DONE') return { ...check, next_allowed: false, r56_execution_state: 'HANDOFF_COMPLETE', reason: check.reason || 'WAIT_FINAL_RECEIPTS' };
       completions.push(check.collected.receipt);
     }
     const last = await call(() => input.lookupCompleted(result.decision.stages.at(-1).key));
+    if (pipelineHash !== C.digest({ pipeline: publicClone(input.pipeline), item: publicClone(input.item) })) return blocked('R56_FINAL_POLICY_CHANGED');
     if (!await currentGate(input, last.packet.base.envelope, Date.now())) return blocked('R56_FINAL_GATE_CHANGED');
     return { ...result, r57_completed_receipts: completions, manual_prompt_transfers: 0, real_agent_wake: 'NOT_VERIFIED' };
   } catch (error) { return blocked(/^[A-Z0-9_]{1,80}$/.test(error?.code || '') ? error.code : 'R56_R57_ADAPTER_UNVERIFIED'); }

@@ -34,7 +34,10 @@ test('SIGKILL after dispatch + expired lease recovers UNKNOWN with reservation, 
  const pids=JSON.parse(fs.readFileSync(path.join(path.dirname(f.stages[0].f.cli.counter),'hang-pids.json'),'utf8'));
  for(const pid of pids)try{process.kill(pid,'SIGKILL');}catch{}
  const before=Object.values((await f.backend.read()).document.jobs)[0];assert.equal(before.state,'DISPATCHING');
- const now=f.stages[0].f.now+f.stages[0].f.config.lease_ms+1;
+ const early=before.lease_until-1;
+ await require('../../tools/auto-handoff-r46/reconcile').recover({simulate:true,config:f.stages[0].f.config,backend:f.backend,trigger:require('../../tools/auto-handoff-r46/triggers').tick(early,f.stages[0].f.config),now:early});
+ assert.equal(Object.values((await f.backend.read()).document.jobs)[0].state,'DISPATCHING');
+ const now=before.lease_until+1;
  await require('../../tools/auto-handoff-r46/reconcile').recover({simulate:true,config:f.stages[0].f.config,backend:f.backend,trigger:require('../../tools/auto-handoff-r46/triggers').tick(now,f.stages[0].f.config),now});
  const j=Object.values((await f.backend.read()).document.jobs)[0];assert.equal(j.state,'UNKNOWN');assert.equal(j.reservation,.1);assert.equal(j.outcome,null);
  f.stages[0].packet.kind='tick';await Control.runOnce(f.stages[0]);assert.equal(f.launches(),1);

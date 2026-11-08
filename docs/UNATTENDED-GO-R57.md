@@ -84,4 +84,7 @@ R56已正式READY并冻结于`2b53e350d3b147b9216f8241a3e63350ceaf6b67`，专属
 
 另一本地实际复现：将TMPDIR与RUNNER_TEMP置于不同自有临时目录，旧R57 worker未继承两者，SIGKILL清理对os.tmpdir的假设失败。已仅在自有测试传递这两个目录配置（仍不传凭据/代理/宿主session），并按原R45 workspace的RUNNER_TEMP优先规则验证精确cleanup根。修后两个针对性测试2/2；必须等待远端日志才能确定它是否为CI的唯一原因。历史R48原件在默认和分离临时目录两环境均49/49，未复现原CI失败，不能声称已修复或跳过。
 
-2026-11-08后续GitHub访问实际HTTP401 Bad credentials，git push同样Authentication failed。使用标准gh credential helper也未恢复，未读取/输出任何Token、未配置新凭据或扩大网络权限。代码诊断/本地修复会提交保存在本分支，**远端未推送的提交不冒充已推送**。恢复只需项目负责人在环境重新连接已有GitHub授权；随后推送待发提交、通过check annotations定位剩余失败，完成同最终SHA全部CI并提交#40唯一最终报告，再冻结。当前仍BLOCKED/非最终；不得宣称R57已正式READY或真实自动执行成功。
+2026-11-08后续GitHub访问实际HTTP401 Bad credentials，git push同样Authentication failed。使用标准gh credential helper也未恢复，未读取/输出任何Token、未配置新凭据或扩大网络权限。代码诊断/本地修复会提交保存在本分支，**远端未推送的提交不冒充已推送**。当时最小恢复动作是重新连接已有GitHub授权；随后同一授权连接已实际恢复，BLOCKED报告#6718712333成功写入且两个待发提交已正常推送，没有配置/提取新Token。该401现为保留的历史中断，不代表当前仍需用户操作。继续通过check annotations定位剩余失败，完成同最终SHA全部CI并提交#40唯一最终报告，再冻结；本段不是最终READY声明。
+
+
+诊断CI42458717562已通过check annotations取证：R57为43/44，唯一失败在SIGKILL后恢复，测试按fixture起始时间+lease推算到期，但持久claim稍晚落盘，实际仍DISPATCHING。原恢复逻辑正确。自有测试改为以账本before.lease_until为准，并分别断言到期前不回收、到期后UNKNOWN，reservation不释放、不重发。没有增加超时或放宽断言。原R48在该次CI确实49/49通过、未改原件；前次0178493上的历史失败仍保留，不声称已查明其根因。最终pipeline callback交换策略反例也纳入自有测试，完成回收后再次比较同一签署pipeline摘要，不能以异步lookup改白名单/审核身份后报告完成。
