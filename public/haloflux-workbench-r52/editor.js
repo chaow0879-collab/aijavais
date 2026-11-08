@@ -21,7 +21,15 @@
     if (!v && !allowEmpty) fail(label + '不能为空');
     return v;
   }
-  function finish(p, ctx) { p.simulated = true; p.label = 'SIMULATED'; p.edited = true; p.permissions.confirmed = false; p.blocks = P.blocks(p); if (ctx) p.last_edit = ctx; return p; }
+  // Any edit revokes the overall confirmation. Editing the team, steps or models also revokes every
+  // per-role approval (R53); changing a single role's grant keeps the other roles' grants.
+  function finish(p, ctx) {
+    p.simulated = true; if (p.contract !== 'r53') p.label = 'SIMULATED'; p.edited = true; p.permissions.confirmed = false;
+    if (p.contract === 'r53' && p.permissions.roles && !/^grant:|^set_permissions$/.test(ctx)) for (const g of Object.values(p.permissions.roles)) g.approved = false;
+    if (p.contract === 'r53') { p.permissions.roles = p.permissions.roles || {}; for (const r of p.roles) if (!p.permissions.roles[r.role_id]) p.permissions.roles[r.role_id] = { approved: false, max_tokens: 100000, max_cost_usd: 0 };
+      for (const id of Object.keys(p.permissions.roles)) if (!p.roles.some(r => r.role_id === id)) delete p.permissions.roles[id]; }
+    p.blocks = P.blocks(p); if (ctx) p.last_edit = ctx; return p;
+  }
   function nextId(p, prefix, list) { for (let i = 1; i < 1000; i++) { const id = prefix + i; if (!list.some(x => x === id)) return id; } fail('编号已满'); }
 
   const ops = {
@@ -34,7 +42,7 @@
         standard: field(a, 'standard', MAX.standard, '验收标准') || '成果可被他人复核，未核实处已标注', capabilities: caps.length ? caps : ['reasoning'], required: false, origin: 'user', model: null };
       role.model = modelFor(role, env && env.models, null);
       p.roles.push(role);
-      if (p.steps.length < MAX.steps) p.steps.push({ step_id: nextId(p, 'custom-step-', p.steps.map(s => s.step_id)), role_id: id, title: '执行：' + name, deliverable: field(a, 'deliverable', MAX.deliverable, '成果') || '可审核的工作成果', quality: role.standard, tools: [] });
+      if (p.steps.length < MAX.steps) p.steps.push({ step_id: nextId(p, 'custom-step-', p.steps.map(s => s.step_id)), role_id: id, title: '执行：' + name, deliverable: field(a, 'deliverable', MAX.deliverable, '成果') || '可审核的工作成果', quality: role.standard, kind: 'work', tools: [] });
       return 'add_role:' + id;
     },
     removeRole(p, a) {
@@ -67,8 +75,23 @@
       [p.steps[i], p.steps[j]] = [p.steps[j], p.steps[i]];
       return 'move_step:' + a.step_id;
     },
+    setRoleGrant(p, a) {
+      const r = roleOf(p, a.role_id);
+      if (p.contract !== 'r53') fail('逐岗授权只在通用工作流后端可用');
+      const g = { ...(p.permissions.roles[r.role_id] || { approved: false, max_tokens: 100000, max_cost_usd: 0 }) };
+      if (a.max_tokens !== undefined) { const v = Math.floor(Number(a.max_tokens)); if (!(v >= 1000 && v <= 1000000)) fail('岗位 Token 上限需在 1000–1000000 之间'); g.max_tokens = v; }
+      if (a.max_cost_usd !== undefined) { const v = Number(a.max_cost_usd); if (!Number.isFinite(v) || v < 0 || v > 10000) fail('岗位费用上限需在 0–10000 美元之间'); g.max_cost_usd = Math.round(v * 100) / 100; }
+      if (a.approved !== undefined) {
+        if (a.approved === true && (!r.model || !r.model.connection_id || ['none', 'unavailable'].includes(r.model.status))) fail('岗位“' + r.name + '”没有可用模型，不能批准', 'role_blocked');
+        if (a.approved === true && r.model.pricing_mode && r.model.pricing_mode !== 'local') fail('岗位“' + r.name + '”使用远程/收费模型：费用硬上限未被证明，通用工作流不允许', 'BLOCKED_UNENFORCEABLE_COST_CAP');
+        g.approved = a.approved === true;
+      }
+      p.permissions.roles[r.role_id] = g;
+      return 'grant:' + r.role_id;
+    },
     editStep(p, a) {
       const s = stepOf(p, a.step_id);
+      if (a.kind !== undefined) { if (!['work', 'peer_review'].includes(a.kind)) fail('步骤类型只能是工作或独立复核'); s.kind = a.kind; }
       for (const [k, max, label] of [['title', MAX.title, '步骤名称'], ['deliverable', MAX.deliverable, '成果'], ['quality', MAX.quality, '检查标准']]) { const v = field(a, k, max, label); if (v !== undefined) s[k] = v; }
       if (a.role_id !== undefined) s.role_id = roleOf(p, a.role_id).role_id;
       return 'edit_step:' + s.step_id;
@@ -78,7 +101,7 @@
       const r = roleOf(p, a.role_id);
       const title = field(a, 'title', MAX.title, '步骤名称'); if (title === undefined) fail('步骤名称不能为空');
       const id = nextId(p, 'custom-step-', p.steps.map(s => s.step_id));
-      p.steps.push({ step_id: id, role_id: r.role_id, title, deliverable: field(a, 'deliverable', MAX.deliverable, '成果') || '可审核的工作成果', quality: field(a, 'quality', MAX.quality, '检查标准') || r.standard, tools: [] });
+      p.steps.push({ step_id: id, role_id: r.role_id, title, deliverable: field(a, 'deliverable', MAX.deliverable, '成果') || '可审核的工作成果', quality: field(a, 'quality', MAX.quality, '检查标准') || r.standard, kind: a.kind === 'peer_review' ? 'peer_review' : 'work', tools: [] });
       return 'add_step:' + id;
     },
     removeStep(p, a) {

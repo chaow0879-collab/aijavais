@@ -1,0 +1,99 @@
+name: Claude R54 workbench live contract (#37)
+# Dedicated workflow for feat/claude-r54-workbench-live-contract-ux only. Local server + local MOCK
+# model; the R53 backend (397b46c) is used read-only through a temporary local clone in RUNNER_TEMP.
+# No secrets, no paid APIs, no schedule, no deployment. Shared ci.yml is not edited.
+on:
+  push:
+    branches: [feat/claude-r54-workbench-live-contract-ux]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: claude-r54-workbench-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  R53_SHA: 397b46c18e25aaddc3e92886693da4ef3f2528d3
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Record exact SHA and fetch the fixed R53 contract commit (read-only)
+        run: |
+          echo "tested_sha=$GITHUB_SHA r53=$R53_SHA"
+          git fetch --no-tags origin integrate/codex-r53-universal-workflow
+          git cat-file -e "$R53_SHA^{commit}"
+      - name: Install poppler and LibreOffice (existing suite needs them)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Scope — only Claude-owned paths differ from the R52 base
+        run: |
+          git diff --name-only 0532f606258d06bf5215907b1566dc419a86cab5 HEAD | tee "$RUNNER_TEMP/changed.txt"
+          if grep -vE '^(public/project-intake\.html|public/project-intake/|public/haloflux-workbench-r52/|tests/haloflux-workbench-r52/|tests/haloflux-workbench-r54/|docs/UNIVERSAL-WORKBENCH-R54\.md|\.github/workflows/claude-r54-workbench\.yml)' "$RUNNER_TEMP/changed.txt"; then echo "R54 wrote outside its owned paths"; exit 1; fi
+      - name: Full existing suite (npm test)
+        run: npm test
+      - name: R52 workbench + R44 intake (legacy V2 path regression)
+        if: success() || failure()
+        run: node --test --test-concurrency=1 tests/haloflux-workbench-r52/workbench.test.js tests/claude-universal-intake.test.js tests/project-intake.test.js
+      - name: R54 live contract (pure E2 + real R53 backend E3_FAKE)
+        if: success() || failure()
+        env:
+          R54_OUT: ${{ runner.temp }}/r54-out
+        run: mkdir -p "$R54_OUT" && node --test --test-concurrency=1 tests/haloflux-workbench-r54/live-contract.test.js
+      - name: Codex R53 own suites with the R54 frontend overlaid (compatibility)
+        if: success() || failure()
+        env:
+          R54_OUT: ${{ runner.temp }}/r54-out
+        run: mkdir -p "$R54_OUT" && node tests/haloflux-workbench-r54/r53-compat.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-r54-node-evidence
+          path: ${{ runner.temp }}/r54-out
+          if-no-files-found: ignore
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Fetch the fixed R53 contract commit (read-only)
+        run: git fetch --no-tags origin integrate/codex-r53-universal-workflow && git cat-file -e "$R53_SHA^{commit}"
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0
+      - name: Install isolated, pinned browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/aij-ui-deps" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/aij-ui-deps/node_modules/.bin/playwright" install --with-deps chromium
+          mkdir -p "$RUNNER_TEMP/aij-ui-shots"
+      - name: Existing browser suites (admin, workspace, intake, industry, R44, R52)
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:ui && npm run test:workspace && npm run test:intake && npm run test:industry && node tests/ui/claude-universal-intake.e2e.js && node tests/haloflux-workbench-r52/workbench.e2e.js
+      - name: R54 Chromium E2E on the real R53 backend (grants, refresh, outage, criteria, targeted rework, acceptance)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: node tests/haloflux-workbench-r54/workbench-live.e2e.js
+      - name: Hash evidence
+        if: always()
+        run: cd "$RUNNER_TEMP/aij-ui-shots" && sha256sum r54-* r52-* 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-r54-browser-evidence
+          path: ${{ runner.temp }}/aij-ui-shots
+          if-no-files-found: ignore

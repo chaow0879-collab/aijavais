@@ -107,6 +107,7 @@
   }
   // Recomputed after every edit. Blocks are explanations; the backend remains the only authority.
   function blocks(p) {
+    if (p.contract === 'r53') return blocksR53(p);
     const out = [];
     if (p.simulated) out.push({ code: 'PLAN_SIMULATED', severity: 'info', text: '这是离线规则生成的模拟方案（SIMULATED），没有调用 AI 模型，也未经领域专家确认。' });
     if (p.status === 'needs_clarification') out.push({ code: 'NEEDS_CLARIFICATION', severity: 'block', text: '还有必须补充的信息：' + p.clarifications.filter(c => c.blocking).map(c => c.question.split('？')[0]).join('；') });
@@ -123,10 +124,32 @@
     if (!p.permissions.confirmed) out.push({ code: 'NOT_AUTHORIZED', severity: 'block', text: '你还没有确认本次运行的授权范围与费用上限。' });
     return out;
   }
+  // R53 universal backend (#37): server plan, per-role grants, peer review rule, local models only.
+  const REMOTE_TEXT = '远程/收费模型的费用硬上限和官方授权还没有被证明，通用工作流只允许已验证的本地模型。';
+  function blocksR53(p) {
+    const out = [{ code: 'PLAN_SIMULATED', severity: 'info', text: '服务器离线规则草案（PLAN_SIMULATED / ' + (p.evidence || 'E2_RULES_NOT_AI') + '）：没有调用 AI，也未经领域专家确认。' }];
+    if (p.status === 'needs_clarification' || (p.clarifications || []).some(c => c.blocking)) out.push({ code: 'NEEDS_CLARIFICATION', severity: 'warn', text: '建议补充：' + (p.clarifications || []).filter(c => c.blocking).map(c => String(c.question).split('？')[0]).join('；') });
+    const noModel = p.roles.filter(r => !r.model || !r.model.connection_id || ['none', 'unavailable'].includes(r.model.status));
+    if (noModel.length) out.push({ code: 'NO_MODEL', severity: 'block', text: noModel.length + ' 个岗位没有可用的本地模型：没有模型时只能保存模拟方案或看演示。' });
+    const remote = p.roles.filter(r => r.model && r.model.connection_id && r.model.pricing_mode && r.model.pricing_mode !== 'local');
+    if (remote.length) out.push({ code: 'BLOCKED_UNENFORCEABLE_COST_CAP', severity: 'block', text: remote.map(r => r.name).join('、') + '：' + REMOTE_TEXT });
+    const reviews = p.steps.filter(s => s.kind === 'peer_review');
+    if (!reviews.length) out.push({ code: 'PEER_REVIEW_MISSING', severity: 'block', text: '通用工作流需要至少一个独立复核步骤；请把某个步骤设为“独立复核”。' });
+    for (const s of reviews) {
+      const before = p.steps.slice(0, p.steps.indexOf(s));
+      if (!before.length || before.some(x => x.role_id === s.role_id)) out.push({ code: 'PEER_REVIEW_CONFLICT', severity: 'block', text: '复核步骤“' + s.title + '”必须排在其他岗位的工作之后，且复核岗位不能复核自己做的工作。' });
+    }
+    if (p.expert_review_required) out.push({ code: 'HUMAN_EXPERT_REQUIRED', severity: 'warn', text: '验收时需要填写具备资质的人工审查说明；平台不认证该审查。' });
+    const grants = p.permissions.roles || {};
+    const pending = p.roles.filter(r => !(grants[r.role_id] && grants[r.role_id].approved));
+    if (pending.length) out.push({ code: 'ROLE_NOT_APPROVED', severity: 'block', text: pending.length + ' 个岗位尚未逐一批准：' + pending.slice(0, 4).map(r => r.name).join('、') + (pending.length > 4 ? '…' : '') });
+    if (!p.permissions.confirmed) out.push({ code: 'NOT_AUTHORIZED', severity: 'block', text: '你还没有确认整个团队的授权与上限。' });
+    return out;
+  }
   function serverTools(toolCheck) {
     const map = {};
     for (const t of Array.isArray(toolCheck) ? toolCheck : []) if (t && typeof t.intakeId === 'string') map[t.intakeId] = { status: t.status, toolId: t.toolId || null, howTo: t.howTo || '' };
     return map;
   }
-  return { plan, blocks, modelStatus, pickModel, toolStatus, serverTools, OPS, TOOL_OP, LIMITS };
+  return { plan, blocks, blocksR53, modelStatus, pickModel, toolStatus, serverTools, OPS, TOOL_OP, LIMITS };
 });

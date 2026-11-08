@@ -81,6 +81,7 @@
       const role = id => roles[id] || (roles[id] = { role_id: id, state: 'idle', since_event_id: null, since_seq: null, step_id: null, history: [] });
       const setRole = (id, state, ev) => { const r = role(id); r.state = state; r.since_event_id = ev.event_id; r.since_seq = ev.seq; r.step_id = ev.step_id || r.step_id; r.history.push({ state, event_id: ev.event_id, seq: ev.seq }); };
       const done = new Set();
+      const handing = new Map(); // from role -> to role, for explicit hand-offs not yet picked up
       for (const ev of applied) {
         const retracted = retractedIds.has(ev.event_id);
         let cause = 'ok';
@@ -92,7 +93,7 @@
         evidence.add(ev.evidence);
         if (!ev.recognized) continue;
         const def = C.TYPES[ev.type];
-        if (ev.cost) { const key = ev.cost.ledger_id || ev.event_id; costs.set(key, ev.cost); }
+        if (ev.cost) { const key = ev.cost.ledger_id || ev.event_id; costs.set(key, { ...ev.cost, role_id: ev.role_id }); }
         switch (ev.type) {
           case 'task_created': if (phase === 'idle') phase = 'created'; break;
           case 'approved': phase = 'approved'; break;
@@ -102,12 +103,16 @@
           default: {
             if (ev.role_id && def.state) {
               if (ev.type === 'work_started' || ev.type === 'agent_started') {
-                // A new role starting right after another one completed is a derived hand-off edge.
-                if (lastCompleted && lastCompleted.role_id !== ev.role_id) edges.push({ from: lastCompleted.role_id, to: ev.role_id, cause_event_id: lastCompleted.event_id, via_event_id: ev.event_id, derived: true });
+                // A new role starting right after another one completed is a derived hand-off edge,
+                // unless the source already recorded that hand-off explicitly.
+                const explicit = lastCompleted && edges.some(e => !e.derived && e.from === lastCompleted.role_id && e.to === ev.role_id);
+                if (lastCompleted && lastCompleted.role_id !== ev.role_id && !explicit) edges.push({ from: lastCompleted.role_id, to: ev.role_id, cause_event_id: lastCompleted.event_id, via_event_id: ev.event_id, derived: true });
                 lastCompleted = null;
+                // The receiver started: an explicit hand-off to it is finished, the sender's step is done.
+                for (const [from, to] of handing) if (to === ev.role_id && roles[from] && roles[from].state === 'handoff') { setRole(from, 'completed', ev); handing.delete(from); }
               }
               setRole(ev.role_id, def.state, ev);
-              if (ev.type === 'handoff' && ev.to_role_id) { edges.push({ from: ev.role_id, to: ev.to_role_id, cause_event_id: ev.event_id, via_event_id: ev.event_id, derived: false }); role(ev.to_role_id); }
+              if (ev.type === 'handoff' && ev.to_role_id) { edges.push({ from: ev.role_id, to: ev.to_role_id, cause_event_id: ev.event_id, via_event_id: ev.event_id, derived: false }); role(ev.to_role_id); handing.set(ev.role_id, ev.to_role_id); lastCompleted = { role_id: ev.role_id, event_id: ev.event_id }; }
               if (ev.type === 'completed') lastCompleted = { role_id: ev.role_id, event_id: ev.event_id };
               if (ev.artifact_id && (ev.type === 'completed' || ev.type === 'handoff')) artifacts.push({ artifact_id: ev.artifact_id, event_id: ev.event_id, role_id: ev.role_id });
             }
@@ -133,9 +138,11 @@
         else known += c.usd;
       }
       const round = x => Math.round(x * 1e6) / 1e6;
+      const byRole = {};
+      for (const c of costs.values()) if (c.role_id) { const r = byRole[c.role_id] || (byRole[c.role_id] = { entries: 0, unknown: false, known_usd: 0 }); r.entries++; if (c.status === 'unknown' || c.usd === null) r.unknown = true; else r.known_usd = round(r.known_usd + c.usd); }
       const cost = { entries: costs.size, known_usd: round(known), upper_bound_usd: round(upper), reserved_usd: round(reserved), unknown_count: unknown,
         total_usd: unknown || upper || reserved ? null : round(known), status: unknown ? 'unknown' : (upper || reserved ? 'not_final' : (costs.size ? 'settled' : 'none')) };
-      return { roles, edges, log, artifacts, causality, retractIssues, phase, evidence: [...evidence], cost };
+      return { roles, edges, log, artifacts, causality, retractIssues, phase, evidence: [...evidence], cost, cost_by_role: byRole };
     }
     function state(now) {
       const f = fold();
