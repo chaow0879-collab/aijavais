@@ -72,7 +72,7 @@ jobs:
           R57_EVIDENCE_DIR: ${{ runner.temp }}/r55-evidence/r57
         run: |
           mkdir -p "$R57_EVIDENCE_DIR"
-          node --test tests/unattended-go-r57/*.test.js
+          node tools/unattended-go-r57/ci-tests.cjs r57
           node tools/unattended-go-r57/cli.js --matrix "$GITHUB_SHA" > "$R57_EVIDENCE_DIR/OWNER_GO_MATRIX.json"
           node tools/unattended-go-r57/cli.js > "$R57_EVIDENCE_DIR/no-go.json"
       - name: Frozen R56 source conformance including original authorship assertion
@@ -306,7 +306,8 @@ jobs:
       - name: R48 original 49 tests at exact source SHA (historical gaps remain observations)
         env:
           R48_OUT: ${{ runner.temp }}/r49/r48-historical
-        run: node tools/first-handoff-r49/run-r48.js
+          R57_EVIDENCE_DIR: ${{ runner.temp }}/r49/r48-ci-diagnostics
+        run: node tools/unattended-go-r57/ci-tests.cjs r48
       - name: Pinned official native CLI metadata (empty HOME, zero auth/model calls)
         run: |
           npm install --prefix "$RUNNER_TEMP/public-cli" --no-package-lock --ignore-scripts @anthropic-ai/claude-code-linux-x64@2.1.318
