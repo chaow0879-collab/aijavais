@@ -1,0 +1,32 @@
+{
+  "schema": "aijavais.owner-go-matrix/v1",
+  "base_sha": "8e9584149cccac02fa0b5c39a68c1983ec60170e",
+  "candidate_sha": null,
+  "state": "NO_GO",
+  "actual_agent_launches": 0,
+  "REAL_AGENT_WAKE": "NOT_VERIFIED",
+  "gates": {
+    "LIVE_BUILD_ENABLED": "NO",
+    "OFFICIAL_CREDENTIAL": "NOT_VERIFIED",
+    "PROVIDER_SINGLE_USD_HARD_CAP": "NOT_VERIFIED",
+    "PROVIDER_TOTAL_USD_HARD_CAP": "NOT_VERIFIED",
+    "PROVIDER_TOKEN_HARD_CAP": "NOT_VERIFIED",
+    "VENDOR_INVOICE_AND_STOP": "NOT_VERIFIED",
+    "TRUSTED_OIDC_APP_KMS": "NOT_VERIFIED",
+    "INDEPENDENT_CODEAUDIT_SAME_SHA": "NOT_VERIFIED",
+    "INDEPENDENT_PRODUCTQA_SAME_SHA": "NOT_VERIFIED",
+    "PROTECTED_REMOTE_CAS": "NOT_VERIFIED",
+    "HOSTED_OS_READONLY_AND_NETWORK": "NOT_VERIFIED",
+    "DEFAULT_BRANCH_EVENT_AND_TICK": "NO",
+    "OWNER_ONE_SHOT_GO": "NO"
+  },
+  "owner_once_actions": [
+    "Obtain independent CodeAudit and ProductQA for the final exact SHA; no developer self-signing.",
+    "Select a legal official CLI identity in a protected environment; never paste credentials into issues.",
+    "Obtain independently verifiable provider-enforced per-call AND aggregate USD/Token allowances; unsupported means STOP, not a timeout substitute.",
+    "Approve one scoped hosted environment with App/OIDC/KMS, independent reviewer identities, protected FF-only state ref, network and filesystem isolation and HALT.",
+    "Explicitly approve one audited activation commit and one nonproduction readonly pilot with a fixed budget; main merge, Secrets and event/tick installation require separate explicit authorization."
+  ],
+  "stop_rule": "If external identity or enforceable billing boundaries are unavailable, remain BLOCKED and stop adding Runner packages.",
+  "candidate_binding": "Generated CLI/CI evidence fills candidate_sha from the exact reviewed Git commit; null is never an approval."
+}

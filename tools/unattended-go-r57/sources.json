@@ -1,0 +1,11 @@
+{
+  "base": "8e9584149cccac02fa0b5c39a68c1983ec60170e",
+  "r56": null,
+  "deltas": {
+    "tools/first-pilot-r51/r50-bridge.js": {
+      "from": "100644 blob 7db60a440b1022f880ce0d46985ee30d4a6d084a",
+      "to": "100644 blob a6f29b05c4870a2a5fe5919c9c89bc847398fd92",
+      "reason": "Privilege-reducing parent-review authority callback, before spawn and during existing R51 stop watch; compiled OFF unchanged."
+    }
+  }
+}

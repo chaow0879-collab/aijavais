@@ -1,0 +1,47 @@
+# NOT INSTALLED. This file is not a GitHub Actions workflow. Owner approval,
+# exact-SHA independent gates and an audited activation revision are prerequisites.
+# No secret values or real control-state ref may be created by this template.
+name: Future single protected unattended control plane
+on:
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+  workflow_run:
+    workflows: [Reviewed candidate CI]
+    types: [completed]
+  schedule:
+    - cron: '*/10 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: aijavais-single-reviewed-control-plane
+  cancel-in-progress: false
+jobs:
+  guarded-one-shot:
+    if: github.repository == 'chaow0879-collab/aijavais' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: owner-approved-unattended-pilot
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Future installation MUST pin the reviewed default-branch controller;
+      # never checkout/execute an issue/PR-provided source as the controller.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Current build refuses all real dispatches
+        run: |
+          node tools/unattended-go-r57/cli.js --matrix "$GITHUB_SHA"
+          node tools/unattended-go-r57/cli.js
+          echo 'BLOCKED: no verified official identity, provider allowance, protected CAS or Owner GO. Template alone cannot activate.'
+          exit 78
+# Future trusted deployment: App/OIDC -> existing R50 signer -> R46 FF-only CAS
+# -> R51 existing official-port -> R45 one-shot. No direct issue body commands,
+# no unrestricted GITHUB_TOKEN, no personal tokens in prompts/CLI env, no fork/PR
+# credentials. Event + delayed ten-minute fallback share the SAME work key.
+# HALT and approval revocation must be verified by the existing per-run watch.

@@ -36,11 +36,15 @@ async function handleTrusted(input={}){
   const prepared=R49.prepare(bound),caller=kind==='tick'?record.identity:record;
   const {signed,receipt}=broker.sign({caller,approval,prepared:{...prepared,task_id:e.task_id},now});
   if(receipt.test_signer!==true||receipt.candidate_sha!==bound.candidate_sha||receipt.work_key!==C.pilotWorkKey(e)||receipt.envelope_digest!==P.envelopeDigest(signed))return blocked('BLOCKED_BROKER_RECEIPT');
-  const authorityCheck=at=>{
+  const authorityCheck=async at=>{
    if(broker.store.revoked(a.approval_id)||process.env.AIJ_R50_KILL==='1'||input.killFile&&fs.existsSync(input.killFile))return false;
    if(C.digest(E.publicClone(broker.policy))!==policyHash||C.digest(E.publicClone(input.approval))!==approvalHash)return false;
    for(const k of Object.keys(originalHashes))if(C.digest(E.publicClone(base[k]))!==originalHashes[k])return false;
-   verifyApproval(approval,r50Policy,at);return true;
+   verifyApproval(approval,r50Policy,at);
+   // R57 may only add a privilege-reducing parent-review check. The existing
+   // entry bounds/awaits it at spawn and during the owned process watch.
+   if(input.authorityCheck&&await input.authorityCheck(at)!==true)return false;
+   return true;
   };
   const r=await E.runPilot({...bound,mode:'fake',signed,signal:input.signal,authorityCheck});
   broker.store.audit('r51_result',{candidate_sha:bound.candidate_sha,work_key:receipt.work_key,state:r.state,stop_reason:r.stop_reason||null},now);
