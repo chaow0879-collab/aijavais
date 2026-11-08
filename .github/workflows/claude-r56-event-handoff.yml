@@ -1,0 +1,54 @@
+name: Claude R56 event hand-off bridge (#39)
+# Dedicated workflow for feat/claude-r56-event-handoff-bridge only: push/manual, read-only token,
+# no schedule, no secrets, no OIDC, no deployment. The 10-minute/event workflow is a DISABLED template
+# under tools/event-handoff-r56/templates and is not installed here.
+on:
+  push:
+    branches: [feat/claude-r56-event-handoff-bridge]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: claude-r56-event-handoff-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Record exact SHA
+        run: echo "tested_sha=$GITHUB_SHA"
+      - name: Scope — only R56-owned paths differ from the R55 base
+        run: |
+          git diff --name-only 8e9584149cccac02fa0b5c39a68c1983ec60170e HEAD | tee "$RUNNER_TEMP/changed.txt"
+          if grep -vE '^(tools/event-handoff-r56/|tests/event-handoff-r56/|docs/EVENT-HANDOFF-R56\.md|\.github/workflows/claude-r56-event-handoff\.yml)' "$RUNNER_TEMP/changed.txt"; then echo "R56 wrote outside its owned paths"; exit 1; fi
+      - name: R56 hand-off (E2 decisions + E3 local GitHub emulator / Git-ref CAS / R50 store / child processes)
+        env:
+          R56_OUT: ${{ runner.temp }}/r56-out
+        run: mkdir -p "$R56_OUT" && node --test --test-concurrency=1 tests/event-handoff-r56/handoff.test.js
+      - name: Reused chain regression (R46, R49, R50, R51)
+        if: success() || failure()
+        run: node --test --test-concurrency=1 tests/auto-handoff-r46/*.test.js tests/first-handoff-r49/*.test.js tests/trusted-trigger-r50/*.test.js tests/first-pilot-r51/*.test.js
+      - name: Readiness must stay BLOCKED (no live path in this source)
+        if: success() || failure()
+        run: |
+          node tools/event-handoff-r56/cli.js readiness | tee "$RUNNER_TEMP/r56-out/readiness.json"
+          node -e "const r=require(process.argv[1]);if(r.state!=='BLOCKED'||r.actual_agent_launches!==0||!r.blockers.includes('BLOCKED_ACTUAL_RUNNER_IDENTITY'))process.exit(1)" "$RUNNER_TEMP/r56-out/readiness.json"
+      - name: Full existing suite (npm test)
+        if: success() || failure()
+        run: npm test
+      - name: Hash evidence
+        if: always()
+        run: cd "$RUNNER_TEMP/r56-out" && sha256sum * 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-r56-handoff-evidence
+          path: ${{ runner.temp }}/r56-out
+          if-no-files-found: ignore
