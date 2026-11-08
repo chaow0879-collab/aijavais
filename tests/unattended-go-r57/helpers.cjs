@@ -20,14 +20,14 @@ function signReviews(f,collected,change=()=>{}){
  }
  return {manifest,proofs};
 }
-async function fixture(t,{mode='success',count=3,durable=false}={}){
+async function fixture(t,{mode='success',count=3,durable=false,ticketPrefix=null}={}){
  const dir=H.tmp(t,'r57-fixture-'),stages=[],seed=crypto.randomBytes(32),now=Date.now();let backend,shared;
  const svc=durable?await service(t,path.join(dir,'cas.sqlite')):null;
  for(let i=0;i<count;i++){
   const x=R50.base(t,mode,{seed,runtime:3000}),f=x.f;
   f.now=now;f.config.allowed_issues=[40];f.config.allowed_branches=['integrate/codex-r57-unattended-go-gate'];f.config.trusted_event_branches=[...f.config.allowed_branches];
   f.config.max_daily_cost=.5;f.config.allowed_senders=['planner'];
-  f.envelope.issue=40;f.envelope.branch=f.config.allowed_branches[0];f.envelope.task_id='r57-stage-'+i;
+  f.envelope.issue=40;f.envelope.branch=f.config.allowed_branches[0];f.envelope.task_id=ticketPrefix?ticketPrefix+'-'+['integration','audit','qa'][i%3]+'-'+H.HEAD.slice(0,12):'r57-stage-'+i;
   f.envelope.role=['integrator','audit','qa'][i%3];f.envelope.phase=['integration','audit','qa'][i%3];
   f.envelope.after=i?stages[i-1].f.envelope.idempotency_key:null;f.envelope.expires_at=now+3600000;
   f.snapshot.refs[f.envelope.branch]=H.HEAD;

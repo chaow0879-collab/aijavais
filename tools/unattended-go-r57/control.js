@@ -37,7 +37,8 @@ async function runOnce(input = {}) {
       return result('BLOCKED', 'COLLECTION_POLICY_NOT_AUTHORIZED');
     }
     const bound = { ...input, collectionPolicy: policy };
-    const authorityCheck = async now => C.digest(E.publicClone(input.collectionPolicy)) === policyHash && await parentGate(bound, now);
+    const authorityCheck = async now => C.digest(E.publicClone(input.collectionPolicy)) === policyHash && await parentGate(bound, now) &&
+      (typeof input.authorityCheck !== 'function' || await E.boundedBackend({ read: () => input.authorityCheck(now) }, 1000).read() === true);
     if (input.signal?.aborted) return result('BLOCKED', 'CANCELLED_BEFORE_DISPATCH');
     if (!await authorityCheck(packet.now ?? Date.now())) return result('BLOCKED', 'WAIT_PARENT_INDEPENDENT_REVIEWS');
     execution = await R51.handleTrusted({ ...packet, signal: input.signal, authorityCheck });
@@ -83,4 +84,19 @@ async function runChain(input = {}) {
   }
   return result('DONE', null, { stages, manual_prompt_transfers: 0, real_agent_wake: 'NOT_VERIFIED', next_allowed: false });
 }
-module.exports = { runOnce, runChain };
+async function collectCompleted(input = {}) {
+  if (!fake(input)) return runOnce(input);
+  try {
+    const C = require('../auto-handoff-r46/contract'), base = input.packet.base;
+    const policy = E.publicClone(input.collectionPolicy);
+    if (base.authorization?.manifest?.r57_collection_policy_digest !== C.digest(policy) ||
+        C.canonical(policy.trusted_keys) !== C.canonical(base.config.trusted_keys)) return result('BLOCKED', 'COLLECTION_POLICY_NOT_AUTHORIZED');
+    const state = await new Ledger(base.backend, base.config).read(Date.now()), job = state.document.jobs[base.envelope.idempotency_key];
+    if (state.document.halted || job?.state !== 'SUCCEEDED' || job.envelope_hash !== C.digest(base.envelope) || !job.outcome?.cost_known) return result('BLOCKED', 'COMPLETED_WORK_UNVERIFIED');
+    const collected = await Receipts.collect({ envelope: base.envelope, outcome: job.outcome, read: input.readGitHub, policy });
+    if (!collected.receipt) return result(collected.state, collected.reason, { next_allowed: false });
+    const gate = Receipts.reviews(await readReviews(input, collected), collected, policy, Date.now());
+    return result(gate.state, gate.reason || null, { collected, ...gate });
+  } catch (error) { return result('BLOCKED', /^[A-Z0-9_]{1,80}$/.test(error?.code || '') ? error.code : 'COMPLETED_COLLECTION_UNVERIFIED', { next_allowed: false }); }
+}
+module.exports = { runOnce, runChain, collectCompleted };

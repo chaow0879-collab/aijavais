@@ -75,6 +75,18 @@ jobs:
           node --test tests/unattended-go-r57/*.test.js
           node tools/unattended-go-r57/cli.js --matrix "$GITHUB_SHA" > "$R57_EVIDENCE_DIR/OWNER_GO_MATRIX.json"
           node tools/unattended-go-r57/cli.js > "$R57_EVIDENCE_DIR/no-go.json"
+      - name: Frozen R56 source conformance including original authorship assertion
+        if: success() || failure()
+        env:
+          R56_OUT: ${{ runner.temp }}/r55-evidence/r57/r56-frozen
+        run: node tools/unattended-go-r57/run-r56.cjs
+      - name: Unchanged R56 behavior on the unified runtime (scope asserted at frozen source above)
+        if: success() || failure()
+        env:
+          R56_OUT: ${{ runner.temp }}/r55-evidence/r57/r56-integrated
+        run: |
+          mkdir -p "$R56_OUT"
+          node --test --test-skip-pattern='^scope:' tests/event-handoff-r56/*.test.js
       - name: Frozen R52 original suite including authorship and historical shutdown observation
         if: success() || failure()
         env:

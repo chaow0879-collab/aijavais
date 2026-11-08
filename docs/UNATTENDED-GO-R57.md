@@ -63,3 +63,16 @@ npm test
 唯一未来安装计划在`templates/*.disabled`，非生效workflow。事件与延迟的10min兜底须共用原CAS；GitHub不保证准点。Owner一次配置/授权清单见matrix：保护Environment及最小App/OIDC/KMS权限、独立reviewer身份、真实费用硬界限、HALT、固定候选审验、单次只读试点、单独批准的activation commit及main/secret/ref/trigger安装。**当前模板即使被复制也exit78，不能通过一个env变量启动模型**。尚缺真实账户与供应商能力，不能承诺配置后无需任何经审计激活代码；若供应商根本无强限额，明确STOP而不是继续堆Runner。
 
 截至本检查点真实Agent=0、E4/E5 NOT_RUN、真实GitHub state-ref写NOT_RUN、正式cron/webhook NOT_ENABLED。R56与最终同SHA CI/独立审验状态以#40最终报告为准。
+
+
+## R56 精确合流与最终回收
+
+R56已正式READY并冻结于`2b53e350d3b147b9216f8241a3e63350ceaf6b67`，专属CI42441148770同SHA成功。仅将相对R55的`be385790480f495551ffea12608ef800583b983c`和`2b53e350d3b147b9216f8241a3e63350ceaf6b67`精确cherry-pick成`f010cfee8fb0a249b175b237caba7e9c9b4bcda9`与`80eac00807b95b5cd6b558e045dccd73b318e205`；全部13个R56新增文件blob/mode保持原件。自身source guard逐项检查，未改Claude分支或其任何源码/测试/工作流。
+
+`r56-adapter.step`把R56的可信trigger→机器ticket→provision接到本R57的runOnce；provision必须给出已经签好的原R51 packet和collectionPolicy，R56 pipeline/item摘要还须通过`r56_pipeline_digest`纳入该批准策略。adapter不签名、不改工单、不降级权限。它把实时R56候选/CI/撤回/负面审验复查作为AND型authorityCheck交给现有R51监视器，避免只在接力起点检查。直接默认/live调用仍在任何getter前BLOCKED。
+
+原R56的HANDOFF_COMPLETE只表示原R46各job执行成功；本adapter仍重新回收所有完成记录（lookupCompleted须给出原已批准packet），全部SHA/CI/独立签名回执都成立才能对外报告HANDOFF_COMPLETE。末阶段缺审核时保留REVIEW_PENDING，不把execution SUCCEEDED冒充最终验收。补齐签名后的只读重查不会再启动Fake进程。
+
+新增联合E3实际连接R56的HTTP/SQLite GitHub模拟器/原事实读取/签名评审/机器ticket，与R57的临时Git bare、HTTP/SQLite CAS、R50/R51/R45和回收器，完成3个原Fake只读阶段，产生3条机器报告，event+tick重复不重派；另验证末阶段缺审核、晚到signed REJECT运行中停下、假trigger与live getter拒绝。它仍是E3，GitHub模拟器的CI状态不是外部真实GH流水线，KMS与官方模型未运行。
+
+原R56 `scope:`断言检验作者独占分支，不能在联合树声称成立；**完整9项含scope原断言**在`run-r56.cjs`精确冻结clone运行；其余**8项行为原断言**在联合HEAD再跑。没有编辑/删除原断言。联合fixture首次失败来自误用了stats.reports（原emulator字段是post_report）以及重复插入旧评审主键；已改为读取真实计数并append新REJECT，R56原件不动。最终本地/CI计数和明确限制以#40最终报告为准。
