@@ -1,0 +1,68 @@
+[
+  {
+    "scope": "api-pinned",
+    "file": "moss-acoustic.docx",
+    "bytes": 4808,
+    "sha256": "6ebf47df7d00d82bf9ee7a5a53df23d0aa9808166ecaae4fb6b894ac670dd573"
+  },
+  {
+    "scope": "api-pinned",
+    "file": "neon-sign.xlsx",
+    "bytes": 5322,
+    "sha256": "a1deace15db99cf49ff72e5780af34682c35b2df863c0a7d12702615924bf435"
+  },
+  {
+    "scope": "api-pinned",
+    "file": "planet-tickets.xlsx",
+    "bytes": 5322,
+    "sha256": "cb0159196520a6c0b651e100a700cf5cd0fb05cfaeee1267632b3e1a07b1edaf"
+  },
+  {
+    "scope": "api-pinned",
+    "file": "pollen-post.pptx",
+    "bytes": 15980,
+    "sha256": "de31a0de9ba1ad81df1b23a07ac58aadad723c22a427ddd28a11f99740052c5f"
+  },
+  {
+    "scope": "api-pinned",
+    "file": "driftwood-library.xlsx",
+    "bytes": 5322,
+    "sha256": "d96505e40401fd3adcedc74b146cb1d8ad47f3e3b08e4d990be118e964475377"
+  },
+  {
+    "scope": "api-pinned",
+    "file": "steam-scent.docx",
+    "bytes": 4797,
+    "sha256": "5a80ce79df690d9feae72c1daf9f5a178d3a77fde13aa56e1784c81733d925a1"
+  },
+  {
+    "scope": "api-pinned",
+    "file": "bamboo-robot.docx",
+    "bytes": 4815,
+    "sha256": "c33aecdf7da09410bc712f6db75e9f23adc0cce0b5a8e195704c03d17d4043fc"
+  },
+  {
+    "scope": "api-pinned",
+    "file": "meteorite-rubbing.pptx",
+    "bytes": 15974,
+    "sha256": "a2945ea234af6fafcf8c45b874e94bfc9ab40736f0a917de9f3c78a3c67c5df4"
+  },
+  {
+    "scope": "browser-final",
+    "file": "browser-round1.docx",
+    "bytes": 4808,
+    "sha256": "d7e3f9e22f6a031b3abcf7ca569327995c02b4903d7e14785a0c45bbe6bc244b"
+  },
+  {
+    "scope": "browser-final",
+    "file": "main-journey.webm",
+    "bytes": 1082896,
+    "sha256": "b0e2af71b190311de461fd76ddd0c4712da9a8c66e40bb4bc73a07b92e2c40a5"
+  },
+  {
+    "scope": "browser-final",
+    "file": "trace.zip",
+    "bytes": 11961715,
+    "sha256": "280348377554568fd8a5b5ffaba76e2f6225d5dee96c4a36b7796f370b607293"
+  }
+]

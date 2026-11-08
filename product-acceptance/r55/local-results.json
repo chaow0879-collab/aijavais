@@ -1,0 +1,182 @@
+{
+  "reviewed_sha": "8e9584149cccac02fa0b5c39a68c1983ec60170e",
+  "scope": "Local independent E2/E3; CI results separately in final issue report",
+  "cases": [
+    {
+      "id": "M0-exact-subject-source-and-unseeded-inputs",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "M1-unfamiliar-moss-acoustic",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "M1-unfamiliar-neon-sign",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "M1-unfamiliar-meteorite-rubbing",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "M1-unfamiliar-steam-scent",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "M1-unfamiliar-driftwood-library",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "M1-unfamiliar-pollen-post",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "M1-unfamiliar-bamboo-robot",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "M1-unfamiliar-planet-tickets",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "M2-minimum-real-Office-independent-content-parsers",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "M3-server-criteria-and-approval-persist-after-restart",
+      "status": "PASS",
+      "mode": "api"
+    },
+    {
+      "id": "B1-real-UI-natural-goal-edit-grants-no-dispatch",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B2-real-dispatch-reload-disconnect-reconnect-events",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B3-actual-download-server-criteria-not-local-notes",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B4-targeted-rework-fresh-permission-round-SHA-acceptance",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B5-mobile-reduced-motion-and-server-state",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B6-legacy-discovery-404-is-explicit-synthetic-only",
+      "status": "PASS",
+      "mode": "browser"
+    },
+    {
+      "id": "B7-offline-import-fixture-file-visibility",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: P2 QA55-01: valid offline fixture delivered event replays, imported file absent\n    at /workspace/work/aijavais-productqa-r55/tests/productqa-r55/browser.cjs:51:792\n    at async test (/workspace/work/aijavais-productqa-r55/tests/productqa-r55/browser.cjs:6:45)\n    at async /workspace/work/aijavais-productqa-r55/tests/productqa-r55/browser.cjs:48:2",
+      "mode": "browser"
+    },
+    {
+      "id": "F1-real-HTTP-concurrent-id-and-persistent-tombstone",
+      "status": "PASS",
+      "mode": "faults"
+    },
+    {
+      "id": "F2-expiring-approval-stops-next-real-dispatch",
+      "status": "PASS",
+      "mode": "faults"
+    },
+    {
+      "id": "F3-active-cancel-revoke-no-next-call",
+      "status": "PASS",
+      "mode": "faults"
+    },
+    {
+      "id": "F4-three-active-fourth-HTTP429-no-dispatch",
+      "status": "PASS",
+      "mode": "faults"
+    },
+    {
+      "id": "F5-provider-429-no-automatic-retry-or-zero-vendor-bill",
+      "status": "PASS",
+      "mode": "faults"
+    },
+    {
+      "id": "F6-unknown-cost-ack-ledger-unchanged-after-human-accept",
+      "status": "PASS",
+      "mode": "faults"
+    },
+    {
+      "id": "F7-role-token-budget-before-dispatch",
+      "status": "PASS",
+      "mode": "faults"
+    },
+    {
+      "id": "F8-per-role-model-grant-revoked-before-start",
+      "status": "PASS",
+      "mode": "faults"
+    },
+    {
+      "id": "F9-crash-active-run-recovery-no-automatic-replay",
+      "status": "PASS",
+      "mode": "faults"
+    },
+    {
+      "id": "F10-simulated-paid-connection-blocked-no-universal-dispatch",
+      "status": "PASS",
+      "mode": "faults"
+    },
+    {
+      "id": "S1-transient-create-delete-detected-independently",
+      "status": "PASS",
+      "mode": "security"
+    },
+    {
+      "id": "S2-tests-external-symlink-refused-before-execution",
+      "status": "PASS",
+      "mode": "security"
+    },
+    {
+      "id": "S3-forged-isolation-never-launches-child",
+      "status": "PASS",
+      "mode": "security"
+    },
+    {
+      "id": "S7-real-agent-path-compile-time-disabled",
+      "status": "PASS",
+      "mode": "security"
+    },
+    {
+      "id": "S4-OS-nested-namespace-disabled-fail-closed",
+      "status": "PASS",
+      "mode": "security"
+    },
+    {
+      "id": "S5-OS-legal-tests-write-and-trusted-commit",
+      "status": "PASS",
+      "mode": "security"
+    },
+    {
+      "id": "S6-OS-transient-and-live-symlink-write-denial",
+      "status": "PASS",
+      "mode": "security"
+    }
+  ]
+}

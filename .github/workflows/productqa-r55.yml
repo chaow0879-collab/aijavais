@@ -1,0 +1,70 @@
+name: Independent R55 ProductQA
+on:
+  push:
+    branches: [test/codex-productqa-r55]
+permissions:
+  contents: read
+concurrency:
+  group: productqa-r55-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    name: R55 independent ${{ matrix.mode }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [api, browser, faults, security]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify frozen business and test-only delta
+        run: |
+          python3 - <<'PY'
+          import re,subprocess,os
+          base='8e9584149cccac02fa0b5c39a68c1983ec60170e'
+          subprocess.run(['git','merge-base','--is-ancestor',base,'HEAD'],check=True)
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          assert paths and all(re.match(r'^(tests/productqa-r55/|product-acceptance/r55/|\.github/workflows/productqa-r55\.yml$)',p) for p in paths),paths
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['GITHUB_SHA']
+          print('BUSINESS_SHA='+base+' TEST_SHA='+os.environ['GITHUB_SHA'])
+          PY
+      - name: Install isolated browser and recording dependency
+        if: matrix.mode == 'browser'
+        run: |
+          npm install --prefix "$RUNNER_TEMP/qa-browser" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/qa-browser/node_modules/.bin/playwright" install --with-deps chromium
+          command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
+      - name: Install independent Office parsers
+        if: matrix.mode == 'api'
+        run: python3 -m pip install --user --break-system-packages python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Install OS isolation dependency
+        if: matrix.mode == 'security'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends bubblewrap
+      - name: Execute independent concentrated acceptance
+        env:
+          NODE_PATH: ${{ runner.temp }}/qa-browser/node_modules
+          QA_GAPS_OUT: ${{ runner.temp }}/r55-${{ matrix.mode }}
+          QA_MODE: ${{ matrix.mode }}
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$QA_GAPS_OUT"
+          node tests/productqa-r55/"$QA_MODE".cjs 2>&1 | tee "$QA_GAPS_OUT/runner.log"
+      - name: Finalize actual evidence hashes
+        if: always()
+        env:
+          QA_GAPS_OUT: ${{ runner.temp }}/r55-${{ matrix.mode }}
+        run: node -e "console.log('R55_HASHES '+JSON.stringify(require('./tests/productqa-r55/harness.cjs').manifest()))"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: productqa-r55-${{ matrix.mode }}
+          path: ${{ runner.temp }}/r55-${{ matrix.mode }}/
+          if-no-files-found: error
