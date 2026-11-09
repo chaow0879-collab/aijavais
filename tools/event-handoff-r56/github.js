@@ -46,9 +46,17 @@ class GitHubFacts {
     if (!Array.isArray(runs)) fail('GITHUB_SHAPE');
     const out = [];
     for (const r of runs.slice(0, 50)) {
-      const jobs = r.status === 'completed' && r.conclusion === 'success' ? (await this.call('GET', '/actions/runs/' + r.id + '/jobs')).jobs : [];
-      out.push({ id: r.id, name: r.name, html_url: r.html_url, head_sha: r.head_sha, head_branch: r.head_branch, event: r.event, status: r.status, conclusion: r.conclusion,
-        head_repository: { full_name: r.head_repository && r.head_repository.full_name, fork: !!(r.head_repository && r.head_repository.fork) }, jobs: (jobs || []).map(j => ({ name: j.name, conclusion: j.conclusion })) });
+      // Keep the fields the CI gate needs to pick the latest run/attempt (AUD-R57-01). Jobs are only
+      // fetched for successful runs; an incomplete job page is recorded and blocks, never passes.
+      let jobs = [], jobsComplete = true;
+      if (r.status === 'completed' && r.conclusion === 'success') {
+        const page = await this.call('GET', '/actions/runs/' + r.id + '/jobs');
+        if (!page || !Array.isArray(page.jobs)) fail('GITHUB_SHAPE');
+        jobs = page.jobs;
+        jobsComplete = Number.isSafeInteger(page.total_count) && page.total_count === jobs.length;
+      }
+      out.push({ id: r.id, workflow_id: r.workflow_id, run_number: r.run_number, run_attempt: r.run_attempt, name: r.name, html_url: r.html_url, head_sha: r.head_sha, head_branch: r.head_branch, event: r.event, status: r.status, conclusion: r.conclusion,
+        head_repository: { full_name: r.head_repository && r.head_repository.full_name, fork: !!(r.head_repository && r.head_repository.fork) }, jobs_complete: jobsComplete, jobs: jobs.map(j => ({ name: j.name, status: j.status, conclusion: j.conclusion })) });
     }
     return { complete: true, checked_at: now, repository: { full_name: pipeline.repo, id: pipeline.repository_id }, refs: { [item.branch]: ref && ref.object && ref.object.sha || null }, issues, runs: out };
   }

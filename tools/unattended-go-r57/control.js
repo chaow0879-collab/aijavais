@@ -10,6 +10,18 @@ const result = (state, reason, more = {}) => ({ state, reason, evidence: 'E3_FAK
 const fake = input => Object.getOwnPropertyDescriptor(input || {}, 'mode')?.value === 'fake';
 const readReviews = (input, collected) => typeof input.readReviews === 'function'
   ? E.boundedBackend({ read: () => input.readReviews(collected) }, 1000).read() : null;
+// AUD-R57-02: a durable HALT (or any change to the settled job) that lands while receipts/reviews
+// are being collected must win over a DONE result. Re-read the authoritative R46 ledger after the
+// last await; anything uncertain yields next_allowed=false and keeps ledger/cost/tombstone as-is.
+async function stillSettled(base, now) {
+  const { digest } = require('../auto-handoff-r46/contract');
+  try {
+    const state = await new Ledger(base.backend, base.config).read(now), job = state.document.jobs[base.envelope.idempotency_key];
+    if (state.document.halted) return 'PERSISTENT_HALT';
+    if (job?.state !== 'SUCCEEDED' || job.envelope_hash !== digest(base.envelope) || !job.outcome?.cost_known) return 'COMPLETED_WORK_CHANGED';
+    return null;
+  } catch { return 'LEDGER_RECHECK_UNVERIFIED'; }
+}
 async function parentGate(input, now) {
   const base = input.packet.base, e = base.envelope;
   if (!e.after) return true;
@@ -59,6 +71,10 @@ async function runOnce(input = {}) {
     const proofs = await readReviews(input, collected);
     if (!await authorityCheck(packet.now ?? Date.now())) return result('BLOCKED', 'COLLECTION_AUTHORITY_CHANGED', { execution, next_allowed: false });
     const gate = Receipts.reviews(proofs, collected, policy, packet.now ?? Date.now());
+    if (gate.state === 'DONE') {
+      const changed = await stillSettled(base, packet.now ?? Date.now());
+      if (changed) return result('BLOCKED', changed, { execution, history: [...history, 'REVIEW_PENDING', 'BLOCKED'], collected, next_allowed: false });
+    }
     return result(gate.state, gate.reason || null, { execution, history: [...history, 'REVIEW_PENDING', ...(gate.state === 'DONE' ? ['QA_PENDING', 'REWORK_OR_NEXT', 'DONE'] : [gate.state])], collected, ...gate });
   } catch (error) {
     // Collection uncertainty never settles/releases/reclaims execution. A later
@@ -96,6 +112,10 @@ async function collectCompleted(input = {}) {
     const collected = await Receipts.collect({ envelope: base.envelope, outcome: job.outcome, read: input.readGitHub, policy });
     if (!collected.receipt) return result(collected.state, collected.reason, { next_allowed: false });
     const gate = Receipts.reviews(await readReviews(input, collected), collected, policy, Date.now());
+    if (gate.state === 'DONE') {
+      const changed = await stillSettled(base, Date.now());
+      if (changed) return result('BLOCKED', changed, { collected, next_allowed: false });
+    }
     return result(gate.state, gate.reason || null, { collected, ...gate });
   } catch (error) { return result('BLOCKED', /^[A-Z0-9_]{1,80}$/.test(error?.code || '') ? error.code : 'COMPLETED_COLLECTION_UNVERIFIED', { next_allowed: false }); }
 }

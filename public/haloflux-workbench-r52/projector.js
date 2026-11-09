@@ -74,7 +74,7 @@
       for (const e of applied) if (e.type === 'retracted') {
         if (ids.has(e.retracts) && e.retracts !== e.event_id) retractedIds.add(e.retracts); else retractIssues.push({ kind: 'retract_unknown', event_id: e.event_id, seq: e.seq, detail: e.retracts });
       }
-      const roles = {}, edges = [], log = [], artifacts = [], causality = [];
+      const roles = Object.create(null), edges = [], log = [], artifacts = [], causality = [];
       const evidence = new Set();
       let phase = 'idle', lastCompleted = null;
       const costs = new Map(); // ledger key -> cost
@@ -138,7 +138,7 @@
         else known += c.usd;
       }
       const round = x => Math.round(x * 1e6) / 1e6;
-      const byRole = {};
+      const byRole = Object.create(null);
       for (const c of costs.values()) if (c.role_id) { const r = byRole[c.role_id] || (byRole[c.role_id] = { entries: 0, unknown: false, known_usd: 0 }); r.entries++; if (c.status === 'unknown' || c.usd === null) r.unknown = true; else r.known_usd = round(r.known_usd + c.usd); }
       const cost = { entries: costs.size, known_usd: round(known), upper_bound_usd: round(upper), reserved_usd: round(reserved), unknown_count: unknown,
         total_usd: unknown || upper || reserved ? null : round(known), status: unknown ? 'unknown' : (upper || reserved ? 'not_final' : (costs.size ? 'settled' : 'none')) };

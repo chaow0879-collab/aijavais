@@ -1,11 +1,19 @@
 # AIJAVAIS V2 — 接力开发须知
 
+> **当前治理（2026-11-09 起，优先于本文件下方所有旧轮次分工）**
+> - 项目负责人决定：ChatGPT 与 Codex 永久退出。**Claude 是唯一项目规划总指挥兼唯一开发者**；不再有 Codex 分支所有权，旧"Codex 独占/Claude 待命"条款作废。
+> - 最高战略 GitHub #26（先读顶部 OWNER_STRATEGY_V3）；总控决议 #10；当前快照 #20 最新的 `[CONTEXT_PACK_V2]` 评论。不要重读全部历史。
+> - 独立审计 / 产品 QA 由**全新上下文的 Claude 会话**承担，提示词见 `collab/roles/`。开发者会话不得自签审计或 QA 结论。
+> - 服务器由负责人本人持有。服务器侧工作只以"负责人在服务器上执行的精确命令＋需要回贴的输出"下达，见 `collab/roles/server-ops.md`。
+> - 不变的门禁：不调用收费模型、不配置 Secrets、不启用正式 cron、不合并 main、不做生产部署，除非负责人逐项明确批准。开发在 `claude/*` 分支，经 PR 交负责人合并。
+> - 停止扩张 Runner/调度层（R45–R57 已足够）；只修经证实的阻断缺陷，资源转向 #26 V3 的两条 MVP。
+
 先读本文件，再读 `docs/FEATURE-STATUS.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md` 和 `collab/handoffs/codex-to-claude-code.md`。文档描述当前实现，未验证项不等于完成。
 
 ## 正确开始
 
 1. `git status --short --branch`，保护现存修改；`git fetch origin` 后核对交接 SHA。
-2. 第十轮#6+#8位于 `feat/codex-v2-p1-ledger-recovery`，精确起点为 `b71faaa65bb66e04ea2a015c9238a3a129bdb68e`，唯一负责人Codex，Claude待命；原始交付保留在 `feat/codex-v2-integration`。不得与其他开发者同时写同分支；当前所有权与最新SHA见collab/HANDOFF.md及ACTIVE-DEVELOPMENT.md。
+2. （历史）旧轮次的分支所有权已作废；当前分支与 SHA 以 #20 最新快照为准。
 3. 检查三个来源分支的最新提交，不要用某分支旧版整份文件覆盖已集成代码。两份原始功能分支都保留在合并历史中。
 4. 云任务已隔离；使用现有 checkout，不创建 worktree，除非用户明确要求。
 5. Node.js **24+**（使用 `node:sqlite`、`AbortSignal.any`），零生产 npm 依赖，无 lockfile，无需 `npm install`。`npm start` 默认本机 8787；不要运行已有的桌面自动打开脚本作为云健康检查。

@@ -171,7 +171,7 @@
     if (r53()) {
       const st = S.projector.state();
       $('role-grants').replaceChildren(...p.roles.map(r => {
-        const rs = L.roleStatus(p, r, st), g = (perm.roles || {})[r.role_id] || {};
+        const rs = L.roleStatus(p, r, st), g = (perm.roles && Object.prototype.hasOwnProperty.call(perm.roles, r.role_id) && perm.roles[r.role_id]) || {};
         return node('li', { 'data-grant-role': r.role_id, 'data-role-status': rs.status, 'data-unknown-cost': String(rs.unknown_cost) }, [
           node('div', { class: 'role-head' }, [node('strong', { text: r.name }),
             node('span', { class: 'badge ' + ({ approved: 'good', blocked: 'block', pending: 'warn' }[rs.status] || 'info'), text: { approved: '已批准 approved', blocked: '受阻 blocked', pending: '待批准' }[rs.status] }),

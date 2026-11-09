@@ -82,8 +82,49 @@ function read(snapshot, pipeline, item, now) {
     else { try { if (der(a.key) === der(q.key)) independence = 'SAME_KEY_FOR_AUDIT_AND_QA'; } catch { independence = 'REVIEWER_KEY_INVALID'; } }
   }
   const ci = snapshot.runs.filter(r => r && r.head_sha === candidate && r.head_branch === item.branch && pipeline.ci.events.includes(r.event) && r.head_repository && r.head_repository.full_name === pipeline.repo && r.head_repository.fork !== true && pipeline.ci.workflows.includes(r.name));
-  const green = ci.filter(r => r.status === 'completed' && r.conclusion === 'success' && pipeline.ci.required_jobs.every(j => (r.jobs || []).some(x => x.name === j && x.conclusion === 'success')));
-  return { candidate, candidate_ref: latest ? latest.c.html_url : null, withdrawn, revoked, branch_sha: snapshot.refs[item.branch] || null, reviews, independence,
-    ci: { runs: ci.length, green: green.length ? green[green.length - 1].html_url : null, failed: ci.some(r => r.status === 'completed' && r.conclusion !== 'success') } };
+  return { candidate, candidate_ref: latest ? latest.c.html_url : null, withdrawn, revoked, branch_sha: snapshot.refs[item.branch] || null, reviews, independence, ci: ciGate(ci, pipeline) };
 }
-module.exports = { read, block, verifyProof, trustedBy, NEGATIVE, ACCEPT, SHA };
+
+// AUD-R57-01: CI is judged on the LATEST run/attempt of every required workflow for the candidate,
+// never on "some older success". A newer failure/cancel/pending run, an unknown order, an incomplete
+// job list or any same-name required job that is not completed/success blocks. Normal matrices whose
+// same-name jobs are all successful still pass.
+const num = v => (Number.isSafeInteger(v) && v > 0 ? v : null);
+function latestRun(runs) {
+  // GitHub run ids are monotonic; re-runs keep the id and increment run_attempt.
+  if (runs.some(r => num(r.id) === null || (r.run_attempt !== undefined && num(r.run_attempt) === null))) return { problem: 'CI_UNKNOWN_ORDER' };
+  const ids = new Set(runs.map(r => r.workflow_id).filter(v => v !== undefined));
+  if (ids.size > 1) return { problem: 'CI_WORKFLOW_IDENTITY_AMBIGUOUS' };
+  const key = r => [r.id, r.run_attempt || 1];
+  const sorted = [...runs].sort((a, b) => key(b)[0] - key(a)[0] || key(b)[1] - key(a)[1]);
+  if (sorted.length > 1 && key(sorted[0])[0] === key(sorted[1])[0] && key(sorted[0])[1] === key(sorted[1])[1]) return { problem: 'CI_DUPLICATE_RUN_ATTEMPT' };
+  return { run: sorted[0] };
+}
+function runGreen(r, required) {
+  if (r.status !== 'completed' || r.conclusion !== 'success') return 'CI_LATEST_RUN_' + String(r.status === 'completed' ? r.conclusion : r.status || 'unknown').toUpperCase();
+  if (r.jobs_complete !== true && r.jobs_complete !== undefined) return 'CI_JOBS_INCOMPLETE';
+  const jobs = Array.isArray(r.jobs) ? r.jobs : [];
+  for (const j of required) {
+    const same = jobs.filter(x => x && x.name === j);
+    if (!same.length) return 'CI_REQUIRED_JOB_MISSING';
+    if (same.some(x => x.conclusion !== 'success' || (x.status !== undefined && x.status !== 'completed'))) return 'CI_REQUIRED_JOB_NOT_SUCCESS';
+  }
+  return null;
+}
+function ciGate(ci, pipeline) {
+  const workflows = pipeline.ci.workflows || [];
+  if (!ci.length) return { runs: 0, green: null, failed: false };
+  if (!workflows.length || !Array.isArray(pipeline.ci.required_jobs) || !pipeline.ci.required_jobs.length) return { runs: ci.length, green: null, failed: true, problem: 'CI_POLICY_EMPTY' };
+  let last = null;
+  for (const w of workflows) {
+    const runs = ci.filter(r => r.name === w);
+    if (!runs.length) return { runs: ci.length, green: null, failed: false, problem: 'CI_REQUIRED_WORKFLOW_MISSING' };
+    const sel = latestRun(runs);
+    if (sel.problem) return { runs: ci.length, green: null, failed: true, problem: sel.problem };
+    const problem = runGreen(sel.run, pipeline.ci.required_jobs);
+    if (problem) return { runs: ci.length, green: null, failed: true, problem, latest: sel.run.html_url };
+    last = sel.run;
+  }
+  return { runs: ci.length, green: last.html_url, failed: false };
+}
+module.exports = { read, ciGate, block, verifyProof, trustedBy, NEGATIVE, ACCEPT, SHA };

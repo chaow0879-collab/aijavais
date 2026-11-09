@@ -31,7 +31,7 @@ function decide({ snapshot, pipeline, item, jobs, now }) {
   if (f.branch_sha !== f.candidate) return out('BLOCKED_SHA_MOVED', 'BRANCH_HEAD_DIFFERS_FROM_CANDIDATE', { ...base, branch_sha: f.branch_sha });
   const rejected = [...f.reviews.audit.negative, ...f.reviews.qa.negative];
   if (rejected.length) return out('BLOCKED_REJECTED', 'INDEPENDENT_REVIEW_NEGATIVE', { ...base, refs: rejected });
-  if (!f.ci.green) return out('WAIT_CI', f.ci.failed ? 'CI_NOT_GREEN_FOR_CANDIDATE' : 'NO_CI_FOR_CANDIDATE', { ...base, todo: [{ role: 'ci', action: 'same-SHA required jobs must succeed' }] });
+  if (!f.ci.green) return out('WAIT_CI', f.ci.failed ? 'CI_NOT_GREEN_FOR_CANDIDATE' : 'NO_CI_FOR_CANDIDATE', { ...base, ci_problem: f.ci.problem || null, todo: [{ role: 'ci', action: 'same-SHA required jobs must succeed' }] });
   const todo = [];
   for (const role of ['audit', 'qa']) {
     const r = f.reviews[role];

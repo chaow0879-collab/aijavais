@@ -38,7 +38,7 @@ const server = http.createServer((req, res) => {
       return send(res, 200, rows.map(c => ({ id: Number(c.id), html_url: c.html_url, user: { login: c.login }, author_association: c.assoc, created_at: c.created_at, body: c.body, ...(c.pr ? { pull_request: { url: 'x' } } : {}) })));
     }
     if (req.method === 'GET' && r === '/actions/runs') { bump('read_runs'); const b = url.searchParams.get('branch'); return send(res, 200, { workflow_runs: db.prepare('SELECT doc FROM runs').all().map(x => JSON.parse(x.doc)).filter(x => x.head_branch === b).map(({ jobs, ...x }) => x) }); }
-    if (req.method === 'GET' && (m = /^\/actions\/runs\/(\d+)\/jobs$/.exec(r))) { const row = db.prepare('SELECT doc FROM runs WHERE id=?').get(Number(m[1])); return row ? send(res, 200, { jobs: JSON.parse(row.doc).jobs || [] }) : send(res, 404, {}); }
+    if (req.method === 'GET' && (m = /^\/actions\/runs\/(\d+)\/jobs$/.exec(r))) { const row = db.prepare('SELECT doc FROM runs WHERE id=?').get(Number(m[1])); return row ? (j => send(res, 200, { total_count: j.length, jobs: j }))(JSON.parse(row.doc).jobs || []) : send(res, 404, {}); }
     if (req.method === 'POST' && (m = /^\/issues\/(\d+)\/comments$/.exec(r))) {
       bump('post_report'); const id = nextId++;
       db.prepare('INSERT INTO comments VALUES(?,?,?,?,?,?,?,?)').run(id, Number(m[1]), `https://github.com/${REPO}/issues/${m[1]}#issuecomment-${id}`, 'r56-bridge', 'COLLABORATOR', new Date().toISOString(), body.body, 0);
