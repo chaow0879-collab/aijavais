@@ -56,6 +56,10 @@
         "to": "100644 blob 85c6b73876d364e1cfb0edc65d38ae79aeecb2e1",
         "reason": "AUD-R57-01: emulator returns jobs total_count like GitHub"
       },
+      "tests/haloflux-workbench-r52/workbench.test.js": {
+        "to": "100644 blob 8526a008bfcc2eccf5e6479e344df5f732cf42cf",
+        "reason": "R52 E3 shutdown assertion pinned the pre-R53 backend gap; R53 229c766 now records run_cancelled{reason:server_shutdown}. Test asserts the real event, keeps derived-event fallback on a labelled synthetic gap"
+      },
       "tools/event-handoff-r56/facts.js": {
         "to": "100644 blob 4176af4926723c636bd7c46126f2463ca00fd1ff",
         "reason": "AUD-R57-01 P1: latest run/attempt CI gate (ciGate)"

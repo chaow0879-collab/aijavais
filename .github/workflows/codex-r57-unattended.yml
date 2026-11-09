@@ -95,9 +95,9 @@ jobs:
         env:
           R52_OUT: ${{ runner.temp }}/r53-evidence/r52-frozen
         run: node tools/universal-workflow-r53/run-r52.js
-      - name: R52 pure modules against integrated tree (historical authorship/shutdown assumptions run only above)
+      - name: "R52 workbench against integrated tree (incl. E3_FAKE real server; only author-branch scope: assertion skipped)"
         if: success() || failure()
-        run: node --test --test-skip-pattern='scope:|E3_FAKE real server:' tests/haloflux-workbench-r52/workbench.test.js
+        run: node --test --test-skip-pattern='scope:' tests/haloflux-workbench-r52/workbench.test.js
       - name: "#15 semantic P2 guards (test:p2)"
         if: success() || failure()
         run: npm run test:p2

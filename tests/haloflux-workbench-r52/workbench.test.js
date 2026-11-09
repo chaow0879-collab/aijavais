@@ -329,16 +329,26 @@ test('E3_FAKE real server: workbench plan → existing APIs → real run events 
   const ji = J.createProjector({}); ji.ingest(C.fromV2Run(after).events);
   assert.equal(ji.state().phase, 'unknown'); assert.equal(ji.state().busy, false); assert.equal(ji.state().roles[p.steps[0].role_id].state, 'unknown');
   await new Promise(r => setTimeout(r, 200)); assert.equal(f.state.calls, callsBefore, 'no automatic replay after restart');
-  // Graceful shutdown mid-run: the server marks the run cancelled WITHOUT an event (backend gap, reported to R53);
-  // the adapter adds one explicitly derived event so the halo never keeps showing "working".
+  // Graceful shutdown mid-run. The R52 backend marked the run cancelled WITHOUT an event; R53 (229c766,
+  // lib/project-engine.js shutdown) closed that gap and now records run_cancelled{reason:server_shutdown}.
+  // The projection must come from that real server event, with no derived status event added on top.
   const c3 = await app().call('POST', '/api/v2/projects/' + pid + '/runs', { ...rr.body, maxTokens: 200000 });
   for (let i = 0; i < 200 && f.state.held.length === 0; i++) await new Promise(r => setTimeout(r, 10));
   await f.restart(); f.state.held.splice(0); f.state.hold = false;
   const shut = (await app().call('GET', '/api/v2/runs/' + c3.json.run.runId)).json.run;
-  assert.equal(shut.status, 'cancelled'); assert.ok(!shut.events.some(e => e.eventType === 'run_cancelled'), 'server recorded no cancel event');
-  const ds = C.fromV2Run(shut); const derived = ds.events.find(e => e.event_id.startsWith('v2-status:'));
-  assert.equal(derived.type, 'cancelled'); assert.match(derived.event_id, /^v2-status:/); assert.match(derived.detail, /服务器未记录对应事件/);
+  assert.equal(shut.status, 'cancelled');
+  const shutEvent = shut.events.find(e => e.eventType === 'run_cancelled');
+  assert.ok(shutEvent, 'server records a run_cancelled event on graceful shutdown'); assert.equal(shutEvent.reason, 'server_shutdown');
+  const ds = C.fromV2Run(shut);
+  assert.ok(!ds.events.some(e => e.event_id.startsWith('v2-status:')), 'no derived status event when the server recorded one');
   const jd = J.createProjector({}); jd.ingest(ds.events); assert.equal(jd.state().phase, 'cancelled'); assert.equal(jd.state().busy, false);
-  evidence.e3.faults = { cancelled: cancelled.status, interrupted: after.status, gracefulShutdown: { status: shut.status, derivedEvent: derived.event_id, backendGap: 'status changed without run_cancelled event' } };
+  assert.notEqual(jd.state().roles[p.steps[0].role_id].state, 'working');
+  // Adapter fallback stays covered for older/partial snapshots: SAME real run with its cancel event removed
+  // (synthetic, labelled) still yields exactly one explicitly derived cancelled event.
+  const gap = C.fromV2Run({ ...shut, events: shut.events.filter(e => e.eventType !== 'run_cancelled') });
+  const derived = gap.events.filter(e => e.event_id.startsWith('v2-status:'));
+  assert.equal(derived.length, 1); assert.equal(derived[0].type, 'cancelled'); assert.match(derived[0].detail, /服务器未记录对应事件/);
+  const jg = J.createProjector({}); jg.ingest(gap.events); assert.equal(jg.state().phase, 'cancelled'); assert.equal(jg.state().busy, false);
+  evidence.e3.faults = { cancelled: cancelled.status, interrupted: after.status, gracefulShutdown: { status: shut.status, serverEvent: shutEvent.eventType, reason: shutEvent.reason, derivedEventOnSyntheticGap: derived[0].event_id } };
   if (OUT) fs.writeFileSync(path.join(OUT, 'r52-node-evidence.json'), JSON.stringify(evidence, null, 2));
 });
