@@ -7,7 +7,7 @@ name: R57 unattended candidate and preserved product
 # Local MOCK models only; no secrets, no paid APIs, no deploy, no schedule.
 on:
   push:
-    branches: [integrate/codex-r57-unattended-go-gate]
+    branches: [integrate/codex-r57-unattended-go-gate, "claude/**"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -87,6 +87,9 @@ jobs:
         run: |
           mkdir -p "$R56_OUT"
           node --test --test-skip-pattern='^scope:' tests/event-handoff-r56/*.test.js
+      - name: Audit fix regressions (AUD-R57-01, AUD-R57-02, AUD-R55-01)
+        if: success() || failure()
+        run: node --test --test-concurrency=1 tests/audit-fixes/*.test.js
       - name: Frozen R52 original suite including authorship and historical shutdown observation
         if: success() || failure()
         env:
