@@ -2,8 +2,19 @@
 const {execFileSync}=require('node:child_process'),path=require('node:path'),M=require('./sources.json');
 const root=path.resolve(__dirname,'../..'),git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 const POST_R57=Object.freeze({base:'049a3376a2d08042fcac1833b324bc87b0137ba1',changes:Object.freeze({
-  "CLAUDE.md":{from:"100644 blob 9740136ae5e6cf6c57662756a837339b74c23f29",to:"100644 blob a288fbf8a4af4e8fb9dcf3e7d254335ec9518024",reason:"governance: Claude supreme commander, full planning authority (owner decisions 2026-11-09)"},
-  "collab/roles/code-audit.md":{from:null,to:"100644 blob 5e2362d63c640392244d66825917b4a37d44dc0c",reason:"governance: independent audit session prompt"},
+  "AGENTS.md":{from:"100644 blob 784c6bc3d30d03a64b6512f6d4e908adbde815c0",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "CLAUDE.md":{from:"100644 blob 9740136ae5e6cf6c57662756a837339b74c23f29",to:"100644 blob a85d8c666005621c4fa46b70cc48ae5dbc476afc",reason:"governance: Claude supreme commander, full planning authority (owner decisions 2026-11-09)"},
+  "README.md":{from:"100644 blob 26aed375f5795eda89b695037312d5b9e13336d7",to:"100644 blob 21a8a5aa1f419b95e3c64ed98a1f8d5133a46f31",reason:"docs: point to CLAUDE.md and #20 instead of removed handoff"},
+  "collab/ACTIVE-DEVELOPMENT.md":{from:"100644 blob 6a630b8941f2cd2cf5c9e58072f8becf1b463664",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "collab/HANDOFF.md":{from:"100644 blob 3f300723be9115ea576ca8c62ccddf9a4b666c68",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "collab/README.md":{from:"100644 blob cf296ad6e88143b282cf32cd6fb648604801e89b",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "collab/handoffs/codex-to-claude-code.md":{from:"100644 blob 5cda29c1ccf1aa4a00391f155badcc57689a14ca",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "collab/handoffs/current.md":{from:"100644 blob 45de530eb52181f63f9ae993af24ba21716b7787",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "collab/inbox/claude/.gitkeep":{from:"100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "collab/inbox/openai/20261105-claude-to-openai-batch2-review-request.md":{from:"100644 blob 175786f1226acbd4614b9c38ec7406fd6620ad43",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "collab/inbox/openai/20261105-claude-to-openai-phase3-review-request.md":{from:"100644 blob 1d56a8551b62d2429615f0c268f313f7b291221f",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "collab/reviews/review-203b6c3.md":{from:"100644 blob cabbac788ca9037669361cec603fa1ca93ec915f",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "collab/roles/code-audit.md":{from:null,to:"100644 blob c4b4b680c81856e0a8f025c571cb18093f9f587c",reason:"governance: independent audit session prompt"},
   "collab/roles/product-qa.md":{from:null,to:"100644 blob a6b0c34599d336818f1cafd1f7b82e77c745d291",reason:"governance: independent product QA session prompt"},
   "collab/roles/server-ops.md":{from:null,to:"100644 blob 660933ff4fcc9087249f9874e85be025e2ac1ce0",reason:"governance: server operations (aiops sudo, dispatch and discipline)"},
   "public/haloflux-workbench-r52/app.js":{from:"100644 blob a6652e82e2b678710f87107207a49652370a7a96",to:"100644 blob e6f73a18ec8b5d8d0534df96a7f22440e028ef1b",reason:"AUD-R55-01: own-property permission lookup"},
@@ -16,6 +27,8 @@ const POST_R57=Object.freeze({base:'049a3376a2d08042fcac1833b324bc87b0137ba1',ch
   "tools/event-handoff-r56/facts.js":{from:"100644 blob aabe99ab7d2b16ec2eb368d8f4195a43d5153b94",to:"100644 blob a466d43a098a4ebef93df1b5ef79a30d06ab8cb6",reason:"AUD-R57-01/AUD-BC72-01..03: every run latest attempt green; unknown fields block"},
   "tools/event-handoff-r56/github.js":{from:"100644 blob c68869e17fda46fe3ae5b679576ac23d1b917b64",to:"100644 blob 5b6f531082369572bb13d4f5fd9d1289a9758475",reason:"AUD-R57-01/AUD-BC72-03: keep run/job identity and completeness; run-list total_count check"},
   "tools/event-handoff-r56/machine.js":{from:"100644 blob 6e58b656cbe14cbc0f9be34e560925c16b838055",to:"100644 blob d62f4d8307b1c7e5f6c0f5116094f9579b2dfa40",reason:"AUD-R57-01: surface ci_problem in WAIT_CI decisions"},
+  "使用说明.md":{from:"100644 blob fe8b8f272f63368e0875438c6fcfc345ddbbc6da",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
+  "部署到Render.md":{from:"100644 blob a7d74c3c6519ca6fea4254ad76fb702f242ff1fd",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
 })});
 const tree=ref=>new Map(git(['ls-tree','-r','-z',ref]).split('\0').filter(Boolean).map(l=>{const n=l.indexOf('\t');return [l.slice(n+1),l.slice(0,n)];}));
 function verify(){

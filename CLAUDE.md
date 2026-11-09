@@ -33,7 +33,7 @@
 > - 报告标记：`[AGENT_REPORT_V1]`（审计 / QA / 子会话）、`[STRATEGY_REVIEW_V3]`（战略参谋）、`[PLANNER_DECISION_V5]`（总指挥）、`[SERVER_CHANGE_LOG]`（运维）。
 > - 文件：新文档统一用 `docs/<领域>-<主题>.md`，全部 UTF-8、LF 换行。现有 R 编号文档属于历史资产，等进入产品阶段、R57 来源守卫退役后，再统一迁移到 `docs/archive/`。
 
-先读本文件，再读 `docs/FEATURE-STATUS.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md` 和 `collab/handoffs/codex-to-claude-code.md`。文档描述当前实现，未验证项不等于完成。
+以下为代码层面的长期约束。需要时按任务卡指定的范围查阅 `docs/FEATURE-STATUS.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`。文档描述的是当前实现，未经验证的项不等于已完成。
 
 ## 正确开始
 
