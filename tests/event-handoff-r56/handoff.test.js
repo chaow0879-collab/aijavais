@@ -31,7 +31,7 @@ function pureWorld(over = {}) {
   const snap = { complete: true, checked_at: now, repository: { full_name: C.REPO, id: 1446621245 }, refs: { [it.branch]: SHA_A },
     issues: { 34: { comments: [c(34, 1, 'codex-int', W.readyBody(SHA_A))] }, 2: { comments: [c(2, 120, 'auditor', W.verdictBody({ role: 'audit', key: keys.audit.privateKey, keyId: 'aud-1', verdict: 'ACCEPT', sha: SHA_A, it, now }))] },
       4: { comments: [c(4, 140, 'qa-tester', W.verdictBody({ role: 'qa', key: keys.qa.privateKey, keyId: 'qa-1', verdict: 'PASS', sha: SHA_A, it, now }))] } },
-    runs: [{ id: 7, name: 'r57-candidate-ci', html_url: 'https://github.com/' + C.REPO + '/actions/runs/7', head_sha: SHA_A, head_branch: it.branch, event: 'push', status: 'completed', conclusion: 'success', head_repository: { full_name: C.REPO, fork: false }, jobs: [{ name: 'tests', conclusion: 'success' }, { name: 'browser', conclusion: 'success' }] }] };
+    runs_complete: true, runs: [{ id: 7, workflow_id: 4242, run_attempt: 1, jobs_complete: true, name: 'r57-candidate-ci', html_url: 'https://github.com/' + C.REPO + '/actions/runs/7', head_sha: SHA_A, head_branch: it.branch, event: 'push', status: 'completed', conclusion: 'success', head_repository: { full_name: C.REPO, fork: false }, jobs: [{ name: 'tests', status: 'completed', conclusion: 'success' }, { name: 'browser', status: 'completed', conclusion: 'success' }] }] };
   return { keys, now, pl, it, snap, c, ...over };
 }
 const decide = (x, jobs = {}, now = x.now) => M.decide({ snapshot: x.snap, pipeline: x.pl, item: x.it, jobs, now });

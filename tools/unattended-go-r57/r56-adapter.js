@@ -53,6 +53,10 @@ async function step(input = {}) {
     const last = await call(() => input.lookupCompleted(result.decision.stages.at(-1).key));
     if (pipelineHash !== C.digest({ pipeline: publicClone(input.pipeline), item: publicClone(input.item) })) return blocked('R56_FINAL_POLICY_CHANGED');
     if (!await currentGate(input, last.packet.base.envelope, Date.now())) return blocked('R56_FINAL_GATE_CHANGED');
+    // AUD-BC72-04: a durable HALT written during the final lookups/gate must win over HANDOFF_COMPLETE.
+    const ledger = await call(input.readLedger);
+    if (!ledger || !ledger.document || typeof ledger.document.halted !== 'boolean') return blocked('LEDGER_RECHECK_UNVERIFIED');
+    if (ledger.document.halted) return blocked('PERSISTENT_HALT');
     return { ...result, r57_completed_receipts: completions, manual_prompt_transfers: 0, real_agent_wake: 'NOT_VERIFIED' };
   } catch (error) { return blocked(/^[A-Z0-9_]{1,80}$/.test(error?.code || '') ? error.code : 'R56_R57_ADAPTER_UNVERIFIED'); }
 }

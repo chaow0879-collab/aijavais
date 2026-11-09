@@ -42,8 +42,11 @@ class GitHubFacts {
     const ref = await this.call('GET', '/git/ref/heads/' + item.branch);
     const issues = {};
     for (const n of [...new Set([item.issue, pipeline.review_issues.audit, pipeline.review_issues.qa])]) issues[n] = { comments: await this.comments(n) };
-    const runs = (await this.call('GET', '/actions/runs?branch=' + encodeURIComponent(item.branch) + '&per_page=50')).workflow_runs;
+    const page = await this.call('GET', '/actions/runs?branch=' + encodeURIComponent(item.branch) + '&per_page=50');
+    const runs = page && page.workflow_runs;
     if (!Array.isArray(runs)) fail('GITHUB_SHAPE');
+    // AUD-BC72-03: only a complete run list may produce a green CI fact; a truncated list is UNKNOWN.
+    const runsComplete = Number.isSafeInteger(page.total_count) && page.total_count === runs.length && runs.length <= 50;
     const out = [];
     for (const r of runs.slice(0, 50)) {
       // Keep the fields the CI gate needs to pick the latest run/attempt (AUD-R57-01). Jobs are only
@@ -58,7 +61,7 @@ class GitHubFacts {
       out.push({ id: r.id, workflow_id: r.workflow_id, run_number: r.run_number, run_attempt: r.run_attempt, name: r.name, html_url: r.html_url, head_sha: r.head_sha, head_branch: r.head_branch, event: r.event, status: r.status, conclusion: r.conclusion,
         head_repository: { full_name: r.head_repository && r.head_repository.full_name, fork: !!(r.head_repository && r.head_repository.fork) }, jobs_complete: jobsComplete, jobs: jobs.map(j => ({ name: j.name, status: j.status, conclusion: j.conclusion })) });
     }
-    return { complete: true, checked_at: now, repository: { full_name: pipeline.repo, id: pipeline.repository_id }, refs: { [item.branch]: ref && ref.object && ref.object.sha || null }, issues, runs: out };
+    return { complete: true, runs_complete: runsComplete, checked_at: now, repository: { full_name: pipeline.repo, id: pipeline.repository_id }, refs: { [item.branch]: ref && ref.object && ref.object.sha || null }, issues, runs: out };
   }
   report(issue, body) { return this.call('POST', '/issues/' + issue + '/comments', { body: String(body).slice(0, 60000) }); }
 }

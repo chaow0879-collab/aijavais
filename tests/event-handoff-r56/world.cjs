@@ -65,9 +65,9 @@ async function seedCandidate(em, f0, it, { at = Date.now() } = {}) {
   await em.ref(it.branch, f0.candidate_sha);
   await em.comment({ issue: it.issue, login: 'codex-int', association: 'COLLABORATOR', body: readyBody(f0.candidate_sha), created_at: new Date(at - 5000).toISOString() });
 }
-async function seedCi(em, f0, it, { id = 7001, conclusion = 'success', fork = false, event = 'push' } = {}) {
-  await em.run({ id, name: 'r57-candidate-ci', html_url: 'https://github.com/' + C.REPO + '/actions/runs/' + id, head_sha: f0.candidate_sha, head_branch: it.branch, event, status: 'completed', conclusion,
-    head_repository: { full_name: C.REPO, fork }, jobs: [{ name: 'tests', conclusion }, { name: 'browser', conclusion }] });
+async function seedCi(em, f0, it, { id = 7001, conclusion = 'success', fork = false, event = 'push', run_attempt = 1, status = 'completed', workflow_id = 4242 } = {}) {
+  await em.run({ id, workflow_id, run_attempt, name: 'r57-candidate-ci', html_url: 'https://github.com/' + C.REPO + '/actions/runs/' + id + '/attempts/' + run_attempt, head_sha: f0.candidate_sha, head_branch: it.branch, event, status, conclusion,
+    head_repository: { full_name: C.REPO, fork }, jobs: [{ name: 'tests', status: 'completed', conclusion }, { name: 'browser', status: 'completed', conclusion }] });
 }
 async function seedReviews(em, f0, it, keys, now, { auditVerdict = 'ACCEPT', qaVerdict = 'PASS', at = now - 2000 } = {}) {
   // Same comment URLs the existing R46 gate fixture binds (issues #2 / #4), now carrying signed proofs.

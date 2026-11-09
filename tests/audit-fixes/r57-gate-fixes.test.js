@@ -27,15 +27,30 @@ for (const [label, newer] of [
   ['in_progress', { status: 'in_progress', conclusion: null }], ['queued', { status: 'queued', conclusion: null }]
 ]) test('AUD-R57-01: older success + newer ' + label + ' run on the same SHA blocks', () => {
   const r = gate([run(7), run(8, { ...newer, jobs: [] })]);
-  assert.equal(r.green, null); assert.equal(r.failed, true); assert.match(r.problem, /^CI_LATEST_RUN_/);
+  assert.equal(r.green, null); assert.equal(r.failed, true); assert.match(r.problem, /^CI_RUN_/);
 });
 test('AUD-R57-01: same run, attempt 2 failure after attempt 1 success blocks', () => {
   const r = gate([run(7), run(7, { run_attempt: 2, conclusion: 'failure', jobs: [] })]);
-  assert.equal(r.green, null); assert.equal(r.problem, 'CI_LATEST_RUN_FAILURE');
+  assert.equal(r.green, null); assert.equal(r.problem, 'CI_RUN_FAILURE');
 });
-test('AUD-R57-01: newer success after an older failure is green (re-run fixed it)', () => {
-  assert.equal(gate([run(7, { conclusion: 'failure', jobs: [] }), run(8)]).green, 'run/8/1');
+test('AUD-R57-01: a failed run that was re-run to success is green; a different newer success does not hide it', () => {
   assert.equal(gate([run(7, { conclusion: 'failure', jobs: [] }), run(7, { run_attempt: 2 })]).green, 'run/7/2');
+  assert.equal(gate([run(7, { conclusion: 'failure', jobs: [] }), run(8)]).problem, 'CI_RUN_FAILURE');
+});
+/* AUD-BC72-01 (P1): re-running an OLDER run must not be masked by a newer run id that succeeded. */
+for (const [label, older] of [['failure', { conclusion: 'failure' }], ['in_progress', { status: 'in_progress', conclusion: null }]])
+  test('AUD-BC72-01: older run re-attempt ' + label + ' + newer success blocks', () => {
+    const r = gate([run(10, { run_attempt: 2, ...older, jobs: [] }), run(11)]);
+    assert.equal(r.green, null); assert.match(r.problem, /^CI_RUN_/);
+  });
+/* AUD-BC72-02/03 (P2): missing fields and truncated run lists are UNKNOWN. */
+test('AUD-BC72-02/03: missing jobs_complete, workflow_id, run_attempt or job status, or an incomplete run list block', () => {
+  const { jobs_complete, ...noJc } = run(7); assert.equal(gate([noJc]).problem, 'CI_JOBS_INCOMPLETE');
+  const { workflow_id, ...noWf } = run(7); assert.equal(gate([noWf]).problem, 'CI_WORKFLOW_IDENTITY_UNKNOWN');
+  const { run_attempt, ...noAt } = run(7); assert.equal(gate([noAt]).problem, 'CI_UNKNOWN_ORDER');
+  assert.equal(gate([run(7, { jobs: [{ name: 'tests', conclusion: 'success' }, ok[1]] })]).problem, 'CI_REQUIRED_JOB_NOT_SUCCESS');
+  assert.equal(Facts.ciGate([run(7)], pipeline, false).problem, 'CI_RUN_LIST_INCOMPLETE');
+  assert.equal(Facts.ciGate([run(7)], pipeline, undefined).green, 'run/7/1', 'pure callers default to complete');
 });
 for (const conclusion of ['failure', 'skipped', 'cancelled', null]) test('AUD-R57-01: extra same-name required job with conclusion ' + conclusion + ' blocks', () => {
   const r = gate([run(7, { jobs: [...ok, { name: 'tests', status: conclusion === null ? 'in_progress' : 'completed', conclusion }] })]);
@@ -50,21 +65,21 @@ test('AUD-R57-01: incomplete job page, missing required job, missing workflow, a
   assert.equal(gate([run(7, { id: 'x' })]).problem, 'CI_UNKNOWN_ORDER');
   assert.equal(gate([run(7), run(7)]).problem, 'CI_DUPLICATE_RUN_ATTEMPT');
   assert.equal(gate([run(7), run(8, { workflow_id: 100 })]).problem, 'CI_WORKFLOW_IDENTITY_AMBIGUOUS');
+  assert.equal(gate([run(7, { run_attempt: 'x' })]).problem, 'CI_UNKNOWN_ORDER');
   assert.equal(Facts.ciGate([run(7)], { ci: { workflows: [WF, 'other'], required_jobs: ['tests'] } }).problem, 'CI_REQUIRED_WORKFLOW_MISSING');
   assert.equal(Facts.ciGate([run(7)], { ci: { workflows: [WF], required_jobs: [] } }).problem, 'CI_POLICY_EMPTY');
   assert.deepEqual(gate([]), { runs: 0, green: null, failed: false });
 });
 
-/* ---------------- AUD-R57-01: full joint R56 -> R57 path (audit counterexample 3) ---------------- */
-test('AUD-R57-01 E3: success CI7001 then failure CI7002 on the same SHA launches 0 Fake processes', async t => {
+/* ---------------- full joint R56 -> R57 path (real local HTTP/SQLite GitHub emulator) ---------------- */
+async function joint(t, seedRuns) {
   const { fixture } = require('../unattended-go-r57/helpers.cjs');
   const W = require('../event-handoff-r56/world.cjs');
   const Adapter = require('../../tools/unattended-go-r57/r56-adapter');
   const f = await fixture(t, { durable: true, ticketPrefix: 'r56' }), f0 = f.stages[0].f, keys = W.reviewerKeys(), pl = W.pipeline(f0, keys), item = pl.work_items[0];
   const em = await W.emulator(t, path.join(f.dir, 'r56-github.sqlite'));
   await W.seedCandidate(em, f0, item);
-  await W.seedCi(em, f0, item, { id: 7001 });
-  await W.seedCi(em, f0, item, { id: 7002, conclusion: 'failure' });
+  for (const r of seedRuns) await W.seedCi(em, f0, item, r);
   await W.seedReviews(em, f0, item, keys, Date.now());
   for (const s of f.stages) {
     s.collectionPolicy.r56_pipeline_digest = C.digest({ pipeline: pl, item });
@@ -72,11 +87,30 @@ test('AUD-R57-01 E3: success CI7001 then failure CI7002 on the same SHA launches
     for (const [role, pair] of Object.entries(s.f.pairs)) { const p = s.f.authorization.proofs[role]; p.payload.manifest_digest = C.digest(s.f.authorization.manifest); p.signature = crypto.sign(null, Buffer.from(C.canonical(p.payload)), pair.privateKey).toString('base64'); }
   }
   const find = key => f.stages.find(s => s.f.envelope.idempotency_key === key);
-  const r = await Adapter.step({ mode: 'fake', pipeline: pl, item, trigger: W.tickTrigger(), readSnapshot: () => em.client.snapshot(pl, item, Date.now()), readLedger: () => f.backend.read(),
-    provision: async ticket => find(ticket.idempotency_key), lookupCompleted: async key => find(key), report: (issue, body) => em.client.report(issue, body), now: Date.now() });
-  assert.notEqual(r.state, 'STAGE_SUCCEEDED', JSON.stringify(r));
-  assert.equal(r.state, 'WAIT_CI'); assert.equal(r.decision?.ci_problem ?? r.ci_problem, 'CI_LATEST_RUN_FAILURE');
+  const step = (over = {}) => Adapter.step({ mode: 'fake', pipeline: pl, item, trigger: W.tickTrigger(), readSnapshot: () => em.client.snapshot(pl, item, Date.now()), readLedger: () => f.backend.read(),
+    provision: async ticket => find(ticket.idempotency_key), lookupCompleted: async key => find(key), report: (issue, body) => em.client.report(issue, body), now: Date.now(), ...over });
+  return { f, step, find };
+}
+test('AUD-R57-01 E3: success CI7001 then failure CI7002 on the same SHA launches 0 Fake processes', async t => {
+  const { f, step } = await joint(t, [{ id: 7001 }, { id: 7002, conclusion: 'failure' }]);
+  const r = await step();
+  assert.equal(r.state, 'WAIT_CI', JSON.stringify(r)); assert.equal(r.decision?.ci_problem ?? r.ci_problem, 'CI_RUN_FAILURE');
   assert.equal(f.launches(), 0);
+});
+for (const [label, older] of [['failure', { conclusion: 'failure' }], ['in_progress', { status: 'in_progress', conclusion: null }]])
+  test('AUD-BC72-01 E3: re-run of older CI7001 (attempt 2 ' + label + ') + newer CI7002 success launches 0 Fake processes', async t => {
+    const { f, step } = await joint(t, [{ id: 7001, run_attempt: 2, ...older }, { id: 7002 }]);
+    const r = await step();
+    assert.equal(r.state, 'WAIT_CI', JSON.stringify(r)); assert.equal(f.launches(), 0);
+  });
+test('AUD-BC72-04 E3: durable HALT written during the final completion lookups blocks HANDOFF_COMPLETE', async t => {
+  const { f, step, find } = await joint(t, [{ id: 7001 }]);
+  for (let i = 0; i < 3; i++) assert.equal((await step()).state, 'STAGE_SUCCEEDED');
+  assert.equal(f.launches(), 3);
+  let lookups = 0;
+  const r = await step({ lookupCompleted: async key => { if (++lookups === 4) await persistHalt(f.backend); return find(key); } });
+  assert.notEqual(r.state, 'HANDOFF_COMPLETE', JSON.stringify(r)); assert.equal(r.reason, 'PERSISTENT_HALT');
+  assert.equal((await f.backend.read()).document.halted, true); assert.equal(f.launches(), 3);
 });
 
 /* ---------------- AUD-R57-02: HALT during review collection ---------------- */
