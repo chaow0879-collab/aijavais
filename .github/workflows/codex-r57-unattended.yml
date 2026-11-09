@@ -129,7 +129,7 @@ jobs:
             ${{ runner.temp }}/r55-evidence
           if-no-files-found: ignore
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: Playwright 1.56.1 does not support ubuntu-latest (26.04) images
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4

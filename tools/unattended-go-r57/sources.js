@@ -15,6 +15,17 @@ function verify(){
   if(p!=='tools/first-pilot-r51/r50-bridge.js'||base.get(p)!==d.from)violations.push('UNEXPECTED_RUNTIME_EXCEPTION:'+p);
   expected.set(p,d.to);
  }
+ // Post-R57 changes (single-developer era): every path changed after the frozen R57 SHA must be
+ // declared in sources.json `post_r57` with its exact resulting blob and a reason. Unlisted changes and
+ // blob mismatches stay violations, so the guard keeps its strength without the old author split.
+ if(M.post_r57){git(['merge-base','--is-ancestor',M.post_r57.base,head]);
+  for(const p of git(['diff','--name-only','-z',M.post_r57.base,head]).split('\0').filter(Boolean)){
+   const d=M.post_r57.changes[p];
+   if(!d){if(!['tools/unattended-go-r57/','tests/unattended-go-r57/','docs/UNATTENDED-GO-R57.md','.github/workflows/codex-r57-unattended.yml'].some(x=>p===x||x.endsWith('/')&&p.startsWith(x)))violations.push('POST_R57_UNDECLARED:'+p);continue;}
+   if((actual.get(p)||null)!==d.to)violations.push('POST_R57_BLOB_MISMATCH:'+p);
+   if(d.to===null)expected.delete(p);else expected.set(p,d.to);
+  }
+ }
  const own=p=>['tools/unattended-go-r57/','tests/unattended-go-r57/','docs/UNATTENDED-GO-R57.md','.github/workflows/codex-r57-unattended.yml'].some(x=>p===x||x.endsWith('/')&&p.startsWith(x));
  for(const [p,v]of expected)if(!own(p)&&actual.get(p)!==v)violations.push('SOURCE_BLOB_OR_MODE_CHANGED:'+p);
  for(const p of actual.keys())if(!expected.has(p)&&!own(p))violations.push('UNOWNED_PATH:'+p);
