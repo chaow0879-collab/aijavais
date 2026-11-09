@@ -2,10 +2,10 @@
 const {execFileSync}=require('node:child_process'),path=require('node:path'),M=require('./sources.json');
 const root=path.resolve(__dirname,'../..'),git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 const POST_R57=Object.freeze({base:'049a3376a2d08042fcac1833b324bc87b0137ba1',changes:Object.freeze({
-  "CLAUDE.md":{from:"100644 blob 9740136ae5e6cf6c57662756a837339b74c23f29",to:"100644 blob 67d95b64f52c19974f0f2bdbdf6776327e63a513",reason:"governance: Claude supreme commander, full planning authority (owner decisions 2026-11-09)"},
-  "collab/roles/code-audit.md":{from:null,to:"100644 blob c70dbbb8e9c960da2e874626a0448010e28797ae",reason:"governance: independent audit session prompt"},
+  "CLAUDE.md":{from:"100644 blob 9740136ae5e6cf6c57662756a837339b74c23f29",to:"100644 blob 22e7bc9e699115f6e2a4219d08321d9f215b1b0d",reason:"governance: Claude supreme commander, full planning authority (owner decisions 2026-11-09)"},
+  "collab/roles/code-audit.md":{from:null,to:"100644 blob 5e2362d63c640392244d66825917b4a37d44dc0c",reason:"governance: independent audit session prompt"},
   "collab/roles/product-qa.md":{from:null,to:"100644 blob a6b0c34599d336818f1cafd1f7b82e77c745d291",reason:"governance: independent product QA session prompt"},
-  "collab/roles/server-ops.md":{from:null,to:"100644 blob b15822db6f597426fb80ec592f9a07a31b6a9493",reason:"governance: server operations (aiops sudo, dispatch and discipline)"},
+  "collab/roles/server-ops.md":{from:null,to:"100644 blob 660933ff4fcc9087249f9874e85be025e2ac1ce0",reason:"governance: server operations (aiops sudo, dispatch and discipline)"},
   "public/haloflux-workbench-r52/app.js":{from:"100644 blob a6652e82e2b678710f87107207a49652370a7a96",to:"100644 blob e6f73a18ec8b5d8d0534df96a7f22440e028ef1b",reason:"AUD-R55-01: own-property permission lookup"},
   "public/haloflux-workbench-r52/projector.js":{from:"100644 blob 93d1fcc526864ee5354948a3f829db2b14281903",to:"100644 blob 6db633c571fca8c2b4794c154c1be693a413c8a2",reason:"AUD-R55-01: null-prototype role/cost dictionaries"},
   "tests/audit-fixes/r57-gate-fixes.test.js":{from:null,to:"100644 blob c36b8487aa5099ddaefbd71a726b7b012b2fccc5",reason:"regressions for every R57 and BC72 audit counterexample"},
