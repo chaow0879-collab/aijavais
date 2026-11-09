@@ -1,12 +1,13 @@
 # AIJAVAIS V2 — 接力开发须知
 
 > **当前治理（2026-11-09 起，优先于本文件下方所有旧轮次分工）**
-> - 项目负责人决定：ChatGPT 与 Codex 永久退出。**Claude 是唯一项目规划总指挥兼唯一开发者**；不再有 Codex 分支所有权，旧"Codex 独占/Claude 待命"条款作废。
-> - 最高战略 GitHub #26（先读顶部 OWNER_STRATEGY_V3）；总控决议 #10；当前快照 #20 最新的 `[CONTEXT_PACK_V2]` 评论。不要重读全部历史。
-> - 独立审计 / 产品 QA 由**全新上下文的 Claude 会话**承担，提示词见 `collab/roles/`。开发者会话不得自签审计或 QA 结论。
-> - 服务器由负责人本人持有。服务器侧工作只以"负责人在服务器上执行的精确命令＋需要回贴的输出"下达，见 `collab/roles/server-ops.md`。
-> - 不变的门禁：不调用收费模型、不配置 Secrets、不启用正式 cron、不合并 main、不做生产部署，除非负责人逐项明确批准。开发在 `claude/*` 分支，经 PR 交负责人合并。
-> - 停止扩张 Runner/调度层（R45–R57 已足够）；只修经证实的阻断缺陷，资源转向 #26 V3 的两条 MVP。
+> - 负责人决定：ChatGPT 与 Codex 永久退出。**Claude 总指挥是最高指挥官**，拥有项目规划决策全权，统一调度本项目所有 Claude 会话：战略参谋、独立审计、开发工程师、服务器运维、产品 QA。旧的"Codex 独占 / Claude 待命"条款作废。
+> - 最高战略看 GitHub #26（先读顶部 OWNER_STRATEGY_V3），决议看 #10，当前快照看 #20 最新一条 `[CONTEXT_PACK_V2]` 评论，战略参谋章程看 #26 的 `[STRATEGY_ADVISOR_CHARTER_V3]`。不要重读全部历史。
+> - 战略顺序：① 自动化第一里程碑（条件驱动的多 AI 自动接力，要有真实证据）→ ② 提交 A（Relay Kit）/ B（国内普通用户主平台）两条 MVP 路线和验收指标 → ③ 产品开发。主平台的首个场景未定，不得预设。
+> - 独立审计、战略参谋由常驻的 Opus/xhigh 会话承担，提示词见 `collab/roles/`。开发会话不得自签审计或 QA 结论。
+> - 服务器（dedirock）的 aiops 账户已有免密 sudo，由总指挥派工给「AIJAVAIS 服务器运维」会话执行，纪律见 `collab/roles/server-ops.md`。
+> - 负责人保留审批的事项只有三项：真实付费、Secrets、合并 main。开发在 `claude/*` 分支进行，经 PR 交负责人合并。商业化与许可问题由负责人自行处理。
+> - 停止扩张 Runner/调度层（R45–R57 已足够），只修经证实的阻断缺陷。
 
 先读本文件，再读 `docs/FEATURE-STATUS.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md` 和 `collab/handoffs/codex-to-claude-code.md`。文档描述当前实现，未验证项不等于完成。
 
