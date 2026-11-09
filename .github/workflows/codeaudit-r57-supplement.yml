@@ -1,0 +1,47 @@
+name: Independent CodeAudit R57 receipt and gate supplement
+on:
+  push:
+    branches: [audit/codeaudit-r57-049a337-20261109]
+    paths: [audit-evidence/r57-supplement/**, .github/workflows/codeaudit-r57-supplement.yml]
+permissions:
+  contents: read
+jobs:
+  security-difference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: audit-assets
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 049a3376a2d08042fcac1833b324bc87b0137ba1
+          path: reviewed
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Independent exact source, signatures, receipts, gates and genuine local Fake chain
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+          AUDIT_OUT: ${{ github.workspace }}/evidence/difference-observations.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git -C reviewed show -s --format='%H %P %T' | tee evidence/source.txt
+          test "$(git -C reviewed rev-parse HEAD)" = 049a3376a2d08042fcac1833b324bc87b0137ba1
+          node --test --test-concurrency=1 --test-reporter=tap audit-assets/audit-evidence/r57-supplement/independent-r57.test.cjs 2>&1 | tee evidence/difference.tap
+      - name: Assert frozen source unchanged after tests
+        if: always()
+        run: test -z "$(git -C reviewed status --porcelain=v1 --untracked-files=all)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codeaudit-r57-difference-final
+          path: evidence
+          retention-days: 30
+
