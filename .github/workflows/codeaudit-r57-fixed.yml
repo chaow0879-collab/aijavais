@@ -1,0 +1,142 @@
+name: Independent CodeAudit R57 fixed-source non-live
+on:
+  push:
+    branches: [audit/codeaudit-r57-049a337-20261109]
+    paths: [audit-evidence/r57/**, .github/workflows/codeaudit-r57-fixed.yml]
+permissions:
+  contents: read
+jobs:
+  security-difference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: audit-assets
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 049a3376a2d08042fcac1833b324bc87b0137ba1
+          path: reviewed
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Independent exact source, signatures, receipts, gates and genuine local Fake chain
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+          AUDIT_OUT: ${{ github.workspace }}/evidence/difference-observations.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git -C reviewed show -s --format='%H %P %T' | tee evidence/source.txt
+          test "$(git -C reviewed rev-parse HEAD)" = 049a3376a2d08042fcac1833b324bc87b0137ba1
+          node --test --test-concurrency=1 --test-reporter=tap audit-assets/audit-evidence/r57/independent-r57.test.cjs 2>&1 | tee evidence/difference.tap
+      - name: Assert frozen source unchanged after tests
+        if: always()
+        run: test -z "$(git -C reviewed status --porcelain=v1 --untracked-files=all)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codeaudit-r57-difference
+          path: evidence
+          retention-days: 30
+  inherited-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: audit-assets
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 049a3376a2d08042fcac1833b324bc87b0137ba1
+          path: reviewed
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 3d6937348d94e585e44d567de05f14ecd0eb3636
+          path: old-r51
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install standard bubblewrap package; no kernel or security policy changes
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends bubblewrap
+      - name: Independent inherited authorization, CAS, crash, old P2 and scope assertions at R57
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+          OLD_R51_ROOT: ${{ github.workspace }}/old-r51
+          AUDIT_OUT: ${{ github.workspace }}/evidence/inherited.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C reviewed rev-parse HEAD)" = 049a3376a2d08042fcac1833b324bc87b0137ba1
+          node audit-assets/audit-evidence/r57/inherited-security.cjs | tee evidence/inherited.log
+      - name: Frozen automation regressions including new R57 real-process races and SIGKILL
+        if: success() || failure()
+        working-directory: reviewed
+        env:
+          R57_EVIDENCE_DIR: ${{ github.workspace }}/evidence/r57
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test --test-reporter=tap tests/agent-scheduler/*.test.js tests/agent-executor/*.test.js tests/agent-pilot-r45/*.test.js tests/auto-handoff-r46/*.test.js tests/first-handoff-r49/*.test.js tests/trusted-trigger-r50/*.test.js tests/first-pilot-r51/*.test.js tests/security-r55/*.test.js tests/unattended-go-r57/*.test.js 2>&1 | tee ../evidence/frozen-933.tap
+      - name: Original R56 eight behavior assertions against integrated R57
+        if: success() || failure()
+        working-directory: reviewed
+        env:
+          R56_OUT: ${{ github.workspace }}/evidence/r56
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test --test-reporter=tap --test-name-pattern='^(?!scope:)' tests/event-handoff-r56/handoff.test.js 2>&1 | tee ../evidence/r56-behavior.tap
+      - name: Frozen source must remain clean
+        if: always()
+        run: test -z "$(git -C reviewed status --porcelain=v1 --untracked-files=all)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codeaudit-r57-inherited-and-regression
+          path: evidence
+          retention-days: 30
+  prototype-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: audit-assets
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 049a3376a2d08042fcac1833b324bc87b0137ba1
+          path: reviewed
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: AUD-R55-01 independent safety expectation on actual R57 (failure retained)
+        env:
+          REVIEWED_ROOT: ${{ github.workspace }}/reviewed
+          AUDIT_OUT: ${{ github.workspace }}/evidence/prototype.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          test "$(git -C reviewed rev-parse HEAD)" = 049a3376a2d08042fcac1833b324bc87b0137ba1
+          node audit-assets/audit-evidence/r57/prototype-repro.cjs | tee evidence/prototype.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codeaudit-r57-prototype-negative
+          path: evidence
+          retention-days: 30
