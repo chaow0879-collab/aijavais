@@ -1,0 +1,62 @@
+name: AUDIT CodeAudit bc72f00 (independent, read-only)
+# Independent-CodeAudit evidence only. Checks out the EXACT reviewed SHA separately from the audit assets.
+# No secrets, no paid models, no deploy, no schedule, contents:read, persist-credentials:false.
+on:
+  push:
+    branches: [audit/codeaudit-bc72f00-20261109]
+    paths: [audit-evidence/codeaudit-bc72f00/**, .github/workflows/audit-codeaudit-bc72f00.yml]
+permissions:
+  contents: read
+concurrency: { group: audit-bc72f00, cancel-in-progress: false }
+env:
+  REVIEWED_SHA: bc72f00020b71ac8efd77ba0683a64c0998845c9
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: audit, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with: { ref: bc72f00020b71ac8efd77ba0683a64c0998845c9, path: reviewed, fetch-depth: 0, persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: Provenance
+        run: |
+          set -eu
+          test "$(git -C reviewed rev-parse HEAD)" = "$REVIEWED_SHA"
+          git -C reviewed status --porcelain | wc -l
+          node --version; uname -a; cat /etc/os-release | head -3
+          mkdir -p "$RUNNER_TEMP/out"; echo "reviewed=$(git -C reviewed rev-parse HEAD) tree=$(git -C reviewed rev-parse HEAD^{tree}) audit=$(git -C audit rev-parse HEAD)" | tee "$RUNNER_TEMP/out/source.txt"
+      - name: "1 Independent counterexamples (auditor-written)"
+        if: success() || failure()
+        env: { REVIEWED_ROOT: "${{ github.workspace }}/reviewed", AUDIT_OUT: "${{ runner.temp }}/out" }
+        run: |
+          set -o pipefail
+          node --test --test-concurrency=1 --test-reporter=tap audit/audit-evidence/codeaudit-bc72f00/independent.test.cjs | tee "$RUNNER_TEMP/out/independent.tap"
+      - name: "2 Author audit-fix regressions"
+        if: success() || failure()
+        working-directory: reviewed
+        run: |
+          set -o pipefail
+          node --test --test-concurrency=1 --test-reporter=tap tests/audit-fixes/*.test.js | tee "$RUNNER_TEMP/out/author-audit-fixes.tap"
+      - name: "3 R56 + R57 suites in reviewed tree (R56 scope: assertion skipped as in author CI)"
+        if: success() || failure()
+        working-directory: reviewed
+        run: |
+          set -o pipefail
+          node --test --test-concurrency=1 --test-reporter=tap --test-skip-pattern='^scope:' tests/event-handoff-r56/*.test.js tests/unattended-go-r57/*.test.js | tee "$RUNNER_TEMP/out/r56-r57.tap"
+      - name: "4 Provenance guard (sources.js) at reviewed HEAD"
+        if: success() || failure()
+        working-directory: reviewed
+        run: node tools/unattended-go-r57/sources.js | tee "$RUNNER_TEMP/out/sources-verify.json"
+      - name: "5 E3_FAKE real server test (skipped by author CI) reproduced"
+        if: success() || failure()
+        env: { REVIEWED_ROOT: "${{ github.workspace }}/reviewed", AUDIT_OUT: "${{ runner.temp }}/out" }
+        run: node audit/audit-evidence/codeaudit-bc72f00/e3-real-server.cjs
+      - name: "6 Reviewed tree unchanged"
+        if: success() || failure()
+        run: git -C reviewed status --porcelain | tee "$RUNNER_TEMP/out/reviewed-status.txt"; test ! -s "$RUNNER_TEMP/out/reviewed-status.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: audit-bc72f00-evidence, path: "${{ runner.temp }}/out", retention-days: 30 }
