@@ -349,6 +349,10 @@
     state.timer=setInterval(periodicRefresh,1800);
   }
   window.AIJWorkspace={refreshProjects:()=>refreshProjects().catch(()=>{})};
+  /* QA-B7-04：人民币为主值，美元上限（专业设置里）自动换算，两边保持一致 */
+  const FXR=window.SmartPlan?SmartPlan.FX:7.5;
+  $('max-cost-cny').addEventListener('input',()=>{const y=Number($('max-cost-cny').value);if(Number.isFinite(y)&&y>=0)$('max-cost').value=String(Math.floor(y/FXR*100)/100);});
+  $('max-cost').addEventListener('input',()=>{const u=Number($('max-cost').value);if(Number.isFinite(u)&&u>=0)$('max-cost-cny').value=String(Math.round(u*FXR*100)/100);});
   $('project-form').addEventListener('input',()=>state.dirty=true);
   $('project-form').addEventListener('submit',work(saveProject));
   for(const name of ['project','run','resources'])$('tab-'+name).addEventListener('click',()=>tab(name));
@@ -385,7 +389,7 @@
     const box=$('start-error'),info=window.SmartPlan?SmartPlan.explain(error):{text:error.message};
     box.replaceChildren(node('div',{text:'没有开始：'+info.text}));
     const fix=info.fix,act={
-      set_budget:()=>{$('max-cost').value=String(Math.floor((fix.budgetCny||1)/SmartPlan.CNY_PER_USD*100)/100);$('approve-paid').checked=true;},
+      set_budget:()=>{$('max-cost-cny').value=String(fix.budgetCny||1);$('max-cost').value=String(Math.floor((fix.budgetCny||1)/SmartPlan.CNY_PER_USD*100)/100);$('approve-paid').checked=true;},
       approve:()=>{$('approve-paid').checked=true;},
       conservative_prices:()=>{const prices={};for(const r of state.project.roles){const m=state.models.find(x=>x.connectionId===r.connectionId),u=m&&SmartPlan.usdRate(m);if(u)prices[m.connectionId]=u;}$('prices-json').value=JSON.stringify(prices,null,2);},
       auto_assign:()=>{const pool=SmartPlan.usable(state.models);for(const r of state.project.roles)if(!r.connectionId&&pool[0])r.connectionId=pool[0].connectionId;renderRoles();},

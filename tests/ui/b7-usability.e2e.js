@@ -233,7 +233,10 @@ function englishLeft(text) {
     await page.fill('#project-name', '高级模式复现'); await page.fill('#project-description', '费用上限为 0 时点击开始执行');
     for (const s of await page.$$('#roles-editor select')) await s.selectOption(tested.connectionId);
     assert.ok((await page.$$eval('#roles-editor select option', o => o.map(x => x.textContent))).some(t => t.startsWith('自定义 · ')), 'B7c label in role picker');
-    await page.fill('#max-cost', '0'); await page.check('#approve-paid');
+    assert.equal(await page.isVisible('#max-tokens'), false, 'Token cap folded under 专业设置'); assert.equal(await page.isVisible('#max-cost'), false, 'USD cap folded under 专业设置');
+    assert.ok(await page.isVisible('#max-cost-cny'), 'RMB is the primary amount');
+    await page.fill('#max-cost-cny', '2'); assert.equal(await page.inputValue('#max-cost'), String(Math.floor(2 / 7.5 * 100) / 100), 'RMB converts to the USD cap');
+    await page.fill('#max-cost-cny', '0'); await page.check('#approve-paid');
     await page.click('#start-run');
     await page.waitForSelector('#start-error:not([hidden])');
     const box = await page.$eval('#start-error', e => { const r = e.getBoundingClientRect(); return { text: e.innerText, inView: r.top >= 0 && r.bottom <= innerHeight }; });
@@ -249,6 +252,7 @@ function englishLeft(text) {
     }
     assert.ok(await page.isVisible('#panel-run'), 'run view opens after the fixes: ' + seen.join(' -> '));
     checks.push(['B7f cost 0: ' + seen.join(' -> ') + ' -> run view opens', null]);
+    checks.push(['QA-B7-04 expert form: RMB primary amount, Token/USD folded under 专业设置 and kept in sync', null]);
 
     /* ---- B7f: execution check shows a Chinese checklist with fixes, never raw JSON ---- */
     const proj = (await app.call('POST', '/api/v2/projects', { name: '能力检查', description: '岗位需要资料研究能力', roles: [{ roleId: 'analyst', name: '研究员', duty: '研究', connectionId: tested.connectionId, requiredCapabilities: ['research'] }], steps: [{ stepId: 's1', roleId: 'analyst', title: '研究' }] })).json.project;
