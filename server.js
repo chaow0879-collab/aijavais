@@ -30,6 +30,7 @@ const { recommend } = require('./lib/matcher');
 const { AuthStore } = require('./lib/auth');
 const { createV2Api } = require('./lib/v2-api');
 const { recordSystemCall } = require('./lib/usage-ledger');
+const REASONING = require('./lib/reasoning');
 let v2;
 
 const ROOT = __dirname;
@@ -335,7 +336,7 @@ if (Number(process.env.AIJ_TEST_MAX_CALL_BYTES) > 0) LIMITS.maxCallBytes = Numbe
 const taskBytes = new Map();
 const providerKey = p => p.apiKey || (p.envKey && SEC.isAllowedEnvKey(p.envKey) && process.env[p.envKey]) || '';
 
-async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onActivity, onBytes, signal: callerSignal }) {
+async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onActivity, onBytes, onFinish, signal: callerSignal }) {
   const key = providerKey(p);
   if (!key && !p.noKey) throw new Error('未配置 API Key（可在管理界面填写，或设置环境变量 ' + (p.envKey || '—') + '）');
   if (!p.model) throw new Error('未填写模型名');
@@ -367,6 +368,8 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
     messages.push({ role: 'user', content: prompt });
     body = { model: p.model, messages, stream: true, max_tokens: maxTokens || cfg.settings.maxTokens };
     if (/api\.openai\.com/.test(base)) body.stream_options = { include_usage: true };
+    /* 推理模型：保证“推理+正文”总输出不超过本次批准的输出上限（见 lib/reasoning.js） */
+    REASONING.shapeOpenAIBody(base, body, body.max_tokens);
   }
   /* 出站：校验 + 固定解析 IP 连接 + 不跟随重定向（见 lib/security.js） */
   const res = await SEC.pinnedFetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal }, POLICY);
@@ -389,7 +392,8 @@ async function streamChat(p, { system, prompt, maxTokens, onDelta, onUsage, onAc
       const d = j.choices?.[0]?.delta;
       if (d?.content) onDelta(d.content);
       else if (d?.reasoning_content) onActivity();
-      if (j.usage) onUsage(j.usage.prompt_tokens, j.usage.completion_tokens);
+      if (j.choices?.[0]?.finish_reason) onFinish?.(j.choices[0].finish_reason);
+      if (j.usage) onUsage(j.usage.prompt_tokens, j.usage.completion_tokens, REASONING.reasoningTokens(j.usage));
     }
   }, { maxEventBytes: LIMITS.maxEventBytes, maxTotalBytes: LIMITS.maxCallBytes, onBytes });
 }
@@ -400,7 +404,7 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId, run
   ingest({ agent: p.id, label: p.label, model: p.model, role, task, eventType: 'model_start' }, T);
   const t0 = Date.now();
   /* inSeen / outSeen：厂商是否真的返回了该项用量 —— 区分“0”与“未知” */
-  let out = '', inTok = 0, outTok = 0, inSeen = false, outSeen = false, pending = '', lastEmit = 0, firstOutput=false;
+  let out = '', inTok = 0, outTok = 0, inSeen = false, outSeen = false, pending = '', lastEmit = 0, firstOutput=false, reasonTok, finish = null;
   const flush = force => {
     const now = Date.now();
     if (!force && now - lastEmit < 150) return;
@@ -418,10 +422,12 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId, run
     await streamChat(p, {
       system, prompt, maxTokens, signal,
       onDelta: t => { if(t&&!firstOutput){firstOutput=true;onFirstOutput?.();}out += t; if (cfg.settings.showText) pending += t; flush(false); },
-      onUsage: (i, o) => {
+      onUsage: (i, o, r) => {
         if (Number.isFinite(i) && i >= 0 && (i > 0 || !inSeen)) { inTok = i; inSeen = true; }
         if (Number.isFinite(o) && o >= 0 && (o > 0 || !outSeen)) { outTok = o; outSeen = true; }
+        if (r !== undefined) reasonTok = r;
       },
+      onFinish: f => { finish = String(f); },
       onActivity: () => flush(false),
       onBytes: n => {
         if (!taskId) return;
@@ -432,18 +438,20 @@ async function callModel(p, { role, task, system, prompt, maxTokens, taskId, run
       },
     });
     flush(true);
+    /* 推理把输出上限用完、正文为空：明确报错（用量照常如实结算），不当作成功 */
+    if (!out.trim() && finish === 'length') throw new Error('推理 token 用尽了本次输出上限（finish_reason=length，正文为空）：请提高 maxOutputTokens 后重新批准运行');
     const ms = Date.now() - t0;
     const u = usageNow() || { usage: { total: Math.ceil(prompt.length / 1.6) }, source: 'estimated' };
     /* 厂商未返回 usage 时为估算值，事件里明确标记 estimated，不当作真实计费依据 */
     ingest({ agent: p.id, eventType: 'model_done', durationMs: ms, tokenUsage: u.usage }, { ...T, usageSource: u.source });
-    return { text: out, tokens: u.usage.total, inTokens: inSeen ? inTok : undefined, outTokens: outSeen ? outTok : undefined, usageComplete: inSeen && outSeen, ms, estimated: u.source !== 'provider', spanId };
+    return { text: out, tokens: u.usage.total, inTokens: inSeen ? inTok : undefined, outTokens: outSeen ? outTok : undefined, reasoningTokens: outSeen ? reasonTok : undefined, finishReason: finish, usageComplete: inSeen && outSeen, ms, estimated: u.source !== 'provider', spanId };
   } catch (e) {
     /* 写入事件 / 任务记录 / 响应前统一脱敏，防止上游错误回显密钥 */
     const msg = SEC.scrubSecrets(e?.name === 'TimeoutError' ? '请求超时' : (e?.message || String(e)), [providerKey(p)]);
     /* 失败调用：已有用量则如实结算（厂商值或估算），没有任何输出时不附用量（= 未知） */
     const u = usageNow();
     ingest({ agent: p.id, eventType: 'model_error', error: msg, durationMs: Date.now() - t0, ...(u ? { tokenUsage: u.usage } : {}) }, u ? { ...T, usageSource: u.source } : T);
-    throw Object.assign(new Error(msg), { tokens: u?.usage?.total || 0, inTokens: inSeen ? inTok : undefined, outTokens: outSeen ? outTok : undefined, usageComplete: inSeen && outSeen, estimated: u?.source !== 'provider', usageUnknown: !u });
+    throw Object.assign(new Error(msg), { tokens: u?.usage?.total || 0, inTokens: inSeen ? inTok : undefined, outTokens: outSeen ? outTok : undefined, reasoningTokens: outSeen ? reasonTok : undefined, usageComplete: inSeen && outSeen, estimated: u?.source !== 'provider', usageUnknown: !u });
   }
 }
 
