@@ -1,0 +1,545 @@
+{
+  "steps": [
+    {
+      "step": "扫描 首次打开登录页（设置密码）",
+      "ok": false,
+      "note": "英文词=data,setup,code,txt 美元/Token=false JSON/null=false"
+    },
+    {
+      "step": "1 首次打开看到什么",
+      "ok": true,
+      "note": "显示“设置密码”表单，要求输入一次性设置码（文案：一次性设置码（在服务器启动窗口或 data/setup-code.txt 中））"
+    },
+    {
+      "step": "1 登录后落点",
+      "ok": true,
+      "note": "/workspace.html"
+    },
+    {
+      "step": "扫描 登录后首页（无模型）",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "1 新手引导 + ＋新建任务",
+      "ok": true,
+      "note": "引导可见=true ＋新建任务可见=true；引导文字：首次使用，两步开始：① 添加模型（填一次密钥，点“连接并全部添加”）→ ② 回到这里，说说想做什么，点“一键智能配置并开始”。"
+    },
+    {
+      "step": "扫描 管理中心（无模型）",
+      "ok": false,
+      "note": "英文词=Based,Ryder,modified,Key,Anthropic,Claude,OpenAI,ChatGPT,Google,Gemini,DeepSeek,Kimi,GLM,SiliconFlow,Ollama,API,App,data,credentials,json,Plus,Pro 美元/Token=false JSON/null=false"
+    },
+    {
+      "step": "2 一次点击添加全部",
+      "ok": true,
+      "note": "已添加 4 个，已自动跳过 1 个（非对话类或旧快照）。 查看已添加的模型 查看跳过的模型和原因 开始任务时系统会自动检查要用到的模型能否连接（会真实调用一次，费用极少）。"
+    },
+    {
+      "step": "2 模型卡片“平台 · 模型名”",
+      "ok": true,
+      "note": "自定义 · deepseek-flash 默认 未测试费用未知 自定义（任意 OpenAI 兼容接口） · 模型 deepseek-flash · Key ••••0000 · ID mc_4bfb95 推理分析 写作 中文 数据分析 速度快 低成本 团队引用：无 测试 / 诊断 停用 更换模型 / 编辑 删除 自定义 · deepseek-v4-pro 未测试费用未知 自定义（任意 OpenAI 兼容接口） · 模型 deepseek-v4-pro · Key ••••0000 · ID mc_67fb81 推理分析 写作 中文 数据分析 长上下文 资料研究 团队引用：无 测试 / 诊断 停"
+    },
+    {
+      "step": "2 中文擅长标签",
+      "ok": true,
+      "note": "卡片含中文擅长项"
+    },
+    {
+      "step": "扫描 管理中心（已添加模型）",
+      "ok": false,
+      "note": "英文词=Based,Ryder,modified,Key,Anthropic,Claude,OpenAI,ChatGPT,Google,Gemini,DeepSeek,Kimi,GLM,SiliconFlow,Ollama,API,data,credentials,json,Base,URL,Plus,Pro,mc_,bfb,mc_ad 美元/Token=false JSON/null=false"
+    },
+    {
+      "step": "3 ＋新建任务",
+      "ok": true,
+      "note": "工作台顶栏可见"
+    },
+    {
+      "step": "3 简单模式输入项数量",
+      "ok": true,
+      "note": "可见输入控件 7 个（想做什么 / 成果 / 时间）"
+    },
+    {
+      "step": "扫描 简单模式表单",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "3 自定义接入、未填单价时点开始",
+      "ok": true,
+      "note": "主线被挡住，提示：已接入的模型价格都未知，按规定不调用。请在管理中心为模型填写单价，或添加价格已知的模型。 去管理中心填写单价"
+    },
+    {
+      "step": "扫描 编辑模型对话框（单价）",
+      "ok": false,
+      "note": "英文词=Based,Ryder,modified,Key,Anthropic,Claude,OpenAI,ChatGPT,Google,Gemini,DeepSeek,Kimi,GLM,SiliconFlow,Ollama,API,App,data,credentials,json,Plus,Pro,mc_,bfb,mc_ad,Token 美元/Token=true JSON/null=false"
+    },
+    {
+      "step": "3 先看看配置（人话）",
+      "ok": true,
+      "note": "智能分配：起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.8-flash（便宜快速） 预计花费约 ¥0.02，最多不超过 ¥0.10，超过会自动停下。 这些模型的价格未知，按规定不调用，已换成其它模型：自定义 · deepseek-v4-pro、自定义 · qwen3.8-max。 换一个起草员换一个审核员"
+    },
+    {
+      "step": "扫描 先看看配置",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "3 确认框",
+      "ok": true,
+      "note": "确认开始 预计花费约 ¥0.02，最多不超过 ¥0.10，超过会自动停下。 团队：起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.8-flash（便宜快速） 这些模型的价格未知，按规定不调用，已换成其它模型：自定义 · deepseek-v4-pro、自定义 · qwen3.8-max。 开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。 确认开始 取消"
+    },
+    {
+      "step": "扫描 确认框",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "4 直达进度页",
+      "ok": true,
+      "note": "点击确认后 77ms 内进入进度页"
+    },
+    {
+      "step": "扫描 进度/成果页",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "4 进度页内容可读",
+      "ok": true,
+      "note": "写出初稿 · 已完成 审核并定稿 · 已完成"
+    },
+    {
+      "step": "6 下载成果",
+      "ok": true,
+      "note": "文件名 Word 文档.docx，4280 字节，真实 zip 头=true"
+    },
+    {
+      "step": "返工入口（简单模式）",
+      "ok": false,
+      "note": "进度页可见按钮：调整团队 | 到此为止，下载已完成部分 | 追加 ¥0.50 继续（即将支持） | 下载 Word 文档 | 满意，确认完成 | ＋ 新建任务"
+    },
+    {
+      "step": "扫描 调整团队→高级设置页",
+      "ok": false,
+      "note": "英文词=Skills,PDF,CSV,JSON,unknown,Skill,Token,USD,MCP,builtin,text,stats,UTF,json,validate,DOCX,docx_generation,XLSX,xlsx_generation,pptx_generation,file_read,project_file_read,data_analysis,TSV,SVG,chart_generation,Office,LibreOffice,document_convert,document_render,PNG,poppler,utils,JavaScript,code_execution,out 美元/Token=true JSON/null=false"
+    },
+    {
+      "step": "5 管理员把单次上限设为0",
+      "ok": true,
+      "note": "HTTP 200 {\"settings\":{\"showText\":false,\"idleTimeoutSec\":120,\"maxTokens\":4096,\"timeoutSec\":300,\"defaultConnectionId\":\"mc_4bfb95\",\""
+    },
+    {
+      "step": "5 单次上限=0",
+      "ok": true,
+      "note": "确认开始 预计花费约 ¥0.02，最多不超过 ¥0.10，超过会自动停下。 团队：起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.8-flash（便宜快速） 这些模型的价格未知，按规定不调用，已换成其它模型：自定义 · deepseek-v4-pro、自定义 · qwen3.8-max。 开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。 确认开始 取消||"
+    },
+    {
+      "step": "扫描 预算为0",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "5a 预算很低：开始前效果优先/省钱",
+      "ok": true,
+      "note": "确认开始 按现在的分配，预计会超过单次上限 ¥0.10。请选一个： 效果优先 约¥0.38，最多 ¥0.10，可能中途停下。起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · deepseek-v4-pro（擅长分析推理） 省钱 约¥0.02（效果可能稍差），最多 ¥0.10。起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.8-flash（便宜快速） 这些模型的价格未知，按规定不调用，已换成其它模型：自定义 · qwen3.8-max。 开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。 确认开始 取消||"
+    },
+    {
+      "step": "扫描 低预算选择框",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "5b 钱用完：中文提示+可下载已完成部分",
+      "ok": true,
+      "note": "已完成 1/2 步，花了约 ¥0.00"
+    },
+    {
+      "step": "扫描 钱用完停止页",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "5c 是否悄悄换成更差模型",
+      "ok": true,
+      "note": "实际纳入运行的模型：deepseek-flash,deepseek-v4-pro"
+    },
+    {
+      "step": "5d 高级模式默认设置点开始",
+      "ok": true,
+      "note": "提示：没有开始：需要你确认本次可能产生费用。 确认并开始，然后重新开始"
+    },
+    {
+      "step": "扫描 高级模式默认开始",
+      "ok": false,
+      "note": "英文词=Skills,PDF,CSV,JSON,unknown,Skill,Token,USD,MCP,builtin,text,stats,UTF,json,validate,DOCX,docx_generation,XLSX,xlsx_generation,pptx_generation,file_read,project_file_read,data_analysis,TSV,SVG,chart_generation,Office,LibreOffice,document_convert,document_render,PNG,poppler,utils,JavaScript,code_execution,out 美元/Token=true JSON/null=false"
+    },
+    {
+      "step": "5d 高级表单是否仍含美元/Token字样",
+      "ok": false,
+      "note": "执行权限与费用上限 本次 Token 上限 本次费用上限（USD） 最多返工次数 我明确批准本次任务使用收费模型（默认关闭，仍受费用与 Token 上限限制） 我明确批准本次任务使用外部 MCP 工具或代码执行（它们可能修改外部数据、发送消息或产生平台无法估算的费用；默认关闭，每次运行单独批准） 本项目允许的工具 文本"
+    },
+    {
+      "step": "5e 缺少能力：中文说明+一键修复",
+      "ok": true,
+      "note": "岗位「研究员」需要的能力，自定义 · deepseek-flash 还没有登记：资料研究 为 自定义 · deepseek-flash 补充能力：资料研究更换为 自定义 · deepseek-v4-pro"
+    },
+    {
+      "step": "扫描 检查执行条件(能力缺失)",
+      "ok": false,
+      "note": "英文词=Skills,PDF,CSV,JSON,unknown,Skill,Token,USD,MCP,builtin,text,stats,UTF,json,validate,DOCX,docx_generation,XLSX,xlsx_generation,pptx_generation,file_read,project_file_read,data_analysis,TSV,SVG,chart_generation,Office,LibreOffice,document_convert,document_render,PNG,poppler,utils,JavaScript,code_execution,out 美元/Token=true JSON/null=false"
+    },
+    {
+      "step": "手机宽度(390)简单模式",
+      "ok": true,
+      "note": "无横向滚动"
+    },
+    {
+      "step": "扫描 实时大屏 HALOFLUX",
+      "ok": false,
+      "note": "英文词=ASSISTED,DEVELOPMENT,LIVE,SIGNAL,SOURCES,WORKING,CALLS,TOKENS,ERRORS,CONSOLE,ADMIN,CLICK,PLAY,STABILITY,CHECK,CFL,live,signal,bus,api,events,Based,Ryder,RYDER,CODE,MAIKEBAIs,CAT,github,com,haloflux,modified,FEED,infopanel,ready,waiting,for,signals,FLOW,FIELD,AMBIENT,PULSE,BURST,MODEL,ACTIVITY,await_signal,ambient,brightness,follows,workload,ROUTES,CALL,STREAM,DONE,deepse,call,stream,done,qwen,THROUGHPUT,illustrative,not,measured,data,AGENTS,idle,standby,status,per,source,INDEX 美元/Token=false JSON/null=false"
+    },
+    {
+      "step": "页面脚本错误",
+      "ok": true,
+      "note": "无"
+    }
+  ],
+  "findings": [
+    {
+      "where": "首次打开登录页（设置密码）",
+      "words": [
+        "data",
+        "setup",
+        "code",
+        "txt"
+      ],
+      "money_or_token": false,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "管理中心（无模型）",
+      "words": [
+        "Based",
+        "Ryder",
+        "modified",
+        "Key",
+        "Anthropic",
+        "Claude",
+        "OpenAI",
+        "ChatGPT",
+        "Google",
+        "Gemini",
+        "DeepSeek",
+        "Kimi",
+        "GLM",
+        "SiliconFlow",
+        "Ollama",
+        "API",
+        "App",
+        "data",
+        "credentials",
+        "json",
+        "Plus",
+        "Pro"
+      ],
+      "money_or_token": false,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "管理中心（已添加模型）",
+      "words": [
+        "Based",
+        "Ryder",
+        "modified",
+        "Key",
+        "Anthropic",
+        "Claude",
+        "OpenAI",
+        "ChatGPT",
+        "Google",
+        "Gemini",
+        "DeepSeek",
+        "Kimi",
+        "GLM",
+        "SiliconFlow",
+        "Ollama",
+        "API",
+        "data",
+        "credentials",
+        "json",
+        "Base",
+        "URL",
+        "Plus",
+        "Pro",
+        "mc_",
+        "bfb",
+        "mc_ad"
+      ],
+      "money_or_token": false,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "编辑模型对话框（单价）",
+      "words": [
+        "Based",
+        "Ryder",
+        "modified",
+        "Key",
+        "Anthropic",
+        "Claude",
+        "OpenAI",
+        "ChatGPT",
+        "Google",
+        "Gemini",
+        "DeepSeek",
+        "Kimi",
+        "GLM",
+        "SiliconFlow",
+        "Ollama",
+        "API",
+        "App",
+        "data",
+        "credentials",
+        "json",
+        "Plus",
+        "Pro",
+        "mc_",
+        "bfb",
+        "mc_ad",
+        "Token"
+      ],
+      "money_or_token": true,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "调整团队→高级设置页",
+      "words": [
+        "Skills",
+        "PDF",
+        "CSV",
+        "JSON",
+        "unknown",
+        "Skill",
+        "Token",
+        "USD",
+        "MCP",
+        "builtin",
+        "text",
+        "stats",
+        "UTF",
+        "json",
+        "validate",
+        "DOCX",
+        "docx_generation",
+        "XLSX",
+        "xlsx_generation",
+        "pptx_generation",
+        "file_read",
+        "project_file_read",
+        "data_analysis",
+        "TSV",
+        "SVG",
+        "chart_generation",
+        "Office",
+        "LibreOffice",
+        "document_convert",
+        "document_render",
+        "PNG",
+        "poppler",
+        "utils",
+        "JavaScript",
+        "code_execution",
+        "out"
+      ],
+      "money_or_token": true,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "高级模式默认开始",
+      "words": [
+        "Skills",
+        "PDF",
+        "CSV",
+        "JSON",
+        "unknown",
+        "Skill",
+        "Token",
+        "USD",
+        "MCP",
+        "builtin",
+        "text",
+        "stats",
+        "UTF",
+        "json",
+        "validate",
+        "DOCX",
+        "docx_generation",
+        "XLSX",
+        "xlsx_generation",
+        "pptx_generation",
+        "file_read",
+        "project_file_read",
+        "data_analysis",
+        "TSV",
+        "SVG",
+        "chart_generation",
+        "Office",
+        "LibreOffice",
+        "document_convert",
+        "document_render",
+        "PNG",
+        "poppler",
+        "utils",
+        "JavaScript",
+        "code_execution",
+        "out"
+      ],
+      "money_or_token": true,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "检查执行条件(能力缺失)",
+      "words": [
+        "Skills",
+        "PDF",
+        "CSV",
+        "JSON",
+        "unknown",
+        "Skill",
+        "Token",
+        "USD",
+        "MCP",
+        "builtin",
+        "text",
+        "stats",
+        "UTF",
+        "json",
+        "validate",
+        "DOCX",
+        "docx_generation",
+        "XLSX",
+        "xlsx_generation",
+        "pptx_generation",
+        "file_read",
+        "project_file_read",
+        "data_analysis",
+        "TSV",
+        "SVG",
+        "chart_generation",
+        "Office",
+        "LibreOffice",
+        "document_convert",
+        "document_render",
+        "PNG",
+        "poppler",
+        "utils",
+        "JavaScript",
+        "code_execution",
+        "out"
+      ],
+      "money_or_token": true,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "实时大屏 HALOFLUX",
+      "words": [
+        "ASSISTED",
+        "DEVELOPMENT",
+        "LIVE",
+        "SIGNAL",
+        "SOURCES",
+        "WORKING",
+        "CALLS",
+        "TOKENS",
+        "ERRORS",
+        "CONSOLE",
+        "ADMIN",
+        "CLICK",
+        "PLAY",
+        "STABILITY",
+        "CHECK",
+        "CFL",
+        "live",
+        "signal",
+        "bus",
+        "api",
+        "events",
+        "Based",
+        "Ryder",
+        "RYDER",
+        "CODE",
+        "MAIKEBAIs",
+        "CAT",
+        "github",
+        "com",
+        "haloflux",
+        "modified",
+        "FEED",
+        "infopanel",
+        "ready",
+        "waiting",
+        "for",
+        "signals",
+        "FLOW",
+        "FIELD",
+        "AMBIENT",
+        "PULSE",
+        "BURST",
+        "MODEL",
+        "ACTIVITY",
+        "await_signal",
+        "ambient",
+        "brightness",
+        "follows",
+        "workload",
+        "ROUTES",
+        "CALL",
+        "STREAM",
+        "DONE",
+        "deepse",
+        "call",
+        "stream",
+        "done",
+        "qwen",
+        "THROUGHPUT",
+        "illustrative",
+        "not",
+        "measured",
+        "data",
+        "AGENTS",
+        "idle",
+        "standby",
+        "status",
+        "per",
+        "source",
+        "INDEX"
+      ],
+      "money_or_token": false,
+      "raw_json_or_null": false
+    }
+  ],
+  "shots": [
+    "01-first-visit.png",
+    "02-after-login.png",
+    "03-admin-empty.png",
+    "04-models-added.png",
+    "05-simple-form.png",
+    "05b-price-unknown-block.png",
+    "05c-edit-dialog.png",
+    "06-plan.png",
+    "07-confirm.png",
+    "08-progress-early.png",
+    "09-progress-done.png",
+    "10-adjust-advanced.png",
+    "11-cap-zero.png",
+    "12-low-budget-choice.png",
+    "13-low-budget-stopped.png",
+    "15-advanced-default.png",
+    "16-capability-missing.png",
+    "17-mobile-simple.png",
+    "14-haloflux.png"
+  ],
+  "mockChatCalls": 6
+}
