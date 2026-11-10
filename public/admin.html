@@ -287,6 +287,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
       <label class="chk"><input type="checkbox" id="setText"> 在大屏上显示模型输出的文字片段（默认关闭，只显示状态、耗时、token）</label>
       <div class="grid2" style="margin-top:10px">
         <label>默认模型（没指定模型时使用）<select id="setDefault"></select></label>
+        <label>简单模式单次任务上限（元）<input type="number" id="setCap" min="0.1" max="1000" step="0.1"></label>
         <label>无信号自动待机（秒）<input type="number" id="setIdle" min="10" max="3600"></label>
         <label>单次最大输出 token<input type="number" id="setMax" min="256" max="64000"></label>
         <label>单次请求超时（秒）<input type="number" id="setTimeout" min="30" max="1800"></label>
@@ -501,6 +502,7 @@ function editModel(m) {
     <div class="grid2">
       <label>显示名称<input id="eName" value="${esc(m.displayName)}"></label>
       <label>费用类型<select id="ePricing">${Object.entries(PRICE).map(([k, v]) => `<option value="${k}" ${k === m.pricingMode ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label>单价（每百万 Token；${m.price ? (m.price.source === 'catalog' ? '当前用内置价目表' : '当前用你填写的') : '当前未知，简单模式不会调用'}）<span class="row"><select id="ePriceCur"><option value="CNY" ${m.price?.currency !== 'USD' ? 'selected' : ''}>元</option><option value="USD" ${m.price?.currency === 'USD' ? 'selected' : ''}>美元</option></select><input id="ePriceIn" type="number" min="0" step="0.01" placeholder="输入" value="${m.price && m.price.source === 'admin' ? m.price.inputPerMillion : ''}" style="width:90px"><input id="ePriceOut" type="number" min="0" step="0.01" placeholder="输出" value="${m.price && m.price.source === 'admin' ? m.price.outputPerMillion : ''}" style="width:90px"></span></label>
       <label>模型<input id="eModel" value="${esc(m.modelId)}"></label>
       <label>更换 API Key<input id="eKey" type="password" autocomplete="off" placeholder="留空保持不变"></label>
     </div>
@@ -518,6 +520,8 @@ function editModel(m) {
   $('#eSave').onclick = async () => {
     try {
       const body = { displayName: $('#eName').value.trim(), pricingMode: $('#ePricing').value, modelId: $('#eModel').value.trim(), capabilities: $$('#eCaps input:checked').map(x => x.value) };
+      const pin = $('#ePriceIn').value.trim(), pout = $('#ePriceOut').value.trim();
+      body.price = pin === '' && pout === '' ? null : { currency: $('#ePriceCur').value, inputPerMillion: +pin || 0, outputPerMillion: +pout || 0 };
       if ($('#eKey').value.trim()) body.apiKey = $('#eKey').value.trim();
       await api('/api/models/' + m.connectionId, 'PUT', body); closeModal(); await load(false); toast('已保存');
     } catch (err) { $('#eRes').className = 'bad'; $('#eRes').textContent = err.message; }
@@ -734,14 +738,14 @@ $('#igList').addEventListener('click', async e => { const n = e.target.dataset.r
 /* ======================= 设置 ======================= */
 function renderSettings() {
   const s = CFG.settings;
-  $('#setText').checked = !!s.showText; $('#setIdle').value = s.idleTimeoutSec; $('#setMax').value = s.maxTokens; $('#setTimeout').value = s.timeoutSec;
+  $('#setText').checked = !!s.showText; $('#setCap').value = s.simpleRunCapCny ?? 5; $('#setIdle').value = s.idleTimeoutSec; $('#setMax').value = s.maxTokens; $('#setTimeout').value = s.timeoutSec;
   $('#setDefault').innerHTML = '<option value="">（不设置）</option>' + MODELS.map(m => `<option value="${esc(m.connectionId)}" ${m.connectionId === s.defaultConnectionId ? 'selected' : ''}>${esc(plat(m))}</option>`).join('');
   const lan = CFG.server.lan.length ? ' · 局域网：' + CFG.server.lan.join('、') + '（远程管理需要管理令牌）' : ' · 仅本机可访问（127.0.0.1）';
   $('#srvInfo').textContent = '服务端口 ' + CFG.server.port + lan + ' · Node ' + CFG.server.node + (CFG.server.localTargets.length ? ' · 本地模型地址：' + CFG.server.localTargets.join('、') : '');
 }
 $('#saveSettings').addEventListener('click', async () => {
   try {
-    await api('/api/settings', 'POST', { showText: $('#setText').checked, idleTimeoutSec: +$('#setIdle').value, maxTokens: +$('#setMax').value, timeoutSec: +$('#setTimeout').value, defaultConnectionId: $('#setDefault').value });
+    await api('/api/settings', 'POST', { showText: $('#setText').checked, idleTimeoutSec: +$('#setIdle').value, maxTokens: +$('#setMax').value, timeoutSec: +$('#setTimeout').value, defaultConnectionId: $('#setDefault').value, simpleRunCapCny: +$('#setCap').value });
     $('#setRes').className = 'ok'; $('#setRes').textContent = '已保存'; await load(false);
   } catch (err) { $('#setRes').className = 'bad'; $('#setRes').textContent = err.message; }
 });

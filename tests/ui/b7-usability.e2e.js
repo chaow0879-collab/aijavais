@@ -94,24 +94,39 @@ function englishLeft(text) {
     checks.push(['B7a refresh reuses the saved key and adds only new models', null]);
     await shot(page, '2-add-all');
 
-    /* ---- B7e/B7g: one click from three answers to the progress view, plain Chinese only ---- */
+    /* ---- prices: two models priced by the administrator, one left unknown (must be skipped, never called) ---- */
+    const byModel = Object.fromEntries((await app.call('GET', '/api/models')).json.models.map(m => [m.modelId, m.connectionId]));
+    for (const id of ['deepseek-flash', 'qwen3.7-flash']) assert.equal((await app.call('PUT', '/api/models/' + byModel[id], { price: { currency: 'CNY', inputPerMillion: 1, outputPerMillion: 3 } })).status, 200);
+    assert.equal((await app.call('PUT', '/api/models/' + byModel['deepseek-flash'], { price: { currency: 'EUR', inputPerMillion: 1, outputPerMillion: 3 } })).status, 400, 'invalid price rejected');
+
+    /* ---- B7e/B7g: three answers -> one RMB-only confirmation -> progress view, plain Chinese only ---- */
     await page.goto(base + '/workspace.html');
     await page.waitForSelector('#s-go');
     assert.ok(await page.isHidden('#ws-guide'), 'guide hides once a model exists');
+    assert.equal(await page.$('input[name=s-budget]'), null, 'simple mode has no budget, token or model options');
     await page.fill('#s-goal', '给社区咖啡店写一份周末促销方案');
     await page.check('input[name=s-output][value=word]');
-    await page.check('input[name=s-budget][value="5"]');
-    assert.match(await page.innerText('#s-estimate'), /最多花 ¥5。预计约 \d+ 次对话、约 \d+ 字/);
+    await page.fill('#s-deadline', '本周五前');
     await page.click('#s-preview');
     await page.waitForSelector('#s-plan:not([hidden])');
     const team1 = await page.innerText('#s-plan-team');
-    assert.match(team1, /起草员 → 自定义 · \S+（便宜快速）｜审核员 → 自定义 · deepseek-v4-pro（擅长分析推理）/);
+    assert.match(team1, /起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.7-flash（便宜快速）/);
+    assert.match(await page.innerText('#s-plan-note'), /价格未知，按规定不调用，已换成其它模型：自定义 · deepseek-v4-pro/);
     await page.click('#s-swap button >> nth=0');
     assert.notEqual(await page.innerText('#s-plan-team'), team1, '换一个 changes the assignment');
-    checks.push(['B7g preview: rule-based assignment in plain words; 换一个 works', null]);
+    await page.click('#s-swap button >> nth=0');
+    checks.push(['B7g preview: rule-based assignment in plain words; unknown-price model skipped and named; 换一个 works', null]);
     for (const sel of ['#simple']) { const r = englishLeft(await page.innerText(sel)); assert.deepEqual(r.words, [], 'simple form: ' + r.words); assert.equal(r.json, false); }
     await shot(page, '3-simple');
     await page.click('#s-go');
+    await page.waitForSelector('#s-confirm[open]');
+    const dlgText = await page.innerText('#s-confirm');
+    assert.match(dlgText, /预计花费约 ¥\d+\.\d{2}，最多不超过 ¥\d+\.\d{2}，超过会自动停下。/);
+    assert.doesNotMatch(dlgText, /\$|USD|美元|Token|token/, 'confirmation shows RMB only');
+    assert.deepEqual(englishLeft(dlgText).words, []);
+    checks.push(['B7e one confirmation in RMB only: 预计约 ¥X，最多不超过 ¥Y，超过会自动停下', null]);
+    await shot(page, '3b-confirm');
+    await page.click('#s-confirm-ok');
     await page.waitForSelector('#s-progress:not([hidden])');
     await page.waitForSelector('#s-result:not([hidden])', { timeout: 30000 });
     assert.match(await page.innerText('#s-team'), /团队：起草员 → .*｜审核员 → /);
@@ -119,31 +134,51 @@ function englishLeft(text) {
     assert.match(await page.innerText('#s-final'), /周末促销方案/);
     const whole = englishLeft(await page.innerText('body'));
     assert.deepEqual(whole.words, [], 'progress page shows English words: ' + whole.words); assert.equal(whole.json, false, 'no raw JSON');
-    checks.push(['B7g one click -> progress view -> steps done; whole page has no English technical words or raw JSON', null]);
+    checks.push(['B7g one click -> confirm -> progress view -> steps done; whole page has no English technical words or raw JSON', null]);
     const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#s-download')]);
     const docx = fs.readFileSync(await dl.path());
     assert.equal(docx.subarray(0, 2).toString(), 'PK', 'real DOCX (zip)'); assert.match(dl.suggestedFilename(), /\.docx$/);
     await page.click('#s-accept'); await page.waitForFunction(() => /已确认完成/.test(document.querySelector('#s-state').textContent));
     checks.push(['B7e chosen output (Word) downloads as a real DOCX; confirm completes the run', null]);
-    const runs = (await app.call('GET', '/api/v2/projects')).json.projects;
-    const run = (await app.call('GET', '/api/v2/projects/' + runs[0].projectId)).json.runs[0];
-    const full = (await app.call('GET', '/api/v2/runs/' + run.runId)).json.run;
-    assert.equal(full.approval.approvePaid, true); assert.ok(full.approval.maxCost > 0 && full.approval.maxCost <= 5 / 7.3);
-    assert.ok(Object.values(full.approval.prices).every(p => p.inputPerMillion > 0 && p.outputPerMillion > 0), 'budget gate still got explicit USD rates');
+    const lastRun = async () => { const ps = (await app.call('GET', '/api/v2/projects')).json.projects; const pr = ps.sort((a, b) => b.createdAt - a.createdAt)[0]; const r = (await app.call('GET', '/api/v2/projects/' + pr.projectId)).json.runs[0]; return (await app.call('GET', '/api/v2/runs/' + r.runId)).json.run; };
+    const full = await lastRun();
+    assert.equal(full.approval.approvePaid, true); assert.ok(full.approval.maxCost > 0 && full.approval.maxCost <= 5 / 7.5, 'USD cap derived from the RMB maximum, within the ¥5 per-run cap');
+    assert.ok(Object.values(full.approval.prices).every(p => Math.abs(p.inputPerMillion - 1 / 7.5) < 1e-9 && Math.abs(p.outputPerMillion - 3 / 7.5) < 1e-9), 'RMB unit prices converted at the fixed rate');
+    assert.ok(!Object.keys(full.approval.prices).includes(byModel['deepseek-v4-pro']), 'unknown-price model not in the run');
     assert.equal(full.approval.approveExternalTools, false); assert.deepEqual(full.approval.allowedTools, []);
-    checks.push(['budget gate kept: explicit per-run approval, USD cap from ¥ tier, positive rates, MCP/code off', null]);
+    assert.ok(full.usage.cost <= full.approval.maxCost);
+    checks.push(['budget gate kept: explicit per-run approval, USD cap and rates from the RMB confirmation, MCP/code off', null]);
     await shot(page, '4-progress');
 
-    /* ---- B7e: budget 0 in simple mode -> Chinese reason + one-click fix ---- */
+    /* ---- B7e: over the per-run cap -> 效果优先 / 省钱, no silent downgrade; money runs out -> stop, keep finished work ---- */
+    assert.equal((await app.call('PUT', '/api/models/' + byModel['deepseek-v4-pro'], { price: { currency: 'CNY', inputPerMillion: 40, outputPerMillion: 160 } })).status, 200);
+    assert.equal((await app.call('POST', '/api/settings', { simpleRunCapCny: 0.2 })).status, 200);
     await page.click('#s-new');
-    await page.fill('#s-goal', '再写一份方案');
-    await page.check('input[name=s-budget][value=custom]'); await page.fill('#s-budget-custom', '0');
+    await page.fill('#s-goal', '再写一份周末促销方案');
     await page.click('#s-go');
-    await page.waitForSelector('#s-error:not([hidden])');
-    assert.match(await page.innerText('#s-error'), /预算为 0/);
-    await page.click('#s-error button:has-text("把预算设为 ¥1")');
-    await page.waitForSelector('#s-progress:not([hidden])');
-    checks.push(['B7e budget 0: Chinese reason, one click sets ¥1 and starts', null]);
+    await page.waitForSelector('#s-confirm[open]');
+    const choiceText = await page.innerText('#s-confirm');
+    assert.match(choiceText, /效果优先 约¥\d+\.\d{2}，最多 ¥0\.20，可能中途停下。起草员 → .*审核员 → 自定义 · deepseek-v4-pro/);
+    assert.match(choiceText, /省钱 约¥\d+\.\d{2}（效果可能稍差）/);
+    assert.equal(await page.isChecked('input[name=s-choice][value=quality]'), true, 'quality is the default');
+    assert.doesNotMatch(choiceText, /\$|USD|美元/);
+    await shot(page, '5-choice');
+    await page.click('#s-confirm-ok');
+    await page.waitForSelector('#s-stop:not([hidden])', { timeout: 30000 });
+    const stopText = await page.innerText('#s-stop');
+    assert.match(stopText, /已完成 1\/2 步，花了约 ¥\d+\.\d{2}/); assert.match(stopText, /没有超支/);
+    const stopped = await lastRun();
+    assert.equal(Object.values(stopped.approval.prices).length, 2);
+    assert.ok(Object.keys(stopped.approval.prices).includes(byModel['deepseek-v4-pro']), 'quality choice kept the strong reviewer (no silent downgrade)');
+    assert.ok(stopped.usage.cost <= stopped.approval.maxCost + 1e-12, 'never above the confirmed maximum');
+    assert.ok(stopped.steps.some(s => s.status === 'done'));
+    const [dl2] = await Promise.all([page.waitForEvent('download'), page.click('#s-stop-download')]);
+    assert.equal(fs.readFileSync(await dl2.path()).subarray(0, 2).toString(), 'PK', 'finished part downloads as a real file');
+    assert.ok(await page.isDisabled('#s-stop-more'), '追加 is a visible placeholder only');
+    assert.deepEqual(englishLeft(await page.innerText('body')).words, []);
+    checks.push(['B7e over cap: 效果优先(default)/省钱 offered, no silent downgrade; ran out -> stopped at 1/2, within the confirmed max, finished part downloadable', null]);
+    await shot(page, '6-stopped');
+    assert.equal((await app.call('POST', '/api/settings', { simpleRunCapCny: 5 })).status, 200);
 
     /* ---- B7f: advanced form, cost 0 (owner's screenshot) -> reason next to the button + fixes ---- */
     const tested = (await app.call('GET', '/api/models')).json.models.find(m => m.status === 'available');

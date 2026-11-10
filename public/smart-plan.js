@@ -1,26 +1,33 @@
 'use strict';
-/* B7g 智能分配（规则化，不额外调用模型）。Pure: no network, no storage; browser + Node.
- * Input: the user's three answers (做什么 / 要什么成果 / 预算档位) and the registered model list.
- * Output: a V2 project body, a per-run approval, and human-language text. The server's budget and
- * readiness gates are unchanged; this module only fills their inputs.
+/* B7e/B7g 智能分配（规则化，不额外调用模型）。Pure: no network, no storage; browser + Node.
+ * The user gives only: 想做什么 / 想要什么成果 / 什么时候要（可选）. The system assigns models, estimates the
+ * cost in RMB and asks for ONE confirmation, which is this run's explicit paid approval. The server's budget,
+ * token and approval gates are unchanged; this module only fills their inputs.
  *
- * Money: vendor prices are unknown to the platform. Each model gets a deliberately HIGH conservative
- * USD rate by name tier (an over-estimate, labelled as such), so the approved USD cap is enforced
- * against a cost that should be higher than the real bill ("费用未知，按上限封顶"). It is never a bill. */
+ * Rules (owner/commander, #10 v2.2–v2.3 and B7e revisions):
+ *  - Only models with a known unit price (admin-entered or the sourced catalog) or a free local model are used.
+ *    Unknown-price models are skipped and named ("价格未知，已换成其它模型").
+ *  - Ability first, then price: the drafter gets the cheapest model able to write; the reviewer gets the strongest
+ *    tier available; within it a different model than the drafter, then another vendor, then the cheapest.
+ *  - Money never silently degrades quality: if the needed maximum exceeds the per-run cap, both
+ *    "效果优先" and "省钱" are returned for the user to choose; nothing is switched automatically.
+ *  - The confirmed maximum never exceeds the per-run cap; the engine stops before a call it cannot cover.
+ *
+ * Conversion (written into the report): RMB/USD fixed at FX = 7.5 (deliberately above market, so a USD cap
+ * derived from an RMB maximum can only under-spend in RMB). Per call the engine reserves
+ *   (input bytes + 256) × input rate + output bound × output rate,  output bound = 2048 (+1024 thinking on DashScope).
+ * Estimate (RMB) = Σ steps (expected input tokens × input price + expected output tokens × output price).
+ * Maximum (RMB) = min(cap, roundUp0.1(max(3 × estimate, what the reservations of both steps need))). */
 (function (root, factory) {
   const api = factory(typeof module === 'object' && module.exports ? require('./model-hints.js') : root.ModelHints);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.SmartPlan = api;
 })(typeof self !== 'undefined' ? self : this, function (Hints) {
-  const CNY_PER_USD = 7.3; // conservative: a higher CNY/USD rate gives a smaller USD cap
-  const RATES = Object.freeze({ // USD per million tokens, conservative upper bounds by name tier
-    low: Object.freeze({ inputPerMillion: 1, outputPerMillion: 4, currency: 'USD' }),
-    mid: Object.freeze({ inputPerMillion: 4, outputPerMillion: 16, currency: 'USD' }),
-    high: Object.freeze({ inputPerMillion: 10, outputPerMillion: 40, currency: 'USD' }),
-  });
-  const TIER_TEXT = { low: '便宜快速', mid: '均衡', high: '擅长分析推理' };
-  const BUDGETS = [1, 5, 20];
+  const FX = 7.5;
   const MAX_OUTPUT = 2048;
+  const EXPECT = { systemTokens: 600, draftOut: 1500, reviewOut: 1800, systemBytes: 1800 };
+  const TIER_ORDER = { high: 0, mid: 1, low: 2 };
+  const TIER_TEXT = { low: '便宜快速', mid: '均衡', high: '擅长分析推理' };
   const OUTPUTS = Object.freeze({
     text: { label: '文字', format: 'md', ask: '用清晰的中文分段写出完整内容。' },
     word: { label: 'Word 文档', format: 'docx', ask: '写成一份结构清晰的文档：有标题、分节小标题和正文。' },
@@ -29,83 +36,105 @@
     analysis: { label: '表格分析', format: 'xlsx', ask: '给出分析结论和关键数字，并把数据整理成表格：第一行是列名，列之间用竖线 | 分隔。' },
   });
   const bytes = s => (typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(String(s)).length : Buffer.byteLength(String(s)));
+  const yuan = n => Math.ceil(n * 100 - 1e-9) / 100;
+  const yuan10 = n => Math.ceil(n * 10 - 1e-9) / 10;
   const isLocal = m => m.pricingMode === 'local';
-  function usable(models) {
+  const thinkingHost = m => /(^|\.)dashscope(-intl|-us)?\.aliyuncs\.com$/i.test((() => { try { return new URL(m.baseUrl).hostname; } catch { return ''; } })());
+  function cnyRate(m) {
+    if (isLocal(m)) return { input: 0, output: 0 };
+    const p = m.price; if (!p) return null;
+    const f = p.currency === 'USD' ? FX : 1;
+    return { input: p.inputPerMillion * f, output: p.outputPerMillion * f };
+  }
+  function usdRate(m) {
+    const r = cnyRate(m); if (!r || isLocal(m)) return null;
+    return { inputPerMillion: r.input / FX, outputPerMillion: r.output / FX, currency: 'USD' };
+  }
+  function chat(models) {
     return (models || []).filter(m => m && m.enabled !== false && m.status !== 'disabled' && !Hints.nonChatReason(m.modelId));
   }
-  function rateOf(m) { return isLocal(m) ? null : RATES[Hints.tierOf(m.modelId)]; }
-  function rank(list, order) {
-    const pos = t => order.indexOf(t);
-    return [...list].sort((a, b) => (a.status === 'error') - (b.status === 'error') || pos(Hints.tierOf(a.modelId)) - pos(Hints.tierOf(b.modelId)) || String(a.modelId).localeCompare(String(b.modelId)));
-  }
-  // Reservation bound the engine will compute for one call (input bytes + 256 + max output tokens).
-  function callBound(m, inputBytes) {
-    const r = rateOf(m);
-    return r ? ((inputBytes + 256) * r.inputPerMillion + MAX_OUTPUT * r.outputPerMillion) / 1e6 : 0;
-  }
+  function usable(models) { return chat(models).filter(m => cnyRate(m)); }
+  const caps = m => (m.capabilities && m.capabilities.length ? m.capabilities : Hints.suggestCapabilities(m.modelId));
+  const can = (m, need) => caps(m).includes(need);
   function roleSet(output) {
     const analysis = output === 'analysis';
     return [
-      { roleId: 'drafter', name: analysis ? '分析员' : '起草员', duty: analysis ? '分析需求与数据，写出分析初稿' : '根据需求写出完整初稿', boundary: '只负责初稿，不自我审核', standard: '内容完整、结构清晰、不编造事实', prefer: ['low', 'mid', 'high'] },
-      { roleId: 'reviewer', name: '审核员', duty: '审核初稿并修订成最终成果', boundary: '只审核和修订，不改变任务目标', standard: '指出并修正错误与遗漏，输出可直接使用的终稿', prefer: ['high', 'mid', 'low'] },
+      { roleId: 'drafter', need: 'writing', name: analysis ? '分析员' : '起草员', duty: analysis ? '分析需求与数据，写出分析初稿' : '根据需求写出完整初稿', boundary: '只负责初稿，不自我审核', standard: '内容完整、结构清晰、不编造事实' },
+      { roleId: 'reviewer', need: 'reasoning', name: '审核员', duty: '审核初稿并修订成最终成果', boundary: '只审核和修订，不改变任务目标', standard: '指出并修正错误与遗漏，输出可直接使用的终稿' },
     ];
   }
-  /* plan({ models, goal, output, budgetCny, picks }) -> { ok, problems, roles, project, approval, estimate, summary }
-   * picks: { drafter?: connectionId, reviewer?: connectionId } chosen with "换一个". */
-  function plan({ models, goal, output = 'text', budgetCny = 5, picks = {} } = {}) {
-    const problems = [], out = OUTPUTS[output] || OUTPUTS.text, text = String(goal || '').trim();
-    const pool = usable(models);
-    if (!text) problems.push({ code: 'goal_missing', text: '请先用一句话说说想做什么。' });
-    if (!pool.length) problems.push({ code: 'no_model', text: '还没有可用的模型。请先添加一个模型（填一次密钥即可）。', fix: { action: 'add_model', label: '去添加模型' } });
-    const cny = Number(budgetCny);
-    if (!(cny > 0)) problems.push({ code: 'budget_zero', text: '预算为 0 时无法调用收费模型。', fix: { action: 'set_budget', budgetCny: 1, label: '把预算设为 ¥1' } });
-    if (problems.length) return { ok: false, problems, roles: [], summary: '' };
-    const usd = Math.floor(cny / CNY_PER_USD * 10000) / 10000;
-    const specs = roleSet(output), roles = [];
-    const draftIn = bytes(text) + 1800, reviewIn = bytes(text) + 1800 + MAX_OUTPUT * 4;
+  const unitCost = m => { const r = cnyRate(m); return r.input + r.output * 3; };
+  function assign(pool, specs, picks, saving) {
+    const roles = [];
     for (const spec of specs) {
-      let candidates = rank(pool, spec.prefer);
-      if (spec.roleId === 'reviewer' && roles[0]) { // cross-vendor review when another provider exists
-        const other = candidates.filter(m => m.providerId !== roles[0].model.providerId);
-        if (other.length) candidates = [...other, ...candidates.filter(m => !other.includes(m))];
-      }
-      const picked = candidates.find(m => m.connectionId === picks[spec.roleId]) || candidates[0];
-      roles.push({ spec, model: picked, candidates: candidates.map(m => m.connectionId) });
+      let list = pool.filter(m => can(m, spec.need));
+      if (!list.length) list = pool;
+      const reviewerQuality = spec.roleId === 'reviewer' && !saving;
+      list = [...list].sort((a, b) =>
+        (reviewerQuality ? TIER_ORDER[Hints.tierOf(a.modelId)] - TIER_ORDER[Hints.tierOf(b.modelId)] : 0) ||
+        (spec.roleId === 'reviewer' && roles[0] ? (a.connectionId === roles[0].model.connectionId) - (b.connectionId === roles[0].model.connectionId) : 0) ||
+        (spec.roleId === 'reviewer' && roles[0] ? (a.providerId === roles[0].model.providerId) - (b.providerId === roles[0].model.providerId) : 0) ||
+        unitCost(a) - unitCost(b) || String(a.modelId).localeCompare(String(b.modelId)));
+      const picked = list.find(m => m.connectionId === picks[spec.roleId]) || list[0];
+      roles.push({ spec, model: picked, candidates: list.map(m => m.connectionId) });
     }
-    // Downgrade the reviewer (then the drafter) until one draft + one review fits the approved cap.
-    const total = () => callBound(roles[0].model, draftIn) + callBound(roles[1].model, reviewIn);
-    for (const i of [1, 0]) {
-      if (total() <= usd) break;
-      if (picks[roles[i].spec.roleId]) continue; // never silently override the user's own choice
-      const inB = i ? reviewIn : draftIn, byId = new Map(pool.map(m => [m.connectionId, m]));
-      const order = roles[i].candidates.map(id => byId.get(id)); // keeps the cross-vendor preference
-      const cheaper = order.filter(m => callBound(m, inB) < callBound(roles[i].model, inB)).sort((x, y) => callBound(x, inB) - callBound(y, inB) || order.indexOf(x) - order.indexOf(y))[0];
-      if (cheaper) roles[i].model = cheaper;
+    return roles;
+  }
+  function cost(roles, goal) {
+    const goalTok = Math.ceil(String(goal).length * 1.2);
+    const steps = [
+      { m: roles[0].model, inTok: EXPECT.systemTokens + goalTok, outTok: EXPECT.draftOut, inBytes: EXPECT.systemBytes + bytes(goal) },
+      { m: roles[1].model, inTok: EXPECT.systemTokens + goalTok + EXPECT.draftOut, outTok: EXPECT.reviewOut, inBytes: EXPECT.systemBytes + bytes(goal) + MAX_OUTPUT * 4 },
+    ];
+    let estimate = 0, reserveNeed = 0;
+    steps.forEach((s, i) => {
+      const r = cnyRate(s.m);
+      const expected = (s.inTok * r.input + s.outTok * r.output) / 1e6;
+      const bound = ((s.inBytes + 256) * r.input + (MAX_OUTPUT + (thinkingHost(s.m) ? MAX_OUTPUT / 2 : 0)) * r.output) / 1e6;
+      reserveNeed = Math.max(reserveNeed, (i ? estimate : 0) + bound);
+      estimate += expected;
+    });
+    return { estimate: yuan(estimate), needed: yuan10(Math.max(3 * estimate, reserveNeed)) };
+  }
+  function option(roles, goal, capCny, kind) {
+    const c = cost(roles, goal), free = roles.every(r => isLocal(r.model));
+    const maxCny = free ? 0 : Math.max(0.1, Math.min(capCny, c.needed));
+    return { kind, roles, summary: summary(roles), estimateCny: free ? 0 : Math.max(0.01, c.estimate), maxCny, neededCny: c.needed, overCap: !free && c.needed > capCny, free };
+  }
+  function plan({ models, goal, output = 'word', deadline = '', capCny = 5, picks = {}, choice = 'quality' } = {}) {
+    const problems = [], out = OUTPUTS[output] || OUTPUTS.text, text = String(goal || '').trim();
+    const chats = chat(models), pool = usable(models);
+    const skipped = chats.filter(m => !cnyRate(m)).map(m => Hints.platformLabel(m));
+    if (!text) problems.push({ code: 'goal_missing', text: '请先用一句话说说想做什么。' });
+    if (!chats.length) problems.push({ code: 'no_model', text: '还没有可用的模型。请先添加一个模型（填一次密钥即可）。', fix: { action: 'add_model', label: '去添加模型' } });
+    else if (!pool.length) problems.push({ code: 'no_priced_model', text: '已接入的模型价格都未知，按规定不调用。请在管理中心为模型填写单价，或添加价格已知的模型。', fix: { action: 'add_model', label: '去管理中心填写单价' } });
+    if (problems.length) return { ok: false, problems, skipped, roles: [], summary: '', options: {} };
+    const cap = Math.max(0.1, Number(capCny) || 5), specs = roleSet(output);
+    const quality = option(assign(pool, specs, picks, false), text, cap, 'quality');
+    const options = { quality };
+    if (quality.overCap) {
+      const saving = option(assign(pool, specs, picks, true), text, cap, 'saving');
+      if (saving.summary !== quality.summary) options.saving = saving;
     }
-    if (total() > usd) {
-      const need = BUDGETS.find(b => b > cny && callBound(roles[0].model, draftIn) + callBound(roles[1].model, reviewIn) <= Math.floor(b / CNY_PER_USD * 10000) / 10000) || 20;
-      return { ok: false, roles, summary: summary(roles), problems: [{ code: 'budget_low', text: `预算 ¥${cny} 不够完成一次起草加一次审核（按保守单价估算）。`, fix: { action: 'set_budget', budgetCny: need, label: `把预算设为 ¥${need}` } }] };
-    }
+    const chosen = options[choice] || quality;
     const prices = {};
-    for (const r of roles) { const rate = rateOf(r.model); if (rate) prices[r.model.connectionId] = { ...rate }; }
-    const avg = total() / 2;
-    const calls = avg > 0 ? Math.floor(usd / avg) : null;
+    for (const r of chosen.roles) { const u = usdRate(r.model); if (u) prices[r.model.connectionId] = u; }
     const project = {
       name: text.replace(/\s+/g, ' ').slice(0, 30),
-      description: text + '\n\n想要的成果：' + out.label,
-      standards: ['使用中文', '不编造事实或数据'],
-      deliverables: [out.label],
-      maxReworks: 0,
-      roles: roles.map(r => ({ roleId: r.spec.roleId, name: r.spec.name, duty: r.spec.duty, boundary: r.spec.boundary, standard: r.spec.standard, connectionId: r.model.connectionId, requiredCapabilities: [] })),
+      description: text + '\n\n想要的成果：' + out.label + (String(deadline || '').trim() ? '\n希望完成时间：' + String(deadline).trim() : ''),
+      standards: ['使用中文', '不编造事实或数据'], deliverables: [out.label], maxReworks: 0,
+      roles: chosen.roles.map(r => ({ roleId: r.spec.roleId, name: r.spec.name, duty: r.spec.duty, boundary: r.spec.boundary, standard: r.spec.standard, connectionId: r.model.connectionId, requiredCapabilities: [] })),
       steps: [
         { stepId: 'draft', roleId: 'drafter', title: '写出初稿', prompt: '任务：' + text + '\n' + out.ask, checks: [{ type: 'minLength', value: 20 }] },
         { stepId: 'review', roleId: 'reviewer', title: '审核并定稿', prompt: '审核上一步的初稿，修正错误与遗漏。只输出修订后的完整最终成果，不要附加审核过程。' + out.ask, checks: [{ type: 'minLength', value: 20 }], handoff: 'previous' },
       ],
     };
-    const approval = { approvePaid: Object.keys(prices).length > 0, maxCost: usd, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
-    return { ok: true, problems: [], roles, project, approval, format: out.format, outputLabel: out.label,
-      estimate: { cny, usd, calls, chars: calls === null ? null : calls * 800, unknownPrice: roles.some(r => !isLocal(r.model) && r.model.pricingMode !== 'free_tier'), free: !Object.keys(prices).length },
-      summary: summary(roles) };
+    const approval = { approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(chosen.maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
+    return { ok: true, problems: [], skipped, options, chosen, roles: chosen.roles, summary: chosen.summary, project, approval, format: out.format, outputLabel: out.label, confirmText: confirmText(chosen), capCny: cap };
+  }
+  function confirmText(o) {
+    if (o.free) return '所选模型在本机运行，不产生费用。';
+    return `预计花费约 ¥${o.estimateCny.toFixed(2)}，最多不超过 ¥${o.maxCny.toFixed(2)}，超过会自动停下。`;
   }
   function summary(roles) {
     return roles.map((r, i) => {
@@ -114,32 +143,24 @@
       return r.spec.name + ' → ' + Hints.platformLabel(r.model) + '（' + why.join('，') + '）';
     }).join('｜');
   }
-  /* Server gate errors -> plain Chinese + a one-click fix. Never shows the raw message to ordinary users. */
+  const spentCny = usd => Math.round((Number(usd) || 0) * FX * 100) / 100;
   function explain(err, ctx = {}) {
     const code = err && err.code, msg = String(err && err.message || '');
     const name = ctx.modelName ? `「${ctx.modelName}」` : '所选模型';
     if (code === 'budget_required' || /positive maxCost/i.test(msg)) return { text: '预算为 0，无法调用收费模型。', fix: { action: 'set_budget', budgetCny: 1, label: '把预算设为 ¥1' } };
-    if (code === 'cost_budget_exceeded' || code === 'token_budget_exceeded') return { text: '预算不够完成这一步。', fix: { action: 'set_budget', budgetCny: 5, label: '把预算提高到 ¥5' } };
-    if (code === 'paid_approval_required' || code === 'probe_approval_required') return { text: '需要你确认本次可能产生费用。', fix: { action: 'approve', label: '确认预算并开始' } };
-    if (code === 'price_required' || /rates are required|价格 ?JSON|价格表/i.test(msg)) return { text: '缺少模型单价，无法计算费用上限。', fix: { action: 'conservative_prices', label: '按保守单价自动填写' } };
+    if (code === 'cost_budget_exceeded' || code === 'token_budget_exceeded' || /budget cannot cover/i.test(msg)) return { text: '这次确认的金额已经用完，任务已停下，没有超支。', fix: null, budgetStop: true };
+    if (code === 'paid_approval_required' || code === 'probe_approval_required') return { text: '需要你确认本次可能产生费用。', fix: { action: 'approve', label: '确认并开始' } };
+    if (code === 'price_required' || /rates are required|价格 ?JSON|价格表/i.test(msg)) return { text: '缺少模型单价，无法计算费用上限。', fix: { action: 'conservative_prices', label: '按已知单价自动填写' } };
     if (code === 'model_unverified' || /connection test|not ready|未配置 API Key|Key/i.test(msg)) return { text: `${name}还不能用：没有密钥或连接测试没通过。`, fix: { action: 'fix_model', label: '去管理中心修复模型' } };
     if (code === 'model_missing') return { text: '有岗位还没有分配模型。', fix: { action: 'auto_assign', label: '自动分配模型' } };
     if (code === 'capability_missing') return { text: `${name}没有登记这个岗位需要的能力。`, fix: { action: 'add_caps', label: '为模型补充能力' } };
     if (code === 'concurrency_limit') return { text: '同时最多运行 3 个任务，请等前面的任务结束后再试。', fix: null };
     if (code === 'model_changed') return { text: '模型设置刚被修改过，需要重新开始一次。', fix: { action: 'retry', label: '重新开始' } };
+    if (/exceeded the conservative reservation/i.test(msg)) return { text: '模型实际用量超出了预留，任务已停下（已发生的少量超额无法撤回）。', fix: null };
     if (/HTTP 401|HTTP 403|invalid api key|Incorrect API key/i.test(msg)) return { text: `${name}的密钥无效或没有权限。`, fix: { action: 'fix_model', label: '去管理中心修复模型' } };
     if (/超时|timeout|ECONN|网络/i.test(msg)) return { text: '连接模型服务超时，可能是网络问题。', fix: { action: 'retry', label: '再试一次' } };
-    if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null }; // already plain Chinese from this page's own checks
+    if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null };
     return { text: '启动没有成功。', fix: { action: 'retry', label: '再试一次' }, detail: msg };
   }
-  // Execution-check issues -> a Chinese checklist with fixes (replaces raw JSON).
-  function checklist(issues, models) {
-    const byRole = ctx => ctx;
-    return (issues || []).map(i => {
-      const caps = /capabilities? (.+)$/.exec(i.message || '');
-      if (i.code === 'capability_missing') return { code: i.code, roleId: i.roleId, missing: caps ? caps[1].split(/,\s*/) : [], text: '' };
-      return { code: i.code, roleId: i.roleId, text: explain({ code: i.code, message: i.message }).text, fix: explain({ code: i.code, message: i.message }).fix };
-    }).map(byRole);
-  }
-  return { plan, explain, checklist, summary, usable, OUTPUTS, RATES, BUDGETS, CNY_PER_USD, MAX_OUTPUT, TIER_TEXT };
+  return { plan, explain, summary, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
 });

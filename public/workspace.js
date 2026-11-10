@@ -387,7 +387,7 @@
     const fix=info.fix,act={
       set_budget:()=>{$('max-cost').value=String(Math.floor((fix.budgetCny||1)/SmartPlan.CNY_PER_USD*100)/100);$('approve-paid').checked=true;},
       approve:()=>{$('approve-paid').checked=true;},
-      conservative_prices:()=>{const prices={};for(const r of state.project.roles){const m=state.models.find(x=>x.connectionId===r.connectionId);if(m&&m.pricingMode!=='local')prices[m.connectionId]={...SmartPlan.RATES[ModelHints.tierOf(m.modelId)]};}$('prices-json').value=JSON.stringify(prices,null,2);},
+      conservative_prices:()=>{const prices={};for(const r of state.project.roles){const m=state.models.find(x=>x.connectionId===r.connectionId),u=m&&SmartPlan.usdRate(m);if(u)prices[m.connectionId]=u;}$('prices-json').value=JSON.stringify(prices,null,2);},
       auto_assign:()=>{const pool=SmartPlan.usable(state.models);for(const r of state.project.roles)if(!r.connectionId&&pool[0])r.connectionId=pool[0].connectionId;renderRoles();},
       retry:()=>{},
     }[fix&&fix.action];

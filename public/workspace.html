@@ -16,6 +16,8 @@
     .guide{border:1px solid var(--accent);border-radius:9px;padding:10px 14px;margin:0 0 12px;background:#0b2023}
     .team{font-size:15px;line-height:1.9}.steps-list{list-style:none;padding:0;margin:10px 0}.steps-list li{padding:8px 10px;border-left:3px solid var(--line);margin:6px 0;background:#0d1a29}
     .steps-list li.done{border-color:var(--accent)}.steps-list li.running{border-color:var(--warn)}.steps-list li.failed{border-color:var(--bad)}
+    dialog{max-width:560px;background:var(--card);color:var(--text);border:1px solid var(--accent);border-radius:12px;padding:20px}dialog::backdrop{background:#000a}
+    .choice{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:10px;margin:8px 0;cursor:pointer}.choice input{width:auto;margin-top:5px}
     .final{white-space:pre-wrap;background:#0d1a29;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;overflow:auto}
   </style>
   <script src="/model-hints.js" defer></script>
@@ -33,9 +35,9 @@
       <div id="ws-guide" class="guide" hidden><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里，说说想做什么，点“一键智能配置并开始”。</div>
       <label for="s-goal">想做什么</label><textarea id="s-goal" rows="3" maxlength="4000" placeholder="例如：给社区咖啡店写一份周末促销方案"></textarea>
       <label>想要什么成果</label><div class="chips" id="s-output" role="radiogroup" aria-label="想要什么成果"></div>
-      <label>预算（每次任务最多花这么多）</label><div class="chips" id="s-budget" role="radiogroup" aria-label="预算"></div>
-      <p id="s-estimate" class="hint"></p>
-      <div id="s-plan" hidden><p class="team" id="s-plan-team"></p><div id="s-swap"></div></div>
+      <label for="s-deadline">什么时候要（可选）</label><input id="s-deadline" maxlength="60" placeholder="例如：本周五前">
+      <p class="hint">不用选模型、不用设预算：点开始后系统会估算费用，请你确认一次。</p>
+      <div id="s-plan" hidden><p class="team" id="s-plan-team"></p><p class="hint" id="s-plan-note"></p><div id="s-swap"></div></div>
       <div id="s-error" class="alert" role="alert" hidden></div>
       <p id="s-busy" class="hint" role="status" aria-live="polite"></p>
       <div class="toolbar"><button id="s-go" type="button" class="primary big">一键智能配置并开始</button><button id="s-preview" type="button">先看看配置</button></div>
@@ -46,10 +48,12 @@
       <ol class="steps-list" id="s-steps"></ol>
       <p id="s-state" role="status" aria-live="polite"></p>
       <div id="s-run-error" class="alert" role="alert" hidden></div>
+      <div id="s-stop" class="alert" role="alert" hidden><div id="s-stop-text"></div><button id="s-stop-download" type="button" class="fixbtn">到此为止，下载已完成部分</button><button id="s-stop-more" type="button" disabled title="即将支持：追加预算后从停下的步骤继续">追加 ¥0.50 继续（即将支持）</button></div>
       <div id="s-result" hidden><h3>成果</h3><div class="final" id="s-final"></div><div class="toolbar"><button id="s-download" type="button" class="primary">下载成果</button><button id="s-accept" type="button">满意，确认完成</button></div></div>
       <p class="hint">想看动画？<a href="/" target="_blank" rel="noopener">打开实时大屏</a>，每一步都会同步显示。</p>
       <button id="s-new" type="button">＋ 新建任务</button>
     </section>
+    <dialog id="s-confirm" aria-labelledby="s-confirm-title"><h2 id="s-confirm-title">确认开始</h2><div id="s-confirm-body"></div><div class="toolbar"><button id="s-confirm-ok" type="button" class="primary">确认开始</button><button id="s-confirm-cancel" type="button">取消</button></div></dialog>
     <div class="adv"><div class="eyebrow">高级设置</div><h1 id="project-heading">新建项目</h1><p class="muted">定义目标、分配岗位、检查执行条件，并审阅实际任务产生的成果。</p><p><button id="s-back" type="button" class="small">← 返回简单模式</button></p>
     <div id="feedback" class="banner" role="status" aria-live="polite"></div>
     <div class="tabs" role="tablist" aria-label="工作区域"><button id="tab-project" role="tab" aria-selected="true" aria-controls="panel-project">项目配置</button><button id="tab-run" role="tab" aria-selected="false" aria-controls="panel-run">执行与交付</button><button id="tab-resources" role="tab" aria-selected="false" aria-controls="panel-resources">工具与 Skills</button></div>
