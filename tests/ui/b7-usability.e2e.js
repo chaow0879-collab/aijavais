@@ -57,6 +57,16 @@ function englishLeft(text) {
     await lp.waitForSelector('#loginForm:not(.hidden)');
     check('login page shows no English technical words', async () => { const r = englishLeft(await lp.innerText('body')); assert.deepEqual(r.words, [], 'login: ' + r.words); });
     for (const [n, f] of checks.splice(0)) await f().then(() => checks.push([n, null]));
+    /* QA-B7-05: the first-time setup screen speaks plain Chinese (the file path is only in the folded admin note) */
+    const freshApp = await H.boot({ login: false });
+    try {
+      const sp = await (await browser.newContext()).newPage();
+      await sp.goto('http://localhost:' + freshApp.port + '/login.html');
+      await sp.waitForSelector('#setupForm:not(.hidden)');
+      const setupText = await sp.innerText('body');
+      assert.deepEqual(englishLeft(setupText).words, [], 'setup screen'); assert.match(setupText, /请向管理员获取/);
+      checks.push(['QA-B7-05 first-time setup screen: plain Chinese, file path only in the folded admin note', null]);
+    } finally { await freshApp.stop(); }
     await lp.fill('#pw', H.TEST_PASSWORD); await lp.click('#loginBtn');
     await lp.waitForURL(/\/workspace\.html/);
     await lp.waitForSelector('#s-go');

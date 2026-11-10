@@ -38,7 +38,8 @@ button:disabled{opacity:.5;cursor:default}
 
   <form id="setupForm" class="hidden" autocomplete="off">
     <p class="warn" style="font-size:12px;margin:0">首次使用：请设置管理员密码。</p>
-    <label for="code">一次性设置码（在服务器启动窗口或 data/setup-code.txt 中）</label>
+    <label for="code">一次性设置码（请向管理员获取）</label>
+    <details class="note"><summary>我是管理员，设置码在哪？</summary>服务器启动窗口会显示设置码，也保存在服务器数据目录的 <code>setup-code.txt</code> 文件里。</details>
     <input id="code" placeholder="XXXX-XXXX-XXXX" required>
     <label for="np">新密码（至少 10 个字符）</label>
     <input id="np" type="password" autocomplete="new-password" required minlength="10">
