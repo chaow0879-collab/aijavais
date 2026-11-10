@@ -127,7 +127,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
   <button data-pane="ingest">外部接入</button>
   <button data-pane="settings">设置</button>
 </nav>
-<div class="guide hidden" id="guide" role="note"><strong>首次使用：两步开始</strong><ol><li id="g1">① 添加模型：在下方“添加模型”里选服务商、填 Key，点“获取模型列表”勾选要用的模型并保存，再逐个“测试”</li><li id="g2">② 新建任务：<a href="/workspace.html?new=1">去项目工作台新建任务 →</a></li></ol></div>
+<div class="guide hidden" id="guide" role="note"><strong>首次使用：两步开始</strong><ol><li id="g1">① 添加模型：在下方选服务商、粘贴密钥，点“连接并全部添加”</li><li id="g2">② 新建任务：<a href="/workspace.html?new=1">去项目工作台新建任务 →</a></li></ol></div>
 
 <main>
   <!-- ======================= 模型 ======================= -->
@@ -140,9 +140,9 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
             <select id="wProv" style="width:100%"></select>
             <p class="note" id="wProvNote"></p>
           </div>
-          <div class="stepx" id="w2"><div class="t">粘贴 API Key</div>
-            <input id="wKey" type="password" autocomplete="off" placeholder="在服务商官网的 API 管理页面创建" style="width:100%">
-            <p class="note" id="wKeyNote">Key 只保存在你自己的服务器上（data/credentials.json），任何页面都不会再显示完整 Key。</p>
+          <div class="stepx" id="w2"><div class="t">粘贴密钥</div>
+            <input id="wKey" type="password" autocomplete="off" placeholder="在服务商官网的密钥管理页面创建" style="width:100%">
+            <p class="note" id="wKeyNote">密钥只保存在你自己的服务器上，任何页面都不会再显示完整密钥。</p>
           </div>
           <div class="stepx" id="w3"><div class="t">添加模型（推荐“连接并全部添加”）</div>
             <div class="row"><button id="wDiscover">获取模型列表</button><select id="wModelSel" class="hidden" style="min-width:220px"></select></div>
@@ -158,22 +158,22 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
           <div class="stepx" id="w5"><div class="t">保存</div>
             <div class="grid2">
               <label>显示名称（大屏上显示）<input id="wName" placeholder="如：我的主力模型"></label>
-              <label>费用类型<select id="wPricing"><option value="unknown">费用未知（按可能付费处理）</option><option value="paid_api">付费 API</option><option value="free_tier">已确认有免费额度</option><option value="local">本地模型（无 API 费用）</option></select></label>
+              <label>费用类型<select id="wPricing"><option value="unknown">费用未知（按可能付费处理）</option><option value="paid_api">按量付费</option><option value="free_tier">已确认有免费额度</option><option value="local">本地模型（不产生费用）</option></select></label>
             </div>
             <label style="margin-top:8px">这个模型擅长什么（可多选，用于团队推荐；属于你的声明，平台不会替你编造）</label>
             <div class="capbox" id="wCaps"></div>
             <p class="note hidden" id="wCapsSugg"><span class="sugg">建议，未经验证</span> 已按模型名预勾，可修改。</p>
-            <details style="margin-top:8px"><summary class="note" style="cursor:pointer">高级设置（自定义接口时需要）</summary>
+            <details style="margin-top:8px"><summary class="note" style="cursor:pointer">高级（一般不用填）</summary>
               <div class="grid2" style="margin-top:6px">
                 <label>Base URL<input id="wBase" placeholder="按服务商自动填写"></label>
                 <label>协议<select id="wProto"><option value="openai">OpenAI 兼容</option><option value="anthropic">Anthropic</option></select></label>
-                <label>或使用环境变量（不填 Key 时）<input id="wEnv" placeholder="如 ANTHROPIC_API_KEY 或 AIJ_XXX_KEY"></label>
+                <label>或使用环境变量（不填密钥时）<input id="wEnv" placeholder="如 ANTHROPIC_API_KEY 或 AIJ_XXX_KEY"></label>
               </div>
             </details>
             <div class="row" style="margin-top:10px"><button class="pri" id="wSave">保存模型</button><span id="wSaveRes" class="note"></span></div>
           </div>
         </div>
-        <p class="note warn">网页版会员（ChatGPT Plus、Claude Pro 等）不包含 API 额度，这里需要各平台的 API Key。不要共享或借用他人的订阅账号。</p>
+        <p class="note warn">网页版的付费会员不包含调用额度，这里需要在各平台单独申请的密钥。不要共享或借用他人的账号。</p>
       </section>
     </div>
     <div class="col">
@@ -328,8 +328,10 @@ const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let CFG = null, MODELS = [], TEAMS = [], TPL = null;
 const plat = m => ModelHints.platformLabel(m);
+/* 单价显示为“每百万字约 ¥X”（内部仍按每百万 Token 存；美元按 7.5 换算，只用于显示） */
+const priceText = p => { const f = p.currency === 'USD' ? 7.5 : 1, y = n => '¥' + (Math.round(n * f * 100) / 100).toFixed(2); return '输入 ' + y(p.inputPerMillion) + '、输出 ' + y(p.outputPerMillion) + ' / 每百万字'; };
 const STATUS = { available: '可用', untested: '未测试', error: '出错', disabled: '已停用', not_ready: '未就绪' };
-const PRICE = { paid_api: '付费', free_tier: '免费额度', local: '本地', unknown: '费用未知' };
+const PRICE = { paid_api: '按量付费', free_tier: '免费额度', local: '本地', unknown: '费用未知' };
 
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', ms); }
 function modal(html) { $('#modalBox').innerHTML = html; $('#modal').classList.add('on'); }
@@ -436,7 +438,7 @@ $('#wAddAll').addEventListener('click', () => addAll());
 $('#wRefresh').addEventListener('click', () => { const src = sameProvider()[0]; if (src) addAll(src.connectionId); });
 function syncRefresh() { $('#wRefresh').classList.toggle('hidden', !sameProvider().length || !prov().modelsEndpoint); }
 $('#wTest').addEventListener('click', async () => {
-  if (!confirm('连接测试将真实调用所选模型（最多 32 输出 token），可能产生 API 费用。是否批准这一次测试？')) return;
+  if (!confirm('连接测试会真实调用所选模型一次（最多回复几个字），可能产生极少费用。是否批准这一次测试？')) return;
   $('#wTestRes').className = 'note'; $('#wTestRes').textContent = '测试中…（大屏会转动）';
   try {
     const r = await api('/api/models/probe', 'POST', { ...wInput(), approvePaid: true });
@@ -464,7 +466,7 @@ function renderModels() {
     return `<div class="card ${m.enabled ? '' : 'dis'}" data-id="${esc(m.connectionId)}">
       <div class="top"><span class="name">${esc(plat(m))}${m.displayName && m.displayName !== plat(m) ? ` <span class="note">（${esc(m.displayName)}）</span>` : ''}${m.connectionId === def ? ' <span class="badge available">默认</span>' : ''}</span>
         <span><span class="badge ${esc(m.status)}">${esc(STATUS[m.status] || m.status)}</span><span class="badge ${esc(m.pricingMode)}">${esc(PRICE[m.pricingMode])}</span></span></div>
-      <div class="note">${esc(m.providerName)} · 模型 ${esc(m.modelId || '（未填写）')} · Key ${m.hasKey ? esc(m.keyHint) : m.envReady ? '环境变量' : '无'} · ID ${esc(m.connectionId)}</div>
+      <div class="note" title="编号 ${esc(m.connectionId)}">${esc(m.providerName)} · 模型 ${esc(m.modelId || '（未填写）')} · 密钥${m.hasKey ? '已保存（尾号 ' + esc(m.keyHint.replace(/[^0-9A-Za-z]/g, '')) + '）' : m.envReady ? '来自环境变量' : '未填写'}${m.price ? ' · 单价约 ' + priceText(m.price) : ' · 单价未知'}</div>
       ${m.lastTest && !m.lastTest.ok ? `<div class="bad" style="font-size:12px">诊断：${esc(m.lastTest.hint || m.lastTest.error)}</div>` : ''}
       <div class="caps">${(m.capabilities || []).map(c => `<span>${esc(CFG.catalog.capabilities[c] || c)}</span>`).join('') || '<span>未登记能力</span>'}</div>
       <div class="note">团队引用：${refs.length ? esc(refs.join('、')) : '无'}</div>
@@ -483,7 +485,7 @@ $('#mList').addEventListener('click', async e => {
   const card = e.target.closest('.card'), id = card.dataset.id, res = card.querySelector('[data-res]'), m = MODELS.find(x => x.connectionId === id);
   try {
     if (act === 'test') {
-      if (!confirm('连接测试将真实调用此模型（最多 32 输出 token），可能产生 API 费用。是否批准这一次测试？')) return;
+      if (!confirm('连接测试会真实调用这个模型一次（最多回复几个字），可能产生极少费用。是否批准这一次测试？')) return;
       res.className = 'note'; res.textContent = '测试中…';
       const r = await api(`/api/models/${id}/test`, 'POST', { approvePaid: true });
       res.className = r.ok ? 'ok' : 'bad'; res.textContent = r.ok ? `连接正常 · ${r.ms} ms` : (r.hint || r.error);
@@ -502,9 +504,9 @@ function editModel(m) {
     <div class="grid2">
       <label>显示名称<input id="eName" value="${esc(m.displayName)}"></label>
       <label>费用类型<select id="ePricing">${Object.entries(PRICE).map(([k, v]) => `<option value="${k}" ${k === m.pricingMode ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-      <label>单价（每百万 Token；${m.price ? (m.price.source === 'catalog' ? '当前用内置价目表' : '当前用你填写的') : '当前未知，简单模式不会调用'}）<span class="row"><select id="ePriceCur"><option value="CNY" ${m.price?.currency !== 'USD' ? 'selected' : ''}>元</option><option value="USD" ${m.price?.currency === 'USD' ? 'selected' : ''}>美元</option></select><input id="ePriceIn" type="number" min="0" step="0.01" placeholder="输入" value="${m.price && m.price.source === 'admin' ? m.price.inputPerMillion : ''}" style="width:90px"><input id="ePriceOut" type="number" min="0" step="0.01" placeholder="输出" value="${m.price && m.price.source === 'admin' ? m.price.outputPerMillion : ''}" style="width:90px"></span></label>
+      <label>单价：每百万字约多少（${m.price ? (m.price.source === 'catalog' ? '当前用内置价目表：' : '当前用你填写的：') + priceText(m.price) : '当前未知，简单模式不会调用'}）<details class="note"><summary>说明</summary>厂商按 Token 计费，中文大约 1 个字 ≈ 1 个 Token；这里填厂商价格页上的“输入 / 输出”单价。</details><span class="row"><select id="ePriceCur"><option value="CNY" ${m.price?.currency !== 'USD' ? 'selected' : ''}>元</option><option value="USD" ${m.price?.currency === 'USD' ? 'selected' : ''}>美元</option></select><input id="ePriceIn" type="number" min="0" step="0.01" placeholder="输入" value="${m.price && m.price.source === 'admin' ? m.price.inputPerMillion : ''}" style="width:90px"><input id="ePriceOut" type="number" min="0" step="0.01" placeholder="输出" value="${m.price && m.price.source === 'admin' ? m.price.outputPerMillion : ''}" style="width:90px"></span></label>
       <label>模型<input id="eModel" value="${esc(m.modelId)}"></label>
-      <label>更换 API Key<input id="eKey" type="password" autocomplete="off" placeholder="留空保持不变"></label>
+      <label>更换密钥<input id="eKey" type="password" autocomplete="off" placeholder="留空保持不变"></label>
     </div>
     <div class="row" style="margin-top:6px"><button class="sm" id="eDisc">获取模型列表</button><select id="eSel" class="hidden"></select><span class="note" id="eNote"></span></div>
     <label style="margin-top:8px">能力（你的声明）</label>

@@ -18,7 +18,10 @@ const KEEP = ['deepseek-flash', 'deepseek-v4-pro', 'qwen3.7-flash'];
 const checks = [];
 const check = (name, fn) => checks.push([name, fn]);
 // Visible-text scan: after removing model IDs and a short allowlist, no ASCII word of 3+ letters may remain.
-const ALLOW = ['AIJAVAIS', 'Word', 'Excel', 'PPT', ...LIST];
+// Vendor brand names are proper nouns (QA-B7-02 ruling); the HALOFLUX line is the upstream licence attribution
+// that must be preserved (CLAUDE.md), so it is allowed verbatim and nothing else from it.
+const BRANDS = ['Based on HALOFLUX by Ryder191 (modified)', 'Anthropic', 'Claude', 'OpenAI', 'ChatGPT', 'Google', 'Gemini', 'Kimi', 'GLM', 'SiliconFlow', 'Ollama', 'DeepSeek', 'HALOFLUX'];
+const ALLOW = ['AIJAVAIS', 'Word', 'Excel', 'PPT', ...BRANDS, ...LIST];
 function englishLeft(text) {
   let t = String(text);
   for (const w of [...ALLOW].sort((a, b) => b.length - a.length)) t = t.split(w).join(' ');
@@ -92,6 +95,14 @@ function englishLeft(text) {
     await page.waitForFunction(() => /以前已添加/.test(document.querySelector('#wAllRes').textContent));
     assert.match(await page.innerText('#wAllRes'), new RegExp(`已添加 0 个.*${KEEP.length} 个以前已添加`));
     checks.push(['B7a refresh reuses the saved key and adds only new models', null]);
+    /* QA-B7-02: the add-model page and the edit dialog show plain Chinese (brands and model names aside) */
+    await page.evaluate(() => { document.querySelector('#wBase').closest('details').open = false; }); // the test opened 高级 only to point at the MOCK
+    assert.deepEqual(englishLeft(await page.innerText('body')).words, [], 'admin models page');
+    await page.click('#mList button:has-text("编辑") >> nth=0'); await page.waitForSelector('#modal.on');
+    const edit = await page.innerText('#modalBox');
+    assert.deepEqual(englishLeft(edit).words, [], 'edit dialog'); assert.match(edit, /单价：每百万字约多少/); assert.doesNotMatch(edit, /Token|API|Key/);
+    await page.click('#modal', { position: { x: 5, y: 5 } });
+    checks.push(['QA-B7-02 admin add-model page and edit dialog: no English technical words; price shown per million characters', null]);
     await shot(page, '2-add-all');
 
     /* ---- prices: two models priced by the administrator, one left unknown (must be skipped, never called) ---- */
