@@ -31,7 +31,8 @@ function block(c) {
 }
 // Snapshot sanity: complete, fresh, right repository. Anything else is UNKNOWN (never "nothing to do").
 function check(snapshot, pipeline, now) {
-  if (!snapshot || snapshot.complete !== true || !Number.isFinite(snapshot.checked_at) || now - snapshot.checked_at > pipeline.max_snapshot_age_ms || snapshot.checked_at > now + 30000) fail('UNKNOWN_INCOMPLETE_OR_STALE_SOURCE');
+  // AUD-0EA9-01: a snapshot that does not explicitly state its run list is complete is UNKNOWN.
+  if (!snapshot || snapshot.complete !== true || snapshot.runs_complete !== true || !Number.isFinite(snapshot.checked_at) || now - snapshot.checked_at > pipeline.max_snapshot_age_ms || snapshot.checked_at > now + 30000) fail('UNKNOWN_INCOMPLETE_OR_STALE_SOURCE');
   if (!snapshot.repository || snapshot.repository.full_name !== pipeline.repo || snapshot.repository.id !== pipeline.repository_id) fail('UNKNOWN_SOURCE_REPOSITORY');
   if (!snapshot.issues || typeof snapshot.issues !== 'object' || !Array.isArray(snapshot.runs) || !snapshot.refs) fail('UNKNOWN_SOURCE_FIELDS');
 }
@@ -113,7 +114,8 @@ function runGreen(r, required) {
   }
   return null;
 }
-function ciGate(ci, pipeline, complete = true) {
+// AUD-0EA9-01: no default — only an explicit `complete === true` counts as a complete run list.
+function ciGate(ci, pipeline, complete) {
   const workflows = pipeline.ci.workflows || [];
   if (!ci.length) return { runs: 0, green: null, failed: false };
   if (!workflows.length || !Array.isArray(pipeline.ci.required_jobs) || !pipeline.ci.required_jobs.length) return { runs: ci.length, green: null, failed: true, problem: 'CI_POLICY_EMPTY' };

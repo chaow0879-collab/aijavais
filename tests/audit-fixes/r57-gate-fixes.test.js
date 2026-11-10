@@ -17,7 +17,7 @@ const WF = 'r57-candidate-ci';
 const pipeline = { ci: { workflows: [WF], required_jobs: ['tests', 'browser'] } };
 const ok = [{ name: 'tests', status: 'completed', conclusion: 'success' }, { name: 'browser', status: 'completed', conclusion: 'success' }];
 const run = (id, over = {}) => ({ id, run_attempt: 1, workflow_id: 99, name: WF, html_url: 'run/' + id + '/' + (over.run_attempt || 1), status: 'completed', conclusion: 'success', jobs_complete: true, jobs: ok, ...over });
-const gate = runs => Facts.ciGate(runs, pipeline);
+const gate = runs => Facts.ciGate(runs, pipeline, true);
 
 test('AUD-R57-01: a single successful run with all required jobs is green', () => {
   assert.equal(gate([run(7)]).green, 'run/7/1');
@@ -50,7 +50,9 @@ test('AUD-BC72-02/03: missing jobs_complete, workflow_id, run_attempt or job sta
   const { run_attempt, ...noAt } = run(7); assert.equal(gate([noAt]).problem, 'CI_UNKNOWN_ORDER');
   assert.equal(gate([run(7, { jobs: [{ name: 'tests', conclusion: 'success' }, ok[1]] })]).problem, 'CI_REQUIRED_JOB_NOT_SUCCESS');
   assert.equal(Facts.ciGate([run(7)], pipeline, false).problem, 'CI_RUN_LIST_INCOMPLETE');
-  assert.equal(Facts.ciGate([run(7)], pipeline, undefined).green, 'run/7/1', 'pure callers default to complete');
+  // AUD-0EA9-01: a missing completeness flag is UNKNOWN and blocks (no default-to-complete).
+  for (const missing of [undefined, null, 'true', 1]) assert.equal(Facts.ciGate([run(7)], pipeline, missing).problem, 'CI_RUN_LIST_INCOMPLETE', 'runs_complete=' + missing + ' must block');
+  assert.equal(Facts.ciGate([run(7)], pipeline, true).green, 'run/7/1');
 });
 for (const conclusion of ['failure', 'skipped', 'cancelled', null]) test('AUD-R57-01: extra same-name required job with conclusion ' + conclusion + ' blocks', () => {
   const r = gate([run(7, { jobs: [...ok, { name: 'tests', status: conclusion === null ? 'in_progress' : 'completed', conclusion }] })]);
@@ -66,8 +68,8 @@ test('AUD-R57-01: incomplete job page, missing required job, missing workflow, a
   assert.equal(gate([run(7), run(7)]).problem, 'CI_DUPLICATE_RUN_ATTEMPT');
   assert.equal(gate([run(7), run(8, { workflow_id: 100 })]).problem, 'CI_WORKFLOW_IDENTITY_AMBIGUOUS');
   assert.equal(gate([run(7, { run_attempt: 'x' })]).problem, 'CI_UNKNOWN_ORDER');
-  assert.equal(Facts.ciGate([run(7)], { ci: { workflows: [WF, 'other'], required_jobs: ['tests'] } }).problem, 'CI_REQUIRED_WORKFLOW_MISSING');
-  assert.equal(Facts.ciGate([run(7)], { ci: { workflows: [WF], required_jobs: [] } }).problem, 'CI_POLICY_EMPTY');
+  assert.equal(Facts.ciGate([run(7)], { ci: { workflows: [WF, 'other'], required_jobs: ['tests'] } }, true).problem, 'CI_REQUIRED_WORKFLOW_MISSING');
+  assert.equal(Facts.ciGate([run(7)], { ci: { workflows: [WF], required_jobs: [] } }, true).problem, 'CI_POLICY_EMPTY');
   assert.deepEqual(gate([]), { runs: 0, green: null, failed: false });
 });
 
@@ -89,6 +91,7 @@ async function joint(t, seedRuns) {
   const find = key => f.stages.find(s => s.f.envelope.idempotency_key === key);
   const step = (over = {}) => Adapter.step({ mode: 'fake', pipeline: pl, item, trigger: W.tickTrigger(), readSnapshot: () => em.client.snapshot(pl, item, Date.now()), readLedger: () => f.backend.read(),
     provision: async ticket => find(ticket.idempotency_key), lookupCompleted: async key => find(key), report: (issue, body) => em.client.report(issue, body), now: Date.now(), ...over });
+  Object.assign(f, { __em: em, __pl: pl, __item: item });
   return { f, step, find };
 }
 test('AUD-R57-01 E3: success CI7001 then failure CI7002 on the same SHA launches 0 Fake processes', async t => {
@@ -103,6 +106,16 @@ for (const [label, older] of [['failure', { conclusion: 'failure' }], ['in_progr
     const r = await step();
     assert.equal(r.state, 'WAIT_CI', JSON.stringify(r)); assert.equal(f.launches(), 0);
   });
+test('AUD-0EA9-01 E3: a snapshot without runs_complete is UNKNOWN: no STAGE_SUCCEEDED, 0 Fake processes', async t => {
+  const { f, step } = await joint(t, [{ id: 7001 }]);
+  for (const strip of [s => { delete s.runs_complete; }, s => { s.runs_complete = undefined; }, s => { s.runs_complete = 'true'; }]) {
+    const r = await step({ readSnapshot: async () => { const s = await f.__em.client.snapshot(f.__pl, f.__item, Date.now()); assert.equal(s.runs_complete, true); strip(s); return s; } });
+    assert.notEqual(r.state, 'STAGE_SUCCEEDED', JSON.stringify(r)); assert.notEqual(r.state, 'HANDOFF_COMPLETE', JSON.stringify(r));
+  }
+  assert.equal(f.launches(), 0);
+  assert.equal((await step()).state, 'STAGE_SUCCEEDED', 'control: the same world with an explicit runs_complete=true proceeds');
+  assert.equal(f.launches(), 1);
+});
 test('AUD-BC72-04 E3: durable HALT written during the final completion lookups blocks HANDOFF_COMPLETE', async t => {
   const { f, step, find } = await joint(t, [{ id: 7001 }]);
   for (let i = 0; i < 3; i++) assert.equal((await step()).state, 'STAGE_SUCCEEDED');
