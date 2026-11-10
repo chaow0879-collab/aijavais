@@ -79,7 +79,7 @@ function rateOk(kind, key, perSec, burst) {
 const CATALOG = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalog', 'providers.v1.json'), 'utf8'));
 const TEMPLATES = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalog', 'team-templates.v1.json'), 'utf8'));
 
-const DEFAULT_SETTINGS = { showText: false, idleTimeoutSec: 120, maxTokens: 4096, timeoutSec: 300, defaultConnectionId: '' };
+const DEFAULT_SETTINGS = { showText: false, idleTimeoutSec: 120, maxTokens: 4096, timeoutSec: 300, defaultConnectionId: '', simpleRunCapCny: 5 };
 
 function defaultConfig() {
   return { settings: { ...DEFAULT_SETTINGS }, providers: [], ingestTokens: [] };
@@ -935,6 +935,8 @@ async function api(req, res, url) {
     if (Number.isFinite(b.idleTimeoutSec)) s.idleTimeoutSec = Math.max(10, Math.min(3600, b.idleTimeoutSec | 0));
     if (Number.isFinite(b.maxTokens)) s.maxTokens = Math.max(256, Math.min(64000, b.maxTokens | 0));
     if (Number.isFinite(b.timeoutSec)) s.timeoutSec = Math.max(30, Math.min(1800, b.timeoutSec | 0));
+    /* B7e：简单模式单次任务上限（人民币，管理员可改） */
+    if (Number.isFinite(b.simpleRunCapCny)) s.simpleRunCapCny = Math.max(0.1, Math.min(1000, Math.round(b.simpleRunCapCny * 10) / 10));
     if (b.defaultConnectionId !== undefined) {
       if (b.defaultConnectionId && !models.has(b.defaultConnectionId)) return json(res, 400, { error: '默认模型不存在' });
       s.defaultConnectionId = b.defaultConnectionId || '';

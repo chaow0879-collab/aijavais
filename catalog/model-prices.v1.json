@@ -1,0 +1,27 @@
+{
+  "schema": "aijavais.model-prices/v1",
+  "note": "Built-in list prices used ONLY to estimate and cap simple-mode runs. Each entry deliberately takes the HIGHER of the known figures (peak rate or pre-cut price) as a safety margin. Not a bill: always reconcile with the vendor console. Models not listed here have an unknown price and are not called by simple mode unless an administrator enters a price for that connection.",
+  "checkedAt": "2026-11-10",
+  "prices": [
+    {
+      "providerId": "deepseek",
+      "modelIds": ["deepseek-flash"],
+      "currency": "USD",
+      "inputPerMillion": 0.30,
+      "outputPerMillion": 1.20,
+      "basis": "peak-hour cache-miss rate (off-peak is half: 0.15 / 0.60)",
+      "sources": ["https://www.maximem.ai/blog/deepseek-api-pricing-2026", "https://www.morphllm.com/deepseek-api"],
+      "verified": "secondary sources only; official page not reached from the build environment"
+    },
+    {
+      "providerId": "dashscope",
+      "modelIds": ["qwen3.8-flash"],
+      "currency": "CNY",
+      "inputPerMillion": 1.0,
+      "outputPerMillion": 3.0,
+      "basis": "pre-2026-08-27 list price (current official: 0.8 / 2.7, output includes thinking)",
+      "sources": ["https://help.aliyun.com/zh/model-studio/model-pricing", "https://developer.aliyun.com/article/1761526"],
+      "verified": "official pricing page (Beijing region)"
+    }
+  ]
+}
