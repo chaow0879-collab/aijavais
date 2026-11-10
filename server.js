@@ -961,6 +961,12 @@ async function api(req, res, url) {
     const list = Array.isArray(b.models) ? b.models : [];
     if (!list.length || list.length > 50) return json(res, 400, { error: '请选择 1–50 个模型' });
     const shared = { providerId: b.providerId, apiKey: b.apiKey, baseUrl: b.baseUrl, protocol: b.protocol, envKey: b.envKey, pricingMode: b.pricingMode };
+    /* “刷新”：复用同一服务商已保存连接的凭据（只在服务端复制，Key 不回到浏览器）；服务商与 Base URL 必须一致 */
+    if (b.keyFromConnectionId !== undefined) {
+      const src = models.get(String(b.keyFromConnectionId)), rt = src && models.runtime(src.connectionId);
+      if (!src || src.providerId !== b.providerId) return json(res, 400, { error: '只能复用同一服务商已保存连接的密钥' });
+      shared.baseUrl = src.baseUrl; shared.protocol = src.protocol; shared.apiKey = rt.apiKey || ''; shared.envKey = rt.envKey || '';
+    }
     const inputs = [], seen = new Set();
     for (const item of list) {
       if (!item || typeof item.modelId !== 'string' || !item.modelId.trim()) return json(res, 400, { error: '模型名不能为空' });

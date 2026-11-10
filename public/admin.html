@@ -101,8 +101,6 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
 .newtask{background:var(--teal);color:#071311;font-weight:700;border-radius:8px;padding:7px 14px;text-decoration:none}
 .guide{margin:12px 22px 0;border:1px solid var(--teal);border-radius:10px;padding:12px 16px;background:#0f1a1a}
 .guide ol{margin:6px 0 0;padding-left:20px}.guide li{margin:4px 0}.guide li.done{color:var(--dim);text-decoration:line-through}.guide li.cur{font-weight:700}
-.batch{margin-top:8px;max-height:360px;overflow:auto;border:1px solid var(--line2);border-radius:8px;padding:6px 8px}
-.brow{border-bottom:1px solid #22252b;padding:5px 0}.brow:last-child{border-bottom:0}.brow .bcaps{display:flex;flex-wrap:wrap;gap:4px 10px;margin:3px 0 0 22px}
 .brow.nonchat{opacity:.65}.sugg{font-size:11px;color:#ffcf85;border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:6px}
 </style>
 </head>
@@ -146,16 +144,13 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
             <input id="wKey" type="password" autocomplete="off" placeholder="在服务商官网的 API 管理页面创建" style="width:100%">
             <p class="note" id="wKeyNote">Key 只保存在你自己的服务器上（data/credentials.json），任何页面都不会再显示完整 Key。</p>
           </div>
-          <div class="stepx" id="w3"><div class="t">选择模型</div>
+          <div class="stepx" id="w3"><div class="t">添加模型（推荐“连接并全部添加”）</div>
             <div class="row"><button id="wDiscover">获取模型列表</button><select id="wModelSel" class="hidden" style="min-width:220px"></select></div>
             <input id="wModel" placeholder="或直接填写模型名" style="width:100%;margin-top:6px">
             <p class="note" id="wModelNote">模型名以服务商为准；平台不预置、不猜测模型名。</p>
-            <div id="wBatchBox" class="hidden">
-              <div class="row"><input id="wFilter" placeholder="筛选模型名" style="flex:1"><label class="chk"><input type="checkbox" id="wShowNon"> 显示非对话模型</label></div>
-              <p class="note">可多选，一次保存；同一服务商共用这里填的一份 Key。“擅长什么”按模型名预勾，<b>建议，未经验证</b>，可以改。非对话类模型（向量、重排、语音、图像等）默认不勾选。</p>
-              <div class="batch" id="wBatch"></div>
-              <div class="row" style="margin-top:8px"><button class="pri" id="wBatchSave" disabled>保存所选模型</button><span id="wBatchRes" class="note"></span></div>
-            </div>
+            <div class="row" style="margin-top:8px"><button class="pri" id="wAddAll">连接并全部添加</button><button id="wRefresh" class="hidden">刷新：补齐新模型</button></div>
+            <p class="note">填好密钥后点一下即可：自动读取该服务商的模型，跳过向量、重排、语音、图像、翻译等非对话模型和带日期的旧版本，其余全部添加；每个模型“擅长什么”按名称自动推断（<b>建议，未经验证</b>，以后可在右侧“编辑”里改）。同一服务商的模型共用这一份密钥。</p>
+            <div id="wAllRes" class="note" role="status"></div>
           </div>
           <div class="stepx" id="w4"><div class="t">测试连接</div>
             <div class="row"><button id="wTest">测试</button><span id="wTestRes" class="note"></span></div>
@@ -330,7 +325,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let CFG = null, MODELS = [], TEAMS = [], TPL = null, DISCOVERED = [];
+let CFG = null, MODELS = [], TEAMS = [], TPL = null;
 const plat = m => ModelHints.platformLabel(m);
 const STATUS = { available: '可用', untested: '未测试', error: '出错', disabled: '已停用', not_ready: '未就绪' };
 const PRICE = { paid_api: '付费', free_tier: '免费额度', local: '本地', unknown: '费用未知' };
@@ -378,7 +373,7 @@ function onProv() {
   $('#wBase').closest('details').open = p.providerId === 'custom';
   $('#wDiscover').disabled = !p.modelsEndpoint;
   $('#wModelSel').classList.add('hidden'); $('#wTestRes').textContent = ''; $('#wSaveRes').textContent = '';
-  DISCOVERED = []; $('#wBatchBox').classList.add('hidden'); $('#wBatchRes').textContent = '';
+  $('#wAllRes').textContent = ''; $('#wAddAll').disabled = !p.modelsEndpoint; if (MODELS) syncRefresh();
   $$('.stepx').forEach(x => x.classList.remove('done'));
 }
 $('#wProv').addEventListener('change', onProv);
@@ -397,8 +392,8 @@ $('#wDiscover').addEventListener('click', async () => {
     if (!r.ok) { $('#wModelNote').innerHTML = `<span class="bad">${esc(r.hint || r.error)}</span> <span class="note">${esc(r.error)}</span>`; return; }
     $('#wModelSel').innerHTML = '<option value="">— 选择模型 —</option>' + r.models.map(m => `<option>${esc(m)}</option>`).join('');
     $('#wModelSel').classList.remove('hidden');
-    $('#wModelNote').textContent = `读取到 ${r.models.length} 个模型。可在下方多选后一次保存，或在上面选一个按原流程添加。`;
-    DISCOVERED = r.models; renderBatch(); $('#wBatchBox').classList.remove('hidden');
+    $('#wModelNote').textContent = `读取到 ${r.models.length} 个模型。`;
+
   } catch (e) { $('#wModelNote').textContent = e.message; }
 });
 function suggestSingle() {
@@ -408,32 +403,37 @@ function suggestSingle() {
 }
 $('#wModelSel').addEventListener('change', () => { $('#wModel').value = $('#wModelSel').value; $('#w3').classList.toggle('done', !!$('#wModel').value); suggestSingle(); });
 $('#wModel').addEventListener('change', suggestSingle);
-/* B7a/B7b：多选批量添加 */
-function renderBatch() {
-  const f = $('#wFilter').value.trim().toLowerCase(), showNon = $('#wShowNon').checked, caps = CFG.catalog.capabilities;
-  const prev = new Map($$('#wBatch .brow').map(r => [r.dataset.model, { on: r.querySelector('.bpick').checked, caps: [...r.querySelectorAll('.bcap')].filter(x => x.checked).map(x => x.value) }]));
-  $('#wBatch').innerHTML = DISCOVERED.filter(id => !f || id.toLowerCase().includes(f)).map(id => {
-    const non = ModelHints.nonChatReason(id);
-    if (non && !showNon && !(prev.get(id) && prev.get(id).on)) return '';
-    const sug = ModelHints.suggestCapabilities(id, Object.keys(caps)), keep = prev.get(id), chosen = keep ? keep.caps : sug;
-    return `<div class="brow${non ? ' nonchat' : ''}" data-model="${esc(id)}"><label class="chk"><input type="checkbox" class="bpick" ${keep && keep.on ? 'checked' : ''}> <b>${esc(id)}</b>${non ? ` <span class="note">· ${esc(non)}</span>` : sug.length ? '<span class="sugg">建议，未经验证</span>' : ''}</label>`
-      + (non ? '' : `<div class="bcaps">${Object.entries(caps).map(([k, v]) => `<label class="chk"><input type="checkbox" class="bcap" value="${esc(k)}" ${chosen.includes(k) ? 'checked' : ''}> ${esc(v)}</label>`).join('')}</div>`) + '</div>';
-  }).join('') || '<p class="note">没有符合条件的模型。</p>';
-  batchCount();
+/* B7a（修订）：连接并全部添加 / 刷新补齐。能力按名称自动推断，用户不填不确认。 */
+function sameProvider() { return MODELS.filter(m => m.providerId === $('#wProv').value); }
+function showAddAllResult(added, skipped, existing) {
+  const box = $('#wAllRes');
+  box.className = added.length ? 'ok' : 'note';
+  box.innerHTML = `已添加 ${added.length} 个，已自动跳过 ${skipped.length} 个（非对话类或旧快照）${existing ? `，${existing} 个以前已添加` : ''}。`
+    + (added.length ? `<details><summary>查看已添加的模型</summary>${added.map(c => esc(plat(c))).join('<br>')}</details>` : '')
+    + (skipped.length ? `<details><summary>查看跳过的模型和原因</summary>${skipped.map(x => esc(x.modelId) + ' · ' + esc(x.reason)).join('<br>')}</details>` : '')
+    + (added.length ? '<div class="note">开始任务时系统会自动检查要用到的模型能否连接（会真实调用一次，费用极少）。</div>' : '');
 }
-function batchCount() { const n = $$('#wBatch .bpick:checked').length; $('#wBatchSave').disabled = !n; $('#wBatchSave').textContent = n ? `保存所选模型（${n}）` : '保存所选模型'; }
-$('#wFilter').addEventListener('input', renderBatch); $('#wShowNon').addEventListener('change', renderBatch);
-$('#wBatch').addEventListener('change', e => { if (e.target.classList.contains('bpick')) batchCount(); });
-$('#wBatchSave').addEventListener('click', async () => {
-  const picked = $$('#wBatch .brow').filter(r => r.querySelector('.bpick').checked).map(r => ({ modelId: r.dataset.model, capabilities: [...r.querySelectorAll('.bcap')].filter(x => x.checked).map(x => x.value) }));
-  if (!picked.length) return;
+async function addAll(fromConnectionId) {
+  const box = $('#wAllRes'); box.className = 'note'; box.textContent = '正在连接服务商并读取模型列表…';
   try {
-    const r = await api('/api/models/batch', 'POST', { providerId: $('#wProv').value, apiKey: $('#wKey').value.trim(), baseUrl: $('#wBase').value.trim(), protocol: $('#wProto').value, envKey: $('#wEnv').value.trim(), pricingMode: $('#wPricing').value, models: picked });
-    $('#wBatchRes').className = 'ok'; $('#wBatchRes').textContent = `已保存 ${r.connections.length} 个模型：${r.connections.map(plat).join('、')}。使用前请在右侧列表逐个“测试”（会真实调用，可能产生少量费用）。`;
-    $('#wKey').value = ''; $$('#wBatch .bpick').forEach(x => x.checked = false); batchCount(); $('#w5').classList.add('done');
+    const disc = await api('/api/models/discover', 'POST', fromConnectionId ? { connectionId: fromConnectionId } : { providerId: $('#wProv').value, apiKey: $('#wKey').value.trim(), baseUrl: $('#wBase').value.trim() });
+    if (!disc.ok) { box.className = 'bad'; box.textContent = '没能连上服务商：' + (disc.hint || disc.error); return; }
+    const pick = ModelHints.selectForAutoAdd(disc.models), have = new Set(sameProvider().map(m => m.modelId));
+    const fresh = pick.keep.filter(id => !have.has(id)), existing = pick.keep.length - fresh.length;
+    if (!fresh.length) { showAddAllResult([], pick.skipped, existing); return; }
+    const caps = Object.keys(CFG.catalog.capabilities);
+    const body = { providerId: $('#wProv').value, pricingMode: $('#wPricing').value, models: fresh.map(id => ({ modelId: id, capabilities: ModelHints.suggestCapabilities(id, caps) })) };
+    if (fromConnectionId) body.keyFromConnectionId = fromConnectionId;
+    else Object.assign(body, { apiKey: $('#wKey').value.trim(), baseUrl: $('#wBase').value.trim(), protocol: $('#wProto').value, envKey: $('#wEnv').value.trim() });
+    const r = await api('/api/models/batch', 'POST', body);
+    $('#wKey').value = ''; $('#w5').classList.add('done');
     await load(false);
-  } catch (e) { $('#wBatchRes').className = 'bad'; $('#wBatchRes').textContent = e.message; }
-});
+    showAddAllResult(r.connections, pick.skipped, existing);
+  } catch (e) { box.className = 'bad'; box.textContent = e.message; }
+}
+$('#wAddAll').addEventListener('click', () => addAll());
+$('#wRefresh').addEventListener('click', () => { const src = sameProvider()[0]; if (src) addAll(src.connectionId); });
+function syncRefresh() { $('#wRefresh').classList.toggle('hidden', !sameProvider().length || !prov().modelsEndpoint); }
 $('#wTest').addEventListener('click', async () => {
   if (!confirm('连接测试将真实调用所选模型（最多 32 输出 token），可能产生 API 费用。是否批准这一次测试？')) return;
   $('#wTestRes').className = 'note'; $('#wTestRes').textContent = '测试中…（大屏会转动）';
@@ -786,7 +786,7 @@ async function load(first = true) {
   CFG = c; MODELS = c.models; TEAMS = t.teams;
   if (first) { TPL = await api('/api/team-templates'); renderWizard(); renderTemplates(); renderSnippet(); }
   else onTpl();
-  renderModels(); renderTeams(); renderRunSelectors(); renderSettings(); renderGuide();
+  renderModels(); renderTeams(); renderRunSelectors(); renderSettings(); renderGuide(); syncRefresh();
 }
 /* B7d：首次使用（无模型或无项目）显示两步引导 */
 async function renderGuide() {
