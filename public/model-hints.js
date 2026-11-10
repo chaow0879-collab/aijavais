@@ -16,6 +16,7 @@
     [/(^|[-_/])(asr|tts|stt)([-_.]|$)|whisper|speech|paraformer|sensevoice|cosyvoice|sambert|(^|[-_/])audio[-_]|fun-asr/i, '语音识别/合成模型（不是文字对话接口）'],
     [/z-image|wanx|wan\d|flux|sdxl|stable-diffusion|dall-e|gpt-image|(^|[-_/])image[-_]|imagen|seedream|(^|[-_/])t2i|(^|[-_/])i2v|(^|[-_/])t2v|video/i, '图像/视频生成模型（不是文字对话接口）'],
     [/moderation|guard/i, '内容审核模型（不能完成岗位任务）'],
+    [/(^|[-_.])ocr([-_.]|$)/i, '文字识别模型（只做图片识字）'],
     [/(^|[-_/])mt[-_]|(^|[-_/])mt$|translation/i, '专用翻译模型（只做翻译，不适合一般岗位）'],
   ];
   // Name-pattern rules (B7 acceptance): tier/kind words in the model name.
@@ -36,9 +37,13 @@
     for (const [re, why] of NON_CHAT) if (re.test(id)) return why;
     return null;
   }
+  // #10 v2.2 (owner): general chat models are assumed to cover these common abilities by default,
+  // so simple mode never stalls on "capability not declared". Still a suggestion, never verified.
+  const GENERAL = ['reasoning', 'writing', 'chinese', 'data_analysis'];
   function suggestCapabilities(modelId, known) {
     const id = String(modelId || ''), out = new Set();
     if (!id || nonChatReason(id)) return [];
+    GENERAL.forEach(c => out.add(c));
     for (const [re, caps] of RULES) if (re.test(id)) caps.forEach(c => out.add(c));
     for (const [re, caps] of FAMILIES) if (re.test(id)) caps.forEach(c => out.add(c));
     const list = [...out];
@@ -51,5 +56,32 @@
     const platform = m.providerName || m.providerId || '', model = m.modelId || m.displayName || m.connectionId || '';
     return platform ? platform + ' · ' + model : String(model);
   }
-  return { nonChatReason, suggestCapabilities, platformLabel, NON_CHAT, RULES, FAMILIES };
+  // Dated snapshot (e.g. -2026-07-15, -20260715, -0731): keep only each model's latest alias.
+  const DATED = /[-_](20\d{2}-\d{2}-\d{2}|20\d{6}|\d{4})$/;
+  function baseName(id) { return String(id).replace(DATED, ''); }
+  function isSnapshot(id) { return DATED.test(String(id)); }
+  // From a provider's model list: chat models to add, and skipped ones with reasons.
+  function selectForAutoAdd(ids) {
+    const all = [...new Set((ids || []).map(String).filter(Boolean))], keep = [], skipped = [];
+    const aliases = new Set(all.filter(id => !isSnapshot(id)));
+    const newestSnapshot = new Map();
+    for (const id of all) if (isSnapshot(id)) { const b = baseName(id); if (!aliases.has(b) && (!newestSnapshot.has(b) || id > newestSnapshot.get(b))) newestSnapshot.set(b, id); }
+    for (const id of all) {
+      const why = nonChatReason(id);
+      if (why) { skipped.push({ modelId: id, reason: why }); continue; }
+      if (id.includes('/')) { skipped.push({ modelId: id, reason: '平台代售的第三方模型（需要时可在下方手动添加）' }); continue; }
+      if (/(^|[-_.])\d+(\.\d+)?b([-_.]|$)/i.test(id)) { skipped.push({ modelId: id, reason: '开源尺寸版本（需要时可在下方手动添加）' }); continue; }
+      if (isSnapshot(id) && newestSnapshot.get(baseName(id)) !== id) { skipped.push({ modelId: id, reason: '带日期的旧快照版本（已保留最新别名 ' + (aliases.has(baseName(id)) ? baseName(id) : newestSnapshot.get(baseName(id))) + '）' }); continue; }
+      keep.push(id);
+    }
+    return { keep, skipped };
+  }
+  // Price tier from the name: low (flash/turbo...), high (pro/max...), otherwise mid. A guess, not a price.
+  function tierOf(modelId) {
+    const id = String(modelId || '');
+    if (/flash|turbo|lite|mini|nano|air|haiku|small|speed|instant/i.test(id)) return 'low';
+    if (/(^|[-_.])(pro|max|plus|ultra|opus|large)([-_.\d]|$)/i.test(id)) return 'high';
+    return 'mid';
+  }
+  return { nonChatReason, suggestCapabilities, platformLabel, selectForAutoAdd, isSnapshot, tierOf, GENERAL, NON_CHAT, RULES, FAMILIES };
 });
