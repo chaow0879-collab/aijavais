@@ -954,6 +954,34 @@ async function api(req, res, url) {
     saveModels();
     return json(res, 200, { connection: r.connection });
   }
+  /* B7a：同一服务商一次填 Key、多选保存。逐个走与单个添加相同的校验；全部校验通过才写入（任一失败则一个都不保存）。
+     Key 只在本次请求体中出现一次，服务端按现有方式为每个连接各存一份（仍只在 credentials.json，任何视图都不回显）。 */
+  if (p === '/api/models/batch' && m === 'POST') {
+    const b = await readBody(req, 256 << 10);
+    const list = Array.isArray(b.models) ? b.models : [];
+    if (!list.length || list.length > 50) return json(res, 400, { error: '请选择 1–50 个模型' });
+    const shared = { providerId: b.providerId, apiKey: b.apiKey, baseUrl: b.baseUrl, protocol: b.protocol, envKey: b.envKey, pricingMode: b.pricingMode };
+    const inputs = [], seen = new Set();
+    for (const item of list) {
+      if (!item || typeof item.modelId !== 'string' || !item.modelId.trim()) return json(res, 400, { error: '模型名不能为空' });
+      const modelId = item.modelId.trim();
+      if (seen.has(modelId)) return json(res, 400, { error: '重复的模型：' + modelId });
+      seen.add(modelId);
+      const input = { ...shared, modelId, capabilities: Array.isArray(item.capabilities) ? item.capabilities : [], ...(typeof item.displayName === 'string' && item.displayName.trim() ? { displayName: item.displayName } : {}) };
+      const d = models.draft(input);
+      if (!d.ok) return json(res, 400, { error: modelId + '：' + d.error });
+      inputs.push(input);
+    }
+    const added = [];
+    for (const input of inputs) {
+      const r = models.add(input);
+      if (!r.ok) { for (const c of added) models.remove(c.connectionId); return json(res, 400, { error: input.modelId + '：' + r.error }); }
+      added.push(r.connection);
+    }
+    if (!cfg.settings.defaultConnectionId) { cfg.settings.defaultConnectionId = added[0].connectionId; saveConfig(); }
+    saveModels();
+    return json(res, 200, { connections: added });
+  }
   if (p === '/api/models/discover' && m === 'POST') return json(res, 200, await discoverModels(await readBody(req)));
   if (p === '/api/models/probe' && m === 'POST') {
     const b = await readBody(req);
