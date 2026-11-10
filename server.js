@@ -643,7 +643,7 @@ const replaceInTeams = (oldId, replacement) => { const n = teams.replaceConnecti
 function modelImpact(id) {
   const running = [...tasks.values()].filter(t => t.status === 'running' && (t.agents || []).some(x => x.connectionId === id)).map(t => ({ id: t.id, title: t.title }));
   const teams = teamRefs(id);
-  const alternatives = models.list().filter(c => c.connectionId !== id && c.enabled && c.ready).map(c => ({ connectionId: c.connectionId, displayName: c.displayName }));
+  const alternatives = models.list().filter(c => c.connectionId !== id && c.enabled && c.ready).map(c => ({ connectionId: c.connectionId, displayName: c.displayName, platformLabel: c.platformLabel }));
   const isDefault = cfg.settings.defaultConnectionId === id;
   const blockers = [];
   if (running.length) blockers.push(`有 ${running.length} 个运行中的任务正在使用它（已发出的调用会完成，后续步骤会停止）`);

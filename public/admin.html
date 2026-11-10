@@ -98,6 +98,12 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
 .rec{border:1px solid var(--line);padding:8px 10px;margin-top:8px;background:var(--panel2);font-size:12px}
 .rec ul{margin:4px 0;padding-left:18px}
 .hidden{display:none !important}
+.newtask{background:var(--teal);color:#071311;font-weight:700;border-radius:8px;padding:7px 14px;text-decoration:none}
+.guide{margin:12px 22px 0;border:1px solid var(--teal);border-radius:10px;padding:12px 16px;background:#0f1a1a}
+.guide ol{margin:6px 0 0;padding-left:20px}.guide li{margin:4px 0}.guide li.done{color:var(--dim);text-decoration:line-through}.guide li.cur{font-weight:700}
+.batch{margin-top:8px;max-height:360px;overflow:auto;border:1px solid var(--line2);border-radius:8px;padding:6px 8px}
+.brow{border-bottom:1px solid #22252b;padding:5px 0}.brow:last-child{border-bottom:0}.brow .bcaps{display:flex;flex-wrap:wrap;gap:4px 10px;margin:3px 0 0 22px}
+.brow.nonchat{opacity:.65}.sugg{font-size:11px;color:#ffcf85;border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:6px}
 </style>
 </head>
 <body>
@@ -109,6 +115,8 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
   </div>
   <div class="row">
     <span class="chip"><i class="dot" id="dot"></i><span id="conn">连接中…</span></span>
+    <a class="newtask" id="newTaskBtn" href="/workspace.html?new=1">＋ 新建任务</a>
+    <a class="chip" href="/workspace.html">项目工作台 →</a>
     <a class="chip" href="/" target="_blank" rel="noopener">打开大屏 ↗</a>
     <button class="sm" id="logoutBtn">退出登录</button>
   </div>
@@ -121,6 +129,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
   <button data-pane="ingest">外部接入</button>
   <button data-pane="settings">设置</button>
 </nav>
+<div class="guide hidden" id="guide" role="note"><strong>首次使用：两步开始</strong><ol><li id="g1">① 添加模型：在下方“添加模型”里选服务商、填 Key，点“获取模型列表”勾选要用的模型并保存，再逐个“测试”</li><li id="g2">② 新建任务：<a href="/workspace.html?new=1">去项目工作台新建任务 →</a></li></ol></div>
 
 <main>
   <!-- ======================= 模型 ======================= -->
@@ -141,6 +150,12 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
             <div class="row"><button id="wDiscover">获取模型列表</button><select id="wModelSel" class="hidden" style="min-width:220px"></select></div>
             <input id="wModel" placeholder="或直接填写模型名" style="width:100%;margin-top:6px">
             <p class="note" id="wModelNote">模型名以服务商为准；平台不预置、不猜测模型名。</p>
+            <div id="wBatchBox" class="hidden">
+              <div class="row"><input id="wFilter" placeholder="筛选模型名" style="flex:1"><label class="chk"><input type="checkbox" id="wShowNon"> 显示非对话模型</label></div>
+              <p class="note">可多选，一次保存；同一服务商共用这里填的一份 Key。“擅长什么”按模型名预勾，<b>建议，未经验证</b>，可以改。非对话类模型（向量、重排、语音、图像等）默认不勾选。</p>
+              <div class="batch" id="wBatch"></div>
+              <div class="row" style="margin-top:8px"><button class="pri" id="wBatchSave" disabled>保存所选模型</button><span id="wBatchRes" class="note"></span></div>
+            </div>
           </div>
           <div class="stepx" id="w4"><div class="t">测试连接</div>
             <div class="row"><button id="wTest">测试</button><span id="wTestRes" class="note"></span></div>
@@ -152,6 +167,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
             </div>
             <label style="margin-top:8px">这个模型擅长什么（可多选，用于团队推荐；属于你的声明，平台不会替你编造）</label>
             <div class="capbox" id="wCaps"></div>
+            <p class="note hidden" id="wCapsSugg"><span class="sugg">建议，未经验证</span> 已按模型名预勾，可修改。</p>
             <details style="margin-top:8px"><summary class="note" style="cursor:pointer">高级设置（自定义接口时需要）</summary>
               <div class="grid2" style="margin-top:6px">
                 <label>Base URL<input id="wBase" placeholder="按服务商自动填写"></label>
@@ -309,11 +325,13 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
 <div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
 <div class="toast" id="toast"></div>
 
+<script src="/model-hints.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let CFG = null, MODELS = [], TEAMS = [], TPL = null;
+let CFG = null, MODELS = [], TEAMS = [], TPL = null, DISCOVERED = [];
+const plat = m => ModelHints.platformLabel(m);
 const STATUS = { available: '可用', untested: '未测试', error: '出错', disabled: '已停用', not_ready: '未就绪' };
 const PRICE = { paid_api: '付费', free_tier: '免费额度', local: '本地', unknown: '费用未知' };
 
@@ -360,6 +378,7 @@ function onProv() {
   $('#wBase').closest('details').open = p.providerId === 'custom';
   $('#wDiscover').disabled = !p.modelsEndpoint;
   $('#wModelSel').classList.add('hidden'); $('#wTestRes').textContent = ''; $('#wSaveRes').textContent = '';
+  DISCOVERED = []; $('#wBatchBox').classList.add('hidden'); $('#wBatchRes').textContent = '';
   $$('.stepx').forEach(x => x.classList.remove('done'));
 }
 $('#wProv').addEventListener('change', onProv);
@@ -378,10 +397,43 @@ $('#wDiscover').addEventListener('click', async () => {
     if (!r.ok) { $('#wModelNote').innerHTML = `<span class="bad">${esc(r.hint || r.error)}</span> <span class="note">${esc(r.error)}</span>`; return; }
     $('#wModelSel').innerHTML = '<option value="">— 选择模型 —</option>' + r.models.map(m => `<option>${esc(m)}</option>`).join('');
     $('#wModelSel').classList.remove('hidden');
-    $('#wModelNote').textContent = `读取到 ${r.models.length} 个模型。`;
+    $('#wModelNote').textContent = `读取到 ${r.models.length} 个模型。可在下方多选后一次保存，或在上面选一个按原流程添加。`;
+    DISCOVERED = r.models; renderBatch(); $('#wBatchBox').classList.remove('hidden');
   } catch (e) { $('#wModelNote').textContent = e.message; }
 });
-$('#wModelSel').addEventListener('change', () => { $('#wModel').value = $('#wModelSel').value; $('#w3').classList.toggle('done', !!$('#wModel').value); });
+function suggestSingle() {
+  const caps = ModelHints.suggestCapabilities($('#wModel').value.trim(), Object.keys(CFG.catalog.capabilities));
+  $$('#wCaps input').forEach(x => x.checked = caps.includes(x.value));
+  $('#wCapsSugg').classList.toggle('hidden', !caps.length);
+}
+$('#wModelSel').addEventListener('change', () => { $('#wModel').value = $('#wModelSel').value; $('#w3').classList.toggle('done', !!$('#wModel').value); suggestSingle(); });
+$('#wModel').addEventListener('change', suggestSingle);
+/* B7a/B7b：多选批量添加 */
+function renderBatch() {
+  const f = $('#wFilter').value.trim().toLowerCase(), showNon = $('#wShowNon').checked, caps = CFG.catalog.capabilities;
+  const prev = new Map($$('#wBatch .brow').map(r => [r.dataset.model, { on: r.querySelector('.bpick').checked, caps: [...r.querySelectorAll('.bcap')].filter(x => x.checked).map(x => x.value) }]));
+  $('#wBatch').innerHTML = DISCOVERED.filter(id => !f || id.toLowerCase().includes(f)).map(id => {
+    const non = ModelHints.nonChatReason(id);
+    if (non && !showNon && !(prev.get(id) && prev.get(id).on)) return '';
+    const sug = ModelHints.suggestCapabilities(id, Object.keys(caps)), keep = prev.get(id), chosen = keep ? keep.caps : sug;
+    return `<div class="brow${non ? ' nonchat' : ''}" data-model="${esc(id)}"><label class="chk"><input type="checkbox" class="bpick" ${keep && keep.on ? 'checked' : ''}> <b>${esc(id)}</b>${non ? ` <span class="note">· ${esc(non)}</span>` : sug.length ? '<span class="sugg">建议，未经验证</span>' : ''}</label>`
+      + (non ? '' : `<div class="bcaps">${Object.entries(caps).map(([k, v]) => `<label class="chk"><input type="checkbox" class="bcap" value="${esc(k)}" ${chosen.includes(k) ? 'checked' : ''}> ${esc(v)}</label>`).join('')}</div>`) + '</div>';
+  }).join('') || '<p class="note">没有符合条件的模型。</p>';
+  batchCount();
+}
+function batchCount() { const n = $$('#wBatch .bpick:checked').length; $('#wBatchSave').disabled = !n; $('#wBatchSave').textContent = n ? `保存所选模型（${n}）` : '保存所选模型'; }
+$('#wFilter').addEventListener('input', renderBatch); $('#wShowNon').addEventListener('change', renderBatch);
+$('#wBatch').addEventListener('change', e => { if (e.target.classList.contains('bpick')) batchCount(); });
+$('#wBatchSave').addEventListener('click', async () => {
+  const picked = $$('#wBatch .brow').filter(r => r.querySelector('.bpick').checked).map(r => ({ modelId: r.dataset.model, capabilities: [...r.querySelectorAll('.bcap')].filter(x => x.checked).map(x => x.value) }));
+  if (!picked.length) return;
+  try {
+    const r = await api('/api/models/batch', 'POST', { providerId: $('#wProv').value, apiKey: $('#wKey').value.trim(), baseUrl: $('#wBase').value.trim(), protocol: $('#wProto').value, envKey: $('#wEnv').value.trim(), pricingMode: $('#wPricing').value, models: picked });
+    $('#wBatchRes').className = 'ok'; $('#wBatchRes').textContent = `已保存 ${r.connections.length} 个模型：${r.connections.map(plat).join('、')}。使用前请在右侧列表逐个“测试”（会真实调用，可能产生少量费用）。`;
+    $('#wKey').value = ''; $$('#wBatch .bpick').forEach(x => x.checked = false); batchCount(); $('#w5').classList.add('done');
+    await load(false);
+  } catch (e) { $('#wBatchRes').className = 'bad'; $('#wBatchRes').textContent = e.message; }
+});
 $('#wTest').addEventListener('click', async () => {
   if (!confirm('连接测试将真实调用所选模型（最多 32 输出 token），可能产生 API 费用。是否批准这一次测试？')) return;
   $('#wTestRes').className = 'note'; $('#wTestRes').textContent = '测试中…（大屏会转动）';
@@ -409,7 +461,7 @@ function renderModels() {
   $('#mList').innerHTML = MODELS.length ? MODELS.map(m => {
     const refs = refsOf(m.connectionId);
     return `<div class="card ${m.enabled ? '' : 'dis'}" data-id="${esc(m.connectionId)}">
-      <div class="top"><span class="name">${esc(m.displayName)}${m.connectionId === def ? ' <span class="badge available">默认</span>' : ''}</span>
+      <div class="top"><span class="name">${esc(plat(m))}${m.displayName && m.displayName !== plat(m) ? ` <span class="note">（${esc(m.displayName)}）</span>` : ''}${m.connectionId === def ? ' <span class="badge available">默认</span>' : ''}</span>
         <span><span class="badge ${esc(m.status)}">${esc(STATUS[m.status] || m.status)}</span><span class="badge ${esc(m.pricingMode)}">${esc(PRICE[m.pricingMode])}</span></span></div>
       <div class="note">${esc(m.providerName)} · 模型 ${esc(m.modelId || '（未填写）')} · Key ${m.hasKey ? esc(m.keyHint) : m.envReady ? '环境变量' : '无'} · ID ${esc(m.connectionId)}</div>
       ${m.lastTest && !m.lastTest.ok ? `<div class="bad" style="font-size:12px">诊断：${esc(m.lastTest.hint || m.lastTest.error)}</div>` : ''}
@@ -477,7 +529,7 @@ async function deleteModel(m) {
   modal(`<h2>删除：${esc(m.displayName)}</h2>
     ${imp.blockers.length ? `<p class="warn">删除前请注意：</p><ul class="issues">${imp.blockers.map(b => `<li class="warn">${esc(b)}</li>`).join('')}</ul>` : '<p class="ok">没有团队、默认设置或运行中的任务依赖它，可以直接删除。</p>'}
     ${imp.teams.length ? `<p class="note">引用它的团队岗位：${esc(imp.teams.map(t => t.teamName + '/' + t.roleName + (t.slot === 'fallback' ? '（备用）' : '')).join('、'))}</p>` : ''}
-    ${(imp.teams.length || imp.isDefault) ? `<label>改用哪个模型替代<select id="dRep"><option value="">不替代（岗位改为待分配${imp.isDefault ? '，清空默认模型' : ''}）</option>${alts.map(a => `<option value="${esc(a.connectionId)}">${esc(a.displayName)}</option>`).join('')}</select></label>` : ''}
+    ${(imp.teams.length || imp.isDefault) ? `<label>改用哪个模型替代<select id="dRep"><option value="">不替代（岗位改为待分配${imp.isDefault ? '，清空默认模型' : ''}）</option>${alts.map(a => `<option value="${esc(a.connectionId)}">${esc(plat(a))}</option>`).join('')}</select></label>` : ''}
     ${imp.runningTasks.length ? `<label class="chk" style="margin-top:8px"><input type="checkbox" id="dForce"> 我知道有 ${imp.runningTasks.length} 个运行中的任务会在下一步停止</label>` : ''}
     <p class="note">历史任务会保留执行时用的模型信息，不受影响。</p>
     <div class="row" style="margin-top:10px"><button class="danger" id="dGo">确认删除</button><button data-close>取消</button><span id="dRes" class="note"></span></div>`);
@@ -495,7 +547,7 @@ async function deleteModel(m) {
 }
 
 /* ======================= 团队 ======================= */
-const modelOpts = (sel, blank = '— 未分配 —') => `<option value="">${blank}</option>` + MODELS.map(m => `<option value="${esc(m.connectionId)}" ${m.connectionId === sel ? 'selected' : ''} ${m.enabled ? '' : 'disabled'}>${esc(m.displayName)}${m.enabled ? '' : '（已停用）'} · ${esc(PRICE[m.pricingMode])}</option>`).join('');
+const modelOpts = (sel, blank = '— 未分配 —') => `<option value="">${blank}</option>` + MODELS.map(m => `<option value="${esc(m.connectionId)}" ${m.connectionId === sel ? 'selected' : ''} ${m.enabled ? '' : 'disabled'}>${esc(plat(m))}${m.enabled ? '' : '（已停用）'} · ${esc(PRICE[m.pricingMode])}</option>`).join('');
 function renderTemplates() {
   const ready = TPL.templates;
   $('#tTpl').innerHTML = ready.map(t => `<option value="${esc(t.templateId)}">${esc(t.name)}</option>`).join('');
@@ -585,7 +637,7 @@ function onRunBy() {
 $('#runBy').addEventListener('change', onRunBy);
 function renderRunSelectors() {
   const live = MODELS.filter(m => m.enabled);
-  const opts = live.map(m => `<option value="${esc(m.connectionId)}">${esc(m.displayName)}</option>`).join('');
+  const opts = live.map(m => `<option value="${esc(m.connectionId)}">${esc(plat(m))}</option>`).join('');
   const a = $('#selA').value, b = $('#selB').value, t = $('#runTeam').value;
   $('#selA').innerHTML = opts; $('#selB').innerHTML = opts;
   if (a) $('#selA').value = a; if (b) $('#selB').value = b; else if (live.length > 1) $('#selB').selectedIndex = 1;
@@ -683,7 +735,7 @@ $('#igList').addEventListener('click', async e => { const n = e.target.dataset.r
 function renderSettings() {
   const s = CFG.settings;
   $('#setText').checked = !!s.showText; $('#setIdle').value = s.idleTimeoutSec; $('#setMax').value = s.maxTokens; $('#setTimeout').value = s.timeoutSec;
-  $('#setDefault').innerHTML = '<option value="">（不设置）</option>' + MODELS.map(m => `<option value="${esc(m.connectionId)}" ${m.connectionId === s.defaultConnectionId ? 'selected' : ''}>${esc(m.displayName)}</option>`).join('');
+  $('#setDefault').innerHTML = '<option value="">（不设置）</option>' + MODELS.map(m => `<option value="${esc(m.connectionId)}" ${m.connectionId === s.defaultConnectionId ? 'selected' : ''}>${esc(plat(m))}</option>`).join('');
   const lan = CFG.server.lan.length ? ' · 局域网：' + CFG.server.lan.join('、') + '（远程管理需要管理令牌）' : ' · 仅本机可访问（127.0.0.1）';
   $('#srvInfo').textContent = '服务端口 ' + CFG.server.port + lan + ' · Node ' + CFG.server.node + (CFG.server.localTargets.length ? ' · 本地模型地址：' + CFG.server.localTargets.join('、') : '');
 }
@@ -734,7 +786,14 @@ async function load(first = true) {
   CFG = c; MODELS = c.models; TEAMS = t.teams;
   if (first) { TPL = await api('/api/team-templates'); renderWizard(); renderTemplates(); renderSnippet(); }
   else onTpl();
-  renderModels(); renderTeams(); renderRunSelectors(); renderSettings();
+  renderModels(); renderTeams(); renderRunSelectors(); renderSettings(); renderGuide();
+}
+/* B7d：首次使用（无模型或无项目）显示两步引导 */
+async function renderGuide() {
+  let projects = 0; try { projects = ((await api('/api/v2/projects')).projects || []).length; } catch { /* 引导只是提示，读取失败不影响页面 */ }
+  const hasModel = MODELS.length > 0;
+  $('#guide').classList.toggle('hidden', hasModel && projects > 0);
+  $('#g1').className = hasModel ? 'done' : 'cur'; $('#g2').className = hasModel ? 'cur' : '';
 }
 load().then(connect).catch(err => { $('#conn').textContent = '加载失败：' + err.message; });
 </script>
