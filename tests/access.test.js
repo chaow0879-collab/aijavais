@@ -279,7 +279,7 @@ test('部署安全检查：生产模式必须 HTTPS；非本机地址默认拒�
     const ch = require('child_process').spawn(process.execPath, ['--no-warnings', path.join(__dirname, '..', 'server.js')], { env: { ...process.env, PORT: '0', AIJ_DATA_DIR: tmp(), ...env }, stdio: ['ignore', 'ignore', 'pipe'] });
     let err = ''; ch.stderr.on('data', d => err += d);
     const timer = setTimeout(() => { ch.kill(); resolve({ code: 'running', err }); }, 3000);
-    ch.on('exit', code => { clearTimeout(timer); resolve({ code, err }); });
+    ch.on('close', code => { clearTimeout(timer); resolve({ code, err }); }); // 'close' waits for stderr to drain
   });
   const a = await run({ AIJ_ENV: 'production', HOST: '127.0.0.1' });
   assert.equal(a.code, 1); assert.match(a.err, /必须启用 HTTPS/);

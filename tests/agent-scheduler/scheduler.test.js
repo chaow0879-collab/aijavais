@@ -38,7 +38,7 @@ test('T15 expired leases and stale locks require human review without reissue',t
 test('T16 separate process races produce only one plan',async t=>{
  const d=area(t),modulePath=path.resolve(__dirname,'../../tools/agent-scheduler/lease.js');
  const code=`const {PlanStore}=require(${JSON.stringify(modulePath)});console.log(JSON.stringify(new PlanStore(process.argv[1]).claim({issue:15,role:'codex',phase:'ready',sha:'${F.sha(1)}'})))`;
- const run=()=>new Promise((resolve,reject)=>{const env={...process.env};delete env.NODE_TEST_CONTEXT;const c=spawn(process.execPath,['-e',code,d],{env});let out='',errors='';c.stderr.on('data',b=>errors+=b);c.stdout.on('data',b=>out+=b);c.on('error',reject);c.on('exit',n=>n===0?resolve(JSON.parse(out)):reject(Error('child failed '+errors)));});
+ const run=()=>new Promise((resolve,reject)=>{const env={...process.env};delete env.NODE_TEST_CONTEXT;const c=spawn(process.execPath,['-e',code,d],{env});let out='',errors='';c.stderr.on('data',b=>errors+=b);c.stdout.on('data',b=>out+=b);c.on('error',reject);c.on('close',n=>n===0?resolve(JSON.parse(out)):reject(Error('child failed '+errors)));});
  const results=await Promise.all([run(),run(),run(),run()]);assert.equal(results.filter(r=>r.would_dispatch).length,1);assert.ok(results.every(r=>r.actual_dispatch===false));
 });
 test('duplicate fields, identity conflicts and missing policy fail closed',()=>{assert.equal(parse('[AGENT_REPORT_V1]\nstatus: A\nstatus: B\n[/AGENT_REPORT_V1]','AGENT_REPORT_V1'),null);assert.equal(evaluate(F.positive(),{...F.config,required_jobs:[]}).state,'BLOCKED');assert.equal(evaluate(F.positive(),{...F.config,trustedActors:{...F.config.trustedActors,audit:['codex']}}).state,'BLOCKED');});
