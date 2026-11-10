@@ -132,10 +132,10 @@
     if (run.status === 'failed' || run.status === 'cancelled') {
       const bad = steps.find(st => st.status === 'failed' || st.status === 'quality_failed');
       const info = window.SmartPlan.explain({ message: bad && bad.error || '' });
-      if (info.budgetStop) {
+      if (info.budgetStop || info.overrun) {
         // 钱用完：停下来，不自动降级；已完成的部分可以下载
         const total = (run.projectSnapshot && run.projectSnapshot.steps || []).length || steps.length, doneN = steps.filter(st => st.status === 'done').length;
-        $('s-stop-text').textContent = `已完成 ${doneN}/${total} 步，花了约 ${(c => c > 0 && c < 0.01 ? '不到 ¥0.01' : '¥' + c.toFixed(2))(window.SmartPlan.spentCny(run.usage && run.usage.cost))}（估算，以厂商账单为准）。这次确认的金额已经用完，任务已停下，没有超支。`;
+        $('s-stop-text').textContent = `已完成 ${doneN}/${total} 步，花了约 ${(c => c > 0 && c < 0.01 ? '不到 ¥0.01' : '¥' + c.toFixed(2))(window.SmartPlan.spentCny(run.usage && run.usage.cost))}（估算，以厂商账单为准）。${info.text}下一步：可以先下载已完成的部分；如需做完，可请管理员提高单次上限后再新建一次。`;
         $('s-stop-download').hidden = !last; $('s-stop').hidden = false;
         $('s-result').hidden = true; $('s-stop').scrollIntoView({ block: 'center' });
         return;

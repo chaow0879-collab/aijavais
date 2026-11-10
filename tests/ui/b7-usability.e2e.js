@@ -38,8 +38,9 @@ function englishLeft(text) {
     let body = ''; req.on('data', c => body += c); req.on('end', () => {
       const j = JSON.parse(body || '{}'); chats.push(j.model);
       const text = j.max_tokens <= 32 ? '好' : '周末促销方案\n一、时间：周六、周日\n二、优惠：第二杯半价\n三、宣传：社区群与店内海报';
+      const overuse = JSON.stringify(j.messages).includes('OVERUSE') && JSON.stringify(j.messages).includes('审核上一步');
       res.writeHead(200, { 'content-type': 'text/event-stream' });
-      res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: text } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 30, completion_tokens: 40 } }) + '\n\ndata: [DONE]\n\n');
+      res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: text } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 30, completion_tokens: overuse ? 50000 : 40 } }) + '\n\ndata: [DONE]\n\n');
     });
   });
   await new Promise(r => mock.listen(0, '127.0.0.1', r));
@@ -234,6 +235,17 @@ function englishLeft(text) {
     checks.push(['B7e over cap: 效果优先(default)/省钱 offered, no silent downgrade; ran out -> stopped at 1/2, within the confirmed max, finished part downloadable', null]);
     await shot(page, '6-stopped');
     assert.equal((await app.call('POST', '/api/settings', { simpleRunCapCny: 5 })).status, 200);
+
+    /* QA-B7-07: a model that uses more than reserved -> plain stop message with next steps, finished part downloadable */
+    await page.click('#s-new');
+    await page.fill('#s-goal', 'OVERUSE 写一份周末促销方案');
+    await page.click('#s-go'); await page.waitForSelector('#s-confirm[open]'); await page.click('#s-confirm-ok');
+    await page.waitForSelector('#s-stop:not([hidden])', { timeout: 30000 });
+    const over = await page.innerText('#s-stop');
+    assert.match(over, /已完成 1\/2 步/); assert.match(over, /实际用得比预计多/); assert.match(over, /下一步：可以先下载已完成的部分/);
+    assert.doesNotMatch(over, /预留/); assert.deepEqual(englishLeft(over).words, []);
+    assert.ok(await page.isVisible('#s-stop-download'));
+    checks.push(['QA-B7-07 overrun stop: plain wording (no 预留), next-step advice, finished part downloadable', null]);
 
     /* ---- B7f: advanced form, cost 0 (owner's screenshot) -> reason next to the button + fixes ---- */
     const tested = (await app.call('GET', '/api/models')).json.models.find(m => m.status === 'available');

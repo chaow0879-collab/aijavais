@@ -170,6 +170,7 @@
     const name = ctx.modelName ? `「${ctx.modelName}」` : '所选模型';
     if (code === 'budget_required' || /positive maxCost/i.test(msg)) return { text: '预算为 0，无法调用收费模型。', fix: { action: 'set_budget', budgetCny: 1, label: '把预算设为 ¥1' } };
     if (code === 'cost_budget_exceeded' || code === 'token_budget_exceeded' || /budget cannot cover/i.test(msg)) return { text: '这次确认的金额已经用完，任务已停下，没有超支。', fix: null, budgetStop: true };
+    if (code === 'reservation_overrun') return { text: '模型这次实际用得比预计多，任务已停下，后面的步骤不会再花钱。多用的那一点费用已经产生，无法撤回。', fix: null, overrun: true };
     if (code === 'paid_approval_required' || code === 'probe_approval_required') return { text: '需要你确认本次可能产生费用。', fix: { action: 'approve', label: '确认并开始' } };
     if (code === 'price_required' || /rates are required|价格 ?JSON|价格表/i.test(msg)) return { text: '缺少模型单价，无法计算费用上限。', fix: { action: 'conservative_prices', label: '按已知单价自动填写' } };
     if (code === 'model_unverified' || /connection test|not ready|未配置 API Key|Key/i.test(msg)) return { text: `${name}还不能用：没有密钥或连接测试没通过。`, fix: { action: 'fix_model', label: '去管理中心修复模型' } };
@@ -177,7 +178,7 @@
     if (code === 'capability_missing') return { text: `${name}没有登记这个岗位需要的能力。`, fix: { action: 'add_caps', label: '为模型补充能力' } };
     if (code === 'concurrency_limit') return { text: '同时最多运行 3 个任务，请等前面的任务结束后再试。', fix: null };
     if (code === 'model_changed') return { text: '模型设置刚被修改过，需要重新开始一次。', fix: { action: 'retry', label: '重新开始' } };
-    if (/exceeded the conservative reservation/i.test(msg)) return { text: '模型实际用量超出了预留，任务已停下（已发生的少量超额无法撤回）。', fix: null };
+    if (/exceeded the conservative reservation/i.test(msg)) return { text: '模型这次实际用得比预计多，任务已停下，后面的步骤不会再花钱。多用的那一点费用已经产生，无法撤回。', fix: null, overrun: true };
     if (/HTTP 401|HTTP 403|invalid api key|Incorrect API key/i.test(msg)) return { text: `${name}的密钥无效或没有权限。`, fix: { action: 'fix_model', label: '去管理中心修复模型' } };
     if (/超时|timeout|ECONN|网络/i.test(msg)) return { text: '连接模型服务超时，可能是网络问题。', fix: { action: 'retry', label: '再试一次' } };
     if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null };
