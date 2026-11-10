@@ -26,7 +26,7 @@
     const res = await fetch(path, { method, credentials:'same-origin', headers:{ Accept:'application/json', ...(body === undefined ? {} : {'content-type':'application/json'}) }, body:body === undefined ? undefined : JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
     if (res.status === 401) { location.assign('/login.html?next=/workspace.html'); throw Error('会话已过期，请重新登录'); }
-    if (!res.ok) throw Error(data.error || data.message || '请求失败（HTTP ' + res.status + '）');
+    if (!res.ok) throw Object.assign(Error(data.error || data.message || '请求失败（HTTP ' + res.status + '）'), { code: data.code, status: res.status });
     return data;
   }
   function work(action) { return async event => {
@@ -52,7 +52,7 @@
   function modelSelect(role) {
     const select = node('select', { 'aria-label':role.name + '使用的模型', onchange:e => {role.connectionId=e.target.value; state.dirty=true;} });
     select.append(node('option',{value:'',text:'请选择模型连接'}));
-    for (const model of state.models) select.append(node('option',{value:model.connectionId,text:(model.displayName || model.modelId || model.connectionId)+' · '+modelState(model)+' · '+(model.pricingMode || '费用未知')}));
+    for (const model of state.models) select.append(node('option',{value:model.connectionId,text:(window.ModelHints?ModelHints.platformLabel(model):(model.displayName || model.modelId || model.connectionId))+' · '+modelState(model)+' · '+(model.pricingMode || '费用未知')}));
     const current = role.connectionId || role.primaryConnectionId || role.modelConnectionId || '';
     if (current && !state.models.some(m => m.connectionId === current)) select.append(node('option',{value:current,text:current+'（连接已移除）'}));
     select.value = current; role.connectionId = current;
@@ -224,7 +224,7 @@
   }
   async function openProject(id) {
     if(state.dirty && !confirm('当前配置有未保存修改，仍要切换项目吗？'))return;
-    const data=await api('/api/v2/projects/'+encodeURIComponent(id));renderProject(data.project || data);
+    const data=await api('/api/v2/projects/'+encodeURIComponent(id));document.body.dataset.mode='advanced';renderProject(data.project || data);
     state.runs=list(data,'runs');state.run=null;renderRunPicker();renderRun();
     const url=new URL(location.href);url.searchParams.set('project',id);history.replaceState(null,'',url);
     if(state.runs.length)await loadRun(state.runs[0].runId || state.runs[0].id);
@@ -351,11 +351,56 @@
   $('project-form').addEventListener('input',()=>state.dirty=true);
   $('project-form').addEventListener('submit',work(saveProject));
   for(const name of ['project','run','resources'])$('tab-'+name).addEventListener('click',()=>tab(name));
-  $('new-project').addEventListener('click',()=>{if(state.dirty&&!confirm('放弃未保存修改并新建项目？'))return;renderProject(blankProject());state.runs=[];state.run=null;renderRunPicker();renderRun();history.replaceState(null,'','/workspace.html');tab('project');feedback('');});
+  $('new-project').addEventListener('click',()=>{if(state.dirty&&!confirm('放弃未保存修改并新建项目？'))return;renderProject(blankProject());state.runs=[];state.run=null;renderRunPicker();renderRun();history.replaceState(null,'','/workspace.html');tab('project');feedback('');document.body.dataset.mode='simple';window.AIJSimple?.reset();});
   $('add-role').addEventListener('click',()=>{const roleId='role-'+Date.now().toString(36);state.project.roles.push({roleId,name:'新岗位',duty:'',standard:'',connectionId:''});state.dirty=true;renderRoles();renderSteps();});
   $('add-step').addEventListener('click',()=>{state.project.steps.push({stepId:'step-'+Date.now().toString(36),title:'新步骤',roleId:state.project.roles[0]?.roleId || '',prompt:'',toolCalls:[],checks:[]});state.dirty=true;renderSteps();});
-  $('validate-project').addEventListener('click',work(async()=>{const project=await saveProject();const result=await api('/api/v2/projects/'+project.projectId+'/validate','POST',approval());$('validation').hidden=false;$('validation-text').textContent=JSON.stringify(result,null,2);feedback(result.ok?'执行条件检查通过。尚未开始调用模型。':'检查发现待处理事项，请查看具体原因。',!result.ok);}));
-  $('start-run').addEventListener('click',work(async()=>{const project=await saveProject(),limits=approval();const data=await api('/api/v2/projects/'+project.projectId+'/runs','POST',limits);state.run=data.run || data;state.runs.unshift(state.run);$('approve-paid').checked=false;renderRunPicker();renderRun();tab('run');feedback('任务已提交；以下状态来自真实服务端执行记录。');}));
+  let CAPS={};
+  async function capNames(){if(!Object.keys(CAPS).length){try{CAPS=(await api('/api/catalog')).capabilities||{};}catch{CAPS={};}}return CAPS;}
+  async function renderChecklist(result){
+    const names=await capNames(),target=$('validation-list'),label=m=>window.ModelHints?ModelHints.platformLabel(m):(m.displayName||m.connectionId);
+    target.replaceChildren();
+    if(result.ok){target.append(node('p',{text:'✓ 执行条件都满足了，可以开始执行。'}));return;}
+    for(const issue of result.issues||[]){
+      const role=state.project.roles.find(r=>r.roleId===issue.roleId),model=role&&state.models.find(m=>m.connectionId===role.connectionId),row=node('div',{class:'alert'});
+      if(issue.code==='capability_missing'&&role&&model){
+        const missing=((/capabilities? (.+)$/.exec(issue.message||'')||[])[1]||'').split(/,\s*/).filter(Boolean),cn=missing.map(c=>names[c]||c);
+        row.append(node('div',{text:'岗位「'+role.name+'」需要的能力，'+label(model)+' 还没有登记：'+cn.join('、')}));
+        row.append(node('button',{type:'button',class:'fixbtn',text:'为 '+label(model)+' 补充能力：'+cn.join('、'),onclick:work(async()=>{await api('/api/models/'+encodeURIComponent(model.connectionId),'PUT',{capabilities:[...new Set([...(model.capabilities||[]),...missing])]});await refreshResources();await recheck();})}));
+        const better=state.models.find(m=>m.connectionId!==model.connectionId&&m.enabled!==false&&missing.every(c=>(m.capabilities||[]).includes(c)));
+        if(better)row.append(node('button',{type:'button',class:'fixbtn',text:'更换为 '+label(better),onclick:work(async()=>{role.connectionId=better.connectionId;state.dirty=true;renderRoles();await recheck();})}));
+      }else{
+        const info=window.SmartPlan?SmartPlan.explain({code:issue.code,message:issue.message},{modelName:model&&label(model)}):{text:issue.message};
+        row.append(node('div',{text:(role?'岗位「'+role.name+'」：':'')+info.text}));
+        if(info.fix&&info.fix.action==='fix_model')row.append(node('a',{class:'fixbtn',href:'/admin.html',text:info.fix.label}));
+        if(info.fix&&info.fix.action==='auto_assign')row.append(node('button',{type:'button',class:'fixbtn',text:info.fix.label,onclick:work(async()=>{const pool=SmartPlan.usable(state.models);for(const r of state.project.roles)if(!r.connectionId&&pool[0])r.connectionId=pool[0].connectionId;renderRoles();await recheck();})}));
+      }
+      target.append(row);
+    }
+  }
+  async function recheck(){const project=await saveProject();let limits;try{limits=approval();}catch{limits={};}const result=await api('/api/v2/projects/'+project.projectId+'/validate','POST',limits);$('validation').hidden=false;$('validation-text').textContent=JSON.stringify(result,null,2);await renderChecklist(result);feedback(result.ok?'执行条件检查通过。尚未开始调用模型。':'检查发现待处理事项，请按下面的提示修复。',!result.ok);$('validation').scrollIntoView({block:'start'});}
+  $('validate-project').addEventListener('click',work(recheck));
+  /* B7f：门禁拦下时，在按钮旁用中文说明原因并给一键修复；成功后立即进入执行进度 */
+  function showStartError(error){
+    const box=$('start-error'),info=window.SmartPlan?SmartPlan.explain(error):{text:error.message};
+    box.replaceChildren(node('div',{text:'没有开始：'+info.text}));
+    const fix=info.fix,act={
+      set_budget:()=>{$('max-cost').value=String(Math.floor((fix.budgetCny||1)/SmartPlan.CNY_PER_USD*10000)/10000);$('approve-paid').checked=true;},
+      approve:()=>{$('approve-paid').checked=true;},
+      conservative_prices:()=>{const prices={};for(const r of state.project.roles){const m=state.models.find(x=>x.connectionId===r.connectionId);if(m&&m.pricingMode!=='local')prices[m.connectionId]={...SmartPlan.RATES[ModelHints.tierOf(m.modelId)]};}$('prices-json').value=JSON.stringify(prices,null,2);},
+      auto_assign:()=>{const pool=SmartPlan.usable(state.models);for(const r of state.project.roles)if(!r.connectionId&&pool[0])r.connectionId=pool[0].connectionId;renderRoles();},
+      retry:()=>{},
+    }[fix&&fix.action];
+    if(fix&&fix.action==='fix_model')box.append(node('a',{class:'fixbtn',href:'/admin.html',text:fix.label}));
+    else if(fix&&fix.action==='add_caps')box.append(node('button',{type:'button',class:'fixbtn',text:'查看执行条件并修复',onclick:()=>$('validate-project').click()}));
+    else if(act)box.append(node('button',{type:'button',class:'fixbtn',text:fix.label+(fix.action==='retry'?'':'，然后重新开始'),onclick:()=>{act();box.hidden=true;$('start-run').click();}}));
+    if(info.detail)box.append(node('details',{},[node('summary',{text:'技术细节（给管理员看）'}),node('div',{text:info.detail})]));
+    box.hidden=false;box.scrollIntoView({block:'center'});
+  }
+  $('start-run').addEventListener('click',work(async()=>{
+    $('start-error').hidden=true;
+    try{const project=await saveProject(),limits=approval();const data=await api('/api/v2/projects/'+project.projectId+'/runs','POST',limits);state.run=data.run || data;state.runs.unshift(state.run);$('approve-paid').checked=false;renderRunPicker();renderRun();tab('run');scrollTo(0,0);feedback('任务已开始，下面是实时执行进度。');}
+    catch(error){showStartError(error);}
+  }));
   $('run-picker').addEventListener('change',work(()=>loadRun($('run-picker').value)));
   $('refresh-run').addEventListener('click',work(async()=>{if(state.run)await loadRun(state.run.runId);else if(state.project.projectId)await openProject(state.project.projectId);}));
   $('cancel-run').addEventListener('click',work(async()=>{if(!state.run)return;await api('/api/v2/runs/'+state.run.runId+'/cancel','POST',{});await loadRun(state.run.runId);feedback('已请求取消任务');}));

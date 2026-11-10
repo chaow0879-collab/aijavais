@@ -53,7 +53,7 @@ button:disabled{opacity:.5;cursor:default}
 </div>
 <script>
 const $ = s => document.querySelector(s);
-const next = (() => { const n = new URLSearchParams(location.search).get('next') || '/admin.html'; return /^\/(?!\/)[\w./-]*$/.test(n) ? n : '/admin.html'; })();
+const next = (() => { const n = new URLSearchParams(location.search).get('next') || '/workspace.html'; return /^\/(?!\/)[\w./-]*$/.test(n) ? n : '/workspace.html'; })();
 const msg = (t, c = 'bad') => { $('#msg').className = 'msg ' + c; $('#msg').textContent = t; };
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), credentials: 'same-origin' });

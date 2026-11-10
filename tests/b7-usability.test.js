@@ -15,7 +15,7 @@ test('B7b: name rules suggest capabilities from the catalog vocabulary only', ()
   assert.ok(s('qwen3-coder-plus').includes('coding'));
   assert.ok(s('qwen-vl-max').includes('vision')); assert.ok(s('qwen3.8-omni-flash').includes('vision'));
   assert.ok(s('qwen3.8-flash').includes('chinese'), 'built-in family table');
-  assert.deepEqual(s('gpt-x-unknown'), [], 'no rule, no invented capability');
+  assert.deepEqual(s('gpt-x-unknown'), ['reasoning', 'writing', 'chinese', 'data_analysis'], 'owner #10 v2.2: general chat models get the four common abilities by default');
   for (const id of ['deepseek-flash', 'qwen3.8-max', 'qwen-vl-max']) for (const c of s(id)) assert.ok(CAPS.includes(c), c);
 });
 test('B7a: embedding, rerank, realtime, speech, image and translation models are flagged non-chat with a reason', () => {
