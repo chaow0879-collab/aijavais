@@ -121,7 +121,7 @@ docker compose start app
 
 ## 可选 Render 部署
 
-`render.yaml` 已改为 Docker + `starter` 服务 + 1GB 持久磁盘 `/data` + `/healthz` 健康检查，关闭自动部署。它取代不兼容安全登录/持久化的旧免费版方案。
+`deploy/render.yaml`（**不在仓库根目录**）已改为 Docker + `starter` 服务 + 1GB 持久磁盘 `/data` + `/healthz` 健康检查，关闭自动部署。B2-prep 起把它移出根目录：Render 默认读取根目录的 `render.yaml`，若早期按 main 旧版免费蓝图（默认自动部署）建过服务，main 快进后可能被同步成付费方案。负责人批准费用后，执行 `git mv deploy/render.yaml render.yaml` 或在 Render 中把蓝图路径指向 `deploy/render.yaml`，再手动 Apply。它取代不兼容安全登录/持久化的旧免费版方案。
 
 **此方案涉及服务与磁盘费用，必须由负责人确认后在 Render 控制台手动 Apply。** 本次未创建服务、未产生 Render 付费资源，也没有验证 Render 的实际入口、磁盘 UID 或证书。首次部署时检查 `/data` 对 UID1000 可写，若托管磁盘为 root-owned，先通过该平台受支持的权限初始化流程赋予应用 UID1000 目录所有权，不能将生产应用改成 root 运行来掩盖问题。确认平台 HTTPS 入口、转发头覆盖、健康检查和持久化重启，再配置真实凭据。
 
