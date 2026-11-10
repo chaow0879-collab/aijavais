@@ -1,0 +1,80 @@
+name: AUDIT CodeAudit c7de4a7 (independent, read-only)
+# Independent-CodeAudit evidence only. Checks out the EXACT reviewed SHA separately from the audit assets.
+# No secrets, no paid models, no deploy, no schedule, contents:read, persist-credentials:false.
+on:
+  push:
+    branches: [audit/c7de4a7-20261110]
+    paths: [audit-evidence/c7de4a7/**, .github/workflows/audit-c7de4a7.yml]
+permissions:
+  contents: read
+concurrency: { group: audit-c7de4a7, cancel-in-progress: false }
+env:
+  REVIEWED_SHA: c7de4a7fa16b190b63317bdc2df81cb6c4c5e77b
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: audit, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with: { ref: c7de4a7fa16b190b63317bdc2df81cb6c4c5e77b, path: reviewed, fetch-depth: 0, persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: Provenance
+        run: |
+          set -eu
+          test "$(git -C reviewed rev-parse HEAD)" = "$REVIEWED_SHA"
+          git -C reviewed status --porcelain | wc -l
+          node --version; uname -a; cat /etc/os-release | head -3
+          mkdir -p "$RUNNER_TEMP/out"; echo "reviewed=$(git -C reviewed rev-parse HEAD) tree=$(git -C reviewed rev-parse HEAD^{tree}) audit=$(git -C audit rev-parse HEAD)" | tee "$RUNNER_TEMP/out/source.txt"
+      - name: "1 Independent counterexamples (auditor-written)"
+        if: success() || failure()
+        env: { REVIEWED_ROOT: "${{ github.workspace }}/reviewed", AUDIT_OUT: "${{ runner.temp }}/out" }
+        run: |
+          set -o pipefail
+          node --test --test-concurrency=1 --test-reporter=tap audit/audit-evidence/c7de4a7/independent.test.cjs | tee "$RUNNER_TEMP/out/independent.tap"
+      - name: "2 Author audit-fix regressions"
+        if: success() || failure()
+        working-directory: reviewed
+        run: |
+          set -o pipefail
+          node --test --test-concurrency=1 --test-reporter=tap tests/audit-fixes/*.test.js | tee "$RUNNER_TEMP/out/author-audit-fixes.tap"
+      - name: "3 R56 + R57 suites in reviewed tree (R56 scope: assertion skipped as in author CI)"
+        if: success() || failure()
+        working-directory: reviewed
+        run: |
+          set -o pipefail
+          node --test --test-concurrency=1 --test-reporter=tap --test-skip-pattern='^scope:' tests/event-handoff-r56/*.test.js tests/unattended-go-r57/*.test.js | tee "$RUNNER_TEMP/out/r56-r57.tap"
+      - name: "4 Provenance guard (sources.js) at reviewed HEAD"
+        if: success() || failure()
+        working-directory: reviewed
+        run: node tools/unattended-go-r57/sources.js | tee "$RUNNER_TEMP/out/sources-verify.json"
+      - name: "5 E3_FAKE real server test unmodified (AUD-BC72-06)"
+        if: success() || failure()
+        env: { REVIEWED_ROOT: "${{ github.workspace }}/reviewed", AUDIT_OUT: "${{ runner.temp }}/out" }
+        run: node audit/audit-evidence/c7de4a7/e3-real-server.cjs
+      - name: "5b Author R57 workflow audit-fix + R52 workbench steps exactly as in codex-r57-unattended.yml"
+        if: success() || failure()
+        working-directory: reviewed
+        run: |
+          set -o pipefail
+          node --test --test-reporter=tap --test-skip-pattern='scope:' tests/haloflux-workbench-r52/workbench.test.js | tee "$RUNNER_TEMP/out/workbench-author-skip.tap"
+      - name: "7 Flake statistics (50x each, TAP): gate-integration R42 BLOCKED test and executor four-competing test"
+        if: success() || failure()
+        working-directory: reviewed
+        run: |
+          set +e
+          for name in "R42 V2 new-role latest BLOCKED prevents even a Fake job claim|tests/agent-executor/gate-integration.test.js" "R42 V2 new-role latest REJECTED prevents even a Fake job claim|tests/agent-executor/gate-integration.test.js" "four competing processes claim a job once|tests/agent-executor/executor.test.js" "T16 separate process races produce only one plan|tests/agent-scheduler/scheduler.test.js"; do
+            pat="${name%%|*}"; file="${name##*|}"; pass=0; fail=0
+            # auditor-script fix (run 42748506054): default reporter is spec on non-TTY, so '# pass 1' never matched; use TAP explicitly.
+            for i in $(seq 1 50); do if node --test --test-reporter=tap --test-name-pattern="$pat" "$file" > /tmp/flake.out 2>&1 && grep -q '^# pass 1$' /tmp/flake.out && grep -q '^# fail 0$' /tmp/flake.out; then pass=$((pass+1)); else fail=$((fail+1)); grep -E '^not ok|^ +error:' -A2 /tmp/flake.out | head -6; fi; done
+            echo "FLAKE pattern=[$pat] runs=50 pass=$pass fail=$fail" | tee -a "$RUNNER_TEMP/out/flake.txt"
+          done
+          exit 0
+      - name: "6 Reviewed tree unchanged"
+        if: success() || failure()
+        run: git -C reviewed status --porcelain | tee "$RUNNER_TEMP/out/reviewed-status.txt"; test ! -s "$RUNNER_TEMP/out/reviewed-status.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: audit-c7de4a7-evidence, path: "${{ runner.temp }}/out", retention-days: 30 }
