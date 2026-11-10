@@ -48,6 +48,8 @@ const H = require('../helpers');
     page.on('pageerror',error=>errors.push(error.message));
     await page.goto(base+'/workspace.html');
     await page.waitForSelector('#roles-editor select option[value="'+models[0]+'"]',{state:'attached'});
+    // B7e: the workspace opens in simple mode; this walkthrough covers the advanced form behind 高级设置.
+    await page.click('#s-advanced');
     assert.equal(await page.isChecked('#approve-paid'),false);
     await page.fill('#project-name','UI <script>window.__unsafe=1</script> 项目');
     await page.fill('#project-description','通过工作台创建项目并验证真实服务端调度、审核和文件导出。');
