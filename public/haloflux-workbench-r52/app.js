@@ -109,7 +109,7 @@
   function roleCard(r) {
     const models = S.models;
     const sel = node('select', { 'data-op': 'setModel', 'data-role': r.role_id, 'data-fkey': 'model-' + r.role_id, 'aria-label': r.name + ' 使用的模型' },
-      [node('option', { value: '', text: '不分配模型' })].concat(models.map(m => node('option', { value: m.connectionId, selected: r.model && r.model.connection_id === m.connectionId, text: (m.displayName || m.connectionId) + ' · ' + (m.pricingMode || '?') + (m.status !== 'available' ? '（' + m.status + '）' : '') }))));
+      [node('option', { value: '', text: '不分配模型' })].concat(models.map(m => node('option', { value: m.connectionId, selected: r.model && r.model.connection_id === m.connectionId, text: (m.platformLabel || m.displayName || m.connectionId) + ' · ' + (m.pricingMode || '?') + (m.status !== 'available' ? '（' + m.status + '）' : '') }))));
     const field = (key, label, max) => node('div', {}, [node('label', { class: 'lbl', for: 'r-' + key + '-' + r.role_id, text: label }),
       node('input', { type: 'text', id: 'r-' + key + '-' + r.role_id, value: r[key], maxlength: max, 'data-op': 'editRole', 'data-role': r.role_id, 'data-key': key, 'data-fkey': 'r-' + key + '-' + r.role_id })]);
     return node('li', { 'data-rolecard': r.role_id, 'data-origin': r.origin }, [

@@ -24,12 +24,11 @@
   <script src="/workspace-simple.js" defer></script>
 </head>
 <body data-mode="simple">
-<header><div><strong>AIJAVAIS <span style="color:var(--accent)">V2</span></strong><small>项目协作与成果交付工作台</small></div><nav><a href="/project-intake.html">智能立项</a><a href="/capabilities.html">能力中心</a><a href="/admin.html">模型与团队</a><a href="/panel.html">实时大屏</a><button class="small" id="logout" type="button">退出登录</button></nav></header>
+<header><div><strong>AIJAVAIS <span style="color:var(--accent)">V2</span></strong><small>项目协作与成果交付工作台</small></div><nav><a class="newtask" id="s-newtask" href="/workspace.html?new=1">＋ 新建任务</a><a href="/project-intake.html">智能立项</a><a href="/capabilities.html">能力中心</a><a href="/admin.html">模型与团队</a><a href="/panel.html">实时大屏</a><button class="small" id="logout" type="button">退出登录</button></nav></header>
 <div class="shell">
   <aside><div class="side-head"><span class="side-title">我的项目</span><button id="new-project" class="small" type="button">＋ 新建</button></div><div id="projects" class="projects" aria-label="项目列表"><p class="empty">正在读取项目…</p></div></aside>
   <main>
-    <a class="newtask simple-only" id="s-newtask" href="/workspace.html?new=1" style="float:right">＋ 新建任务</a>
-    <section id="simple" class="card simple-only" aria-labelledby="s-title">
+        <section id="simple" class="card simple-only" aria-labelledby="s-title">
       <div class="row-head"><h2 id="s-title">新建任务</h2><button id="s-advanced" type="button" class="small">高级设置</button></div>
       <div id="ws-guide" class="guide" hidden><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里，说说想做什么，点“一键智能配置并开始”。</div>
       <label for="s-goal">想做什么</label><textarea id="s-goal" rows="3" maxlength="4000" placeholder="例如：给社区咖啡店写一份周末促销方案"></textarea>

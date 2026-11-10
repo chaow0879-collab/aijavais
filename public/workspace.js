@@ -348,6 +348,7 @@
     addEventListener('beforeunload',()=>{stream.close();clearInterval(state.timer);});
     state.timer=setInterval(periodicRefresh,1800);
   }
+  window.AIJWorkspace={refreshProjects:()=>refreshProjects().catch(()=>{})};
   $('project-form').addEventListener('input',()=>state.dirty=true);
   $('project-form').addEventListener('submit',work(saveProject));
   for(const name of ['project','run','resources'])$('tab-'+name).addEventListener('click',()=>tab(name));
@@ -384,7 +385,7 @@
     const box=$('start-error'),info=window.SmartPlan?SmartPlan.explain(error):{text:error.message};
     box.replaceChildren(node('div',{text:'没有开始：'+info.text}));
     const fix=info.fix,act={
-      set_budget:()=>{$('max-cost').value=String(Math.floor((fix.budgetCny||1)/SmartPlan.CNY_PER_USD*10000)/10000);$('approve-paid').checked=true;},
+      set_budget:()=>{$('max-cost').value=String(Math.floor((fix.budgetCny||1)/SmartPlan.CNY_PER_USD*100)/100);$('approve-paid').checked=true;},
       approve:()=>{$('approve-paid').checked=true;},
       conservative_prices:()=>{const prices={};for(const r of state.project.roles){const m=state.models.find(x=>x.connectionId===r.connectionId);if(m&&m.pricingMode!=='local')prices[m.connectionId]={...SmartPlan.RATES[ModelHints.tierOf(m.modelId)]};}$('prices-json').value=JSON.stringify(prices,null,2);},
       auto_assign:()=>{const pool=SmartPlan.usable(state.models);for(const r of state.project.roles)if(!r.connectionId&&pool[0])r.connectionId=pool[0].connectionId;renderRoles();},

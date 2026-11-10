@@ -92,7 +92,7 @@
   function selectModel(value, change, id) {
     const select=el('select',{id,onchange:e=>change(e.target.value)});
     select.append(el('option',{value:'',text:'请选择已注册并通过试连的模型'}));
-    for(const c of models)select.append(el('option',{value:c.connectionId,text:(c.displayName||c.connectionId)+' · '+c.pricingMode+(c.status==='available'?'':'（需完成试连）'),disabled:c.status!=='available'}));
+    for(const c of models)select.append(el('option',{value:c.connectionId,text:(c.platformLabel||c.displayName||c.connectionId)+' · '+c.pricingMode+(c.status==='available'?'':'（需完成试连）'),disabled:c.status!=='available'}));
     select.value=value;return select;
   }
   function editor(parent) {

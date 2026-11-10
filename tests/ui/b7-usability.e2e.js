@@ -1,0 +1,191 @@
+'use strict';
+/* B7 usability walkthrough in real Chromium against the real server, SQLite and a LOCAL MOCK
+ * OpenAI-compatible provider (no paid API, no Secrets). Covers #10 [TASK_LIST] v2.1–v2.3:
+ *  B7a connect-and-add-all with filtered counts + refresh; B7b auto abilities; B7c platform labels;
+ *  B7d login lands on "＋ 新建任务" with a first-use guide; B7e/B7g one-click to the progress view
+ *  with no English technical words or raw JSON on screen; B7f gate errors in Chinese with one-click
+ *  fixes (cost 0 at HEAD reproduced) and a fixable checklist instead of raw JSON. */
+const assert = require('node:assert/strict');
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const { chromium } = require('playwright');
+const H = require('../helpers');
+
+const SHOTS = process.env.UI_SHOTS || null;
+const LIST = ['deepseek-flash', 'deepseek-v4-pro', 'qwen3.7-flash', 'qwen3.7-flash-2026-07-15', 'text-embedding-v4', 'qwen3-tts-flash', 'kimi/kimi-k3', 'qwen3.8-27b'];
+const KEEP = ['deepseek-flash', 'deepseek-v4-pro', 'qwen3.7-flash'];
+const checks = [];
+const check = (name, fn) => checks.push([name, fn]);
+// Visible-text scan: after removing model IDs and a short allowlist, no ASCII word of 3+ letters may remain.
+const ALLOW = ['AIJAVAIS', 'Word', 'Excel', 'PPT', ...LIST];
+function englishLeft(text) {
+  let t = String(text);
+  for (const w of [...ALLOW].sort((a, b) => b.length - a.length)) t = t.split(w).join(' ');
+  const words = t.match(/[A-Za-z][A-Za-z_]{2,}/g) || [];
+  const json = /[{[]\s*"[^"]*"\s*:/.test(text);
+  return { words: [...new Set(words)], json };
+}
+
+(async () => {
+  const chats = [];
+  const mock = http.createServer((req, res) => {
+    if (req.method === 'GET' && /\/models$/.test(req.url)) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ data: LIST.map(id => ({ id })) })); }
+    let body = ''; req.on('data', c => body += c); req.on('end', () => {
+      const j = JSON.parse(body || '{}'); chats.push(j.model);
+      const text = j.max_tokens <= 32 ? '好' : '周末促销方案\n一、时间：周六、周日\n二、优惠：第二杯半价\n三、宣传：社区群与店内海报';
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: text } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 30, completion_tokens: 40 } }) + '\n\ndata: [DONE]\n\n');
+    });
+  });
+  await new Promise(r => mock.listen(0, '127.0.0.1', r));
+  const mp = mock.address().port;
+  const app = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mp } });
+  const base = 'http://localhost:' + app.port;
+  // Chromium derives download filenames from the process locale; without UTF-8 it drops non-ASCII names.
+  const browser = await chromium.launch({ headless: true, env: { ...process.env, LANG: process.env.LANG || 'C.UTF-8' }, ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}) });
+  const shot = async (page, name) => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, 'b7-' + name + '.png'), fullPage: true }); } };
+  try {
+    /* ---- B7d: a real login lands on the workspace with "＋ 新建任务" and the two-step guide ---- */
+    const fresh = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const lp = await fresh.newPage();
+    await lp.goto(base + '/login.html');
+    await lp.waitForSelector('#loginForm:not(.hidden)');
+    check('login page shows no English technical words', async () => { const r = englishLeft(await lp.innerText('body')); assert.deepEqual(r.words, [], 'login: ' + r.words); });
+    for (const [n, f] of checks.splice(0)) await f().then(() => checks.push([n, null]));
+    await lp.fill('#pw', H.TEST_PASSWORD); await lp.click('#loginBtn');
+    await lp.waitForURL(/\/workspace\.html/);
+    await lp.waitForSelector('#s-go');
+    assert.ok(await lp.isVisible('#s-newtask'), '＋ 新建任务 is visible after login');
+    await lp.waitForSelector('#ws-guide:not([hidden])');
+    checks.push(['B7d login lands on workspace; ＋ 新建任务 + two-step guide when no model', null]);
+    // B7g fallback: no model yet -> guidance, not an error dump
+    await lp.fill('#s-goal', '写一份方案'); await lp.click('#s-go');
+    await lp.waitForSelector('#s-error:not([hidden])');
+    assert.match(await lp.innerText('#s-error'), /还没有可用的模型/); assert.ok(await lp.isVisible('#s-error a[href="/admin.html"]'));
+    checks.push(['B7g no model: Chinese guidance with a link to add a model', null]);
+    await shot(lp, '1-first-use');
+
+    /* ---- B7a/B7b/B7c: connect-and-add-all, filtered counts, refresh ---- */
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
+    const ck = H.cookies.get(app.port).split('=');
+    await ctx.addCookies([{ name: ck[0], value: ck.slice(1).join('='), domain: 'localhost', path: '/' }]);
+    const page = await ctx.newPage();
+    await page.goto(base + '/admin.html');
+    await page.waitForSelector('#wProv option', { state: 'attached' });
+    assert.ok(await page.isVisible('#newTaskBtn'), 'admin has ＋ 新建任务'); assert.ok(await page.isVisible('#guide'), 'admin shows the first-use guide');
+    await page.selectOption('#wProv', 'custom');
+    await page.evaluate(() => { document.querySelector('#wBase').closest('details').open = true; });
+    await page.fill('#wBase', `http://127.0.0.1:${mp}/v1`);
+    await page.fill('#wKey', 'mock-key-not-secret-1234');
+    await page.click('#wAddAll');
+    await page.waitForFunction(() => /已添加 \d+ 个/.test(document.querySelector('#wAllRes').textContent));
+    assert.match(await page.innerText('#wAllRes'), new RegExp(`已添加 ${KEEP.length} 个，已自动跳过 ${LIST.length - KEEP.length} 个`));
+    const saved = (await app.call('GET', '/api/models')).json.models;
+    assert.deepEqual(saved.map(m => m.modelId).sort(), [...KEEP].sort());
+    assert.ok(saved.every(m => ['reasoning', 'writing', 'chinese', 'data_analysis'].every(c => m.capabilities.includes(c))), 'B7b default abilities');
+    assert.ok(saved.find(m => m.modelId === 'deepseek-v4-pro').capabilities.includes('long_context'));
+    assert.ok(saved.every(m => m.hasKey && m.platformLabel === '自定义 · ' + m.modelId));
+    assert.ok((await page.innerText('#mList')).includes('自定义 · deepseek-flash'), 'B7c label in model list');
+    checks.push([`B7a add-all: added ${KEEP.length}, skipped ${LIST.length - KEEP.length} (non-chat, snapshot, marketplace, size); B7b abilities; B7c labels`, null]);
+    await page.click('#wRefresh');
+    await page.waitForFunction(() => /以前已添加/.test(document.querySelector('#wAllRes').textContent));
+    assert.match(await page.innerText('#wAllRes'), new RegExp(`已添加 0 个.*${KEEP.length} 个以前已添加`));
+    checks.push(['B7a refresh reuses the saved key and adds only new models', null]);
+    await shot(page, '2-add-all');
+
+    /* ---- B7e/B7g: one click from three answers to the progress view, plain Chinese only ---- */
+    await page.goto(base + '/workspace.html');
+    await page.waitForSelector('#s-go');
+    assert.ok(await page.isHidden('#ws-guide'), 'guide hides once a model exists');
+    await page.fill('#s-goal', '给社区咖啡店写一份周末促销方案');
+    await page.check('input[name=s-output][value=word]');
+    await page.check('input[name=s-budget][value="5"]');
+    assert.match(await page.innerText('#s-estimate'), /最多花 ¥5。预计约 \d+ 次对话、约 \d+ 字/);
+    await page.click('#s-preview');
+    await page.waitForSelector('#s-plan:not([hidden])');
+    const team1 = await page.innerText('#s-plan-team');
+    assert.match(team1, /起草员 → 自定义 · \S+（便宜快速）｜审核员 → 自定义 · deepseek-v4-pro（擅长分析推理）/);
+    await page.click('#s-swap button >> nth=0');
+    assert.notEqual(await page.innerText('#s-plan-team'), team1, '换一个 changes the assignment');
+    checks.push(['B7g preview: rule-based assignment in plain words; 换一个 works', null]);
+    for (const sel of ['#simple']) { const r = englishLeft(await page.innerText(sel)); assert.deepEqual(r.words, [], 'simple form: ' + r.words); assert.equal(r.json, false); }
+    await shot(page, '3-simple');
+    await page.click('#s-go');
+    await page.waitForSelector('#s-progress:not([hidden])');
+    await page.waitForSelector('#s-result:not([hidden])', { timeout: 30000 });
+    assert.match(await page.innerText('#s-team'), /团队：起草员 → .*｜审核员 → /);
+    assert.match(await page.innerText('#s-steps'), /写出初稿 · 已完成[\s\S]*审核并定稿 · 已完成/);
+    assert.match(await page.innerText('#s-final'), /周末促销方案/);
+    const whole = englishLeft(await page.innerText('body'));
+    assert.deepEqual(whole.words, [], 'progress page shows English words: ' + whole.words); assert.equal(whole.json, false, 'no raw JSON');
+    checks.push(['B7g one click -> progress view -> steps done; whole page has no English technical words or raw JSON', null]);
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#s-download')]);
+    const docx = fs.readFileSync(await dl.path());
+    assert.equal(docx.subarray(0, 2).toString(), 'PK', 'real DOCX (zip)'); assert.match(dl.suggestedFilename(), /\.docx$/);
+    await page.click('#s-accept'); await page.waitForFunction(() => /已确认完成/.test(document.querySelector('#s-state').textContent));
+    checks.push(['B7e chosen output (Word) downloads as a real DOCX; confirm completes the run', null]);
+    const runs = (await app.call('GET', '/api/v2/projects')).json.projects;
+    const run = (await app.call('GET', '/api/v2/projects/' + runs[0].projectId)).json.runs[0];
+    const full = (await app.call('GET', '/api/v2/runs/' + run.runId)).json.run;
+    assert.equal(full.approval.approvePaid, true); assert.ok(full.approval.maxCost > 0 && full.approval.maxCost <= 5 / 7.3);
+    assert.ok(Object.values(full.approval.prices).every(p => p.inputPerMillion > 0 && p.outputPerMillion > 0), 'budget gate still got explicit USD rates');
+    assert.equal(full.approval.approveExternalTools, false); assert.deepEqual(full.approval.allowedTools, []);
+    checks.push(['budget gate kept: explicit per-run approval, USD cap from ¥ tier, positive rates, MCP/code off', null]);
+    await shot(page, '4-progress');
+
+    /* ---- B7e: budget 0 in simple mode -> Chinese reason + one-click fix ---- */
+    await page.click('#s-new');
+    await page.fill('#s-goal', '再写一份方案');
+    await page.check('input[name=s-budget][value=custom]'); await page.fill('#s-budget-custom', '0');
+    await page.click('#s-go');
+    await page.waitForSelector('#s-error:not([hidden])');
+    assert.match(await page.innerText('#s-error'), /预算为 0/);
+    await page.click('#s-error button:has-text("把预算设为 ¥1")');
+    await page.waitForSelector('#s-progress:not([hidden])');
+    checks.push(['B7e budget 0: Chinese reason, one click sets ¥1 and starts', null]);
+
+    /* ---- B7f: advanced form, cost 0 (owner's screenshot) -> reason next to the button + fixes ---- */
+    const tested = (await app.call('GET', '/api/models')).json.models.find(m => m.status === 'available');
+    await page.goto(base + '/workspace.html');
+    await page.waitForSelector('#s-advanced');
+    await page.click('#s-advanced');
+    await page.fill('#project-name', '高级模式复现'); await page.fill('#project-description', '费用上限为 0 时点击开始执行');
+    for (const s of await page.$$('#roles-editor select')) await s.selectOption(tested.connectionId);
+    assert.ok((await page.$$eval('#roles-editor select option', o => o.map(x => x.textContent))).some(t => t.startsWith('自定义 · ')), 'B7c label in role picker');
+    await page.fill('#max-cost', '0'); await page.check('#approve-paid');
+    await page.click('#start-run');
+    await page.waitForSelector('#start-error:not([hidden])');
+    const box = await page.$eval('#start-error', e => { const r = e.getBoundingClientRect(); return { text: e.innerText, inView: r.top >= 0 && r.bottom <= innerHeight }; });
+    assert.match(box.text, /预算为 0/); assert.ok(box.inView, 'error is next to the button, inside the viewport');
+    assert.deepEqual(englishLeft(box.text).words, []);
+    await shot(page, '5-cost-zero');
+    const seen = [box.text.split('\n')[0]];
+    for (let i = 0; i < 3 && !(await page.isVisible('#panel-run')); i++) {
+      await page.click('#start-error button');
+      await page.waitForFunction(() => !document.querySelector('#panel-run').hidden || !document.querySelector('#start-error').hidden);
+      await page.waitForTimeout(300);
+      if (await page.isVisible('#start-error')) { const t = await page.innerText('#start-error'); seen.push(t.split('\n')[0] + ' [' + (await page.$eval('#start-error', e => e.textContent)).slice(-160) + ']'); assert.deepEqual(englishLeft(t).words, [], 'fix step shows English: ' + t); }
+    }
+    assert.ok(await page.isVisible('#panel-run'), 'run view opens after the fixes: ' + seen.join(' -> '));
+    checks.push(['B7f cost 0: ' + seen.join(' -> ') + ' -> run view opens', null]);
+
+    /* ---- B7f: execution check shows a Chinese checklist with fixes, never raw JSON ---- */
+    const proj = (await app.call('POST', '/api/v2/projects', { name: '能力检查', description: '岗位需要资料研究能力', roles: [{ roleId: 'analyst', name: '研究员', duty: '研究', connectionId: tested.connectionId, requiredCapabilities: ['research'] }], steps: [{ stepId: 's1', roleId: 'analyst', title: '研究' }] })).json.project;
+    await page.goto(base + '/workspace.html?project=' + proj.projectId);
+    await page.waitForSelector('#validate-project');
+    await page.click('#validate-project');
+    await page.waitForSelector('#validation-list .alert');
+    const list = await page.innerText('#validation-list');
+    assert.match(list, /岗位「研究员」需要的能力，自定义 · \S+ 还没有登记：资料研究/);
+    assert.equal(await page.isVisible('#validation-text'), false, 'raw JSON stays hidden');
+    assert.equal(englishLeft(list).json, false);
+    await page.click('#validation-list button:has-text("补充能力")');
+    await page.waitForSelector('#validation-list >> text=执行条件都满足了');
+    assert.ok((await app.call('GET', '/api/models')).json.models.find(m => m.connectionId === tested.connectionId).capabilities.includes('research'));
+    checks.push(['B7f checklist: capability_missing shown in Chinese with one-click fix, auto re-check passes', null]);
+    await shot(page, '6-checklist');
+  } finally { await browser.close(); await app.stop(); mock.close(); }
+  for (const [n] of checks) console.log('PASS ' + n);
+  console.log(`B7 UI checks: ${checks.length} passed, 0 failed; mock chat calls ${chats.length}`);
+})().catch(e => { console.error('FAIL', e); process.exit(1); });

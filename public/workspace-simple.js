@@ -84,6 +84,7 @@
       const run = (await api('/api/v2/projects/' + encodeURIComponent(project.projectId) + '/runs', 'POST', p.approval)).run;
       S.runId = run.runId; S.projectId = project.projectId; S.format = p.format; S.outputLabel = p.outputLabel;
       showProgress(p);
+      window.AIJWorkspace?.refreshProjects();
     } catch (e) {
       showError($('s-error'), window.SmartPlan.explain(e, { modelName: e.modelName }), go);
     } finally { S.busy = false; $('s-go').disabled = false; $('s-busy').textContent = ''; }
