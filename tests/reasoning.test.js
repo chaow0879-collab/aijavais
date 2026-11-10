@@ -6,6 +6,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const https = require('node:https');
+const net = require('node:net');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const H = require('./helpers');
 const R = require('../lib/reasoning');
 const BUDGET = require('../lib/budget');
@@ -64,7 +70,7 @@ test('reasoning: ledger records reasoning tokens as a subset of output tokens; c
 /* ---------------- full HTTP path: real server.js adapter + V2 engine against a MOCK reasoning provider ---------------- */
 async function world(t, opts = {}) {
   const requests = [];
-  const mock = http.createServer((req, res) => {
+  const handler = (req, res) => {
     let body = ''; req.on('data', c => body += c); req.on('end', () => {
       const input = JSON.parse(body); requests.push(input);
       const exhaust = input.messages.some(m => String(m.content).includes('EXHAUST_REASONING'));
@@ -77,18 +83,45 @@ async function world(t, opts = {}) {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.end(frames.map(f => 'data: ' + JSON.stringify(f) + '\n\n').join('') + 'data: [DONE]\n\n');
     });
-  });
-  await new Promise(r => mock.listen(0, '127.0.0.1', r));
-  const S = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mock.address().port, ...(opts.dashscopeProfile ? { AIJ_TEST_REASONING_HOSTS: '127.0.0.1' } : {}) } });
-  t.after(async () => { await S.stop(); await new Promise(r => mock.close(r)); });
-  const c = await S.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mock.address().port}/v1`, modelId: 'reasoner', displayName: 'reasoner', pricingMode: 'local', capabilities: ['writing'] });
-  assert.equal(c.status, 200, c.text); const id = c.json.connection.connectionId;
-  assert.equal((await S.call('POST', '/api/models/' + id + '/test', {})).json.ok, true, 'connection test passes even though reasoning precedes the answer');
+  };
+  let S, id, paid = null;
+  if (!opts.dashscope) {
+    const mock = http.createServer(handler);
+    await new Promise(r => mock.listen(0, '127.0.0.1', r));
+    S = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mock.address().port } });
+    t.after(async () => { await S.stop(); await new Promise(r => mock.close(r)); });
+    const c = await S.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mock.address().port}/v1`, modelId: 'reasoner', displayName: 'reasoner', pricingMode: 'local', capabilities: ['writing'] });
+    assert.equal(c.status, 200, c.text); id = c.json.connection.connectionId;
+    assert.equal((await S.call('POST', '/api/models/' + id + '/test', {})).json.ok, true, 'connection test passes even though reasoning precedes the answer');
+  } else {
+    // The REAL hostname dashscope.aliyuncs.com is tunnelled by a local CONNECT proxy to a local TLS MOCK with a
+    // throwaway self-signed certificate trusted only by this server process. No production switch, no network.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aij-dashscope-tls-')), key = path.join(dir, 'key.pem'), cert = path.join(dir, 'cert.pem');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-days', '1', '-subj', '/CN=dashscope.aliyuncs.com', '-addext', 'subjectAltName=DNS:dashscope.aliyuncs.com'], { stdio: 'ignore' });
+    const target = https.createServer({ key: fs.readFileSync(key), cert: fs.readFileSync(cert) }, handler);
+    await new Promise(r => target.listen(0, '127.0.0.1', r));
+    const sockets = new Set(), proxy = http.createServer();
+    proxy.on('connect', (req, socket, head) => {
+      if (req.url !== 'dashscope.aliyuncs.com:443') { socket.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; }
+      const up = net.connect(target.address().port, '127.0.0.1', () => { socket.write('HTTP/1.1 200 Connection Established\r\n\r\n'); if (head.length) up.write(head); up.pipe(socket); socket.pipe(up); });
+      for (const x of [socket, up]) { sockets.add(x); x.on('close', () => sockets.delete(x)); x.on('error', () => { socket.destroy(); up.destroy(); }); }
+    });
+    await new Promise(r => proxy.listen(0, '127.0.0.1', r));
+    S = await H.boot({ env: { HTTPS_PROXY: 'http://127.0.0.1:' + proxy.address().port, https_proxy: '', NO_PROXY: '', no_proxy: '', AIJ_PROXY_DNS: 'delegate', ALLOWED_BASE_HOSTS: 'dashscope.aliyuncs.com', NODE_EXTRA_CA_CERTS: cert } });
+    t.after(async () => { await S.stop(); for (const x of sockets) x.destroy(); await new Promise(r => proxy.close(r)); await new Promise(r => target.close(r)); });
+    const c = await S.call('POST', '/api/models', { providerId: 'dashscope', modelId: 'qwen-mock-thinking', apiKey: 'mock-not-a-secret' });
+    assert.equal(c.status, 200, c.text); id = c.json.connection.connectionId;
+    assert.equal(c.json.connection.baseUrl, 'https://dashscope.aliyuncs.com/compatible-mode/v1');
+    const probe = await S.call('POST', '/api/providers/' + id + '/test', { approvePaid: true });
+    assert.equal(probe.json.ok, true, probe.text);
+    paid = { approvePaid: true, maxCost: 1, prices: { [id]: { inputPerMillion: 1, outputPerMillion: 1 } } };
+  }
   const run = async prompt => {
     const p = await S.call('POST', '/api/v2/projects', { name: 'Reasoning', description: 'Reasoning model regression',
       roles: [{ roleId: 'writer', name: 'Writer', duty: 'Write', connectionId: id }], steps: [{ stepId: 'w', roleId: 'writer', title: 'Write', prompt }] });
     assert.equal(p.status, 201, p.text);
-    const s = await S.call('POST', '/api/v2/projects/' + p.json.project.projectId + '/runs', { maxTokens: 20000, maxOutputTokens: 100, maxCost: 0 });
+    const s = await S.call('POST', '/api/v2/projects/' + p.json.project.projectId + '/runs', { maxTokens: 20000, maxOutputTokens: 100, maxCost: 0, ...(paid || {}) });
     assert.equal(s.status, 202, s.text);
     for (let i = 0; i < 100; i++) { const r = (await S.call('GET', '/api/v2/runs/' + s.json.run.runId)).json.run; if (!r.executionActive && r.status !== 'running') return r; await H.sleep(50); }
     throw new Error('run did not settle');
@@ -112,7 +145,7 @@ test('reasoning E2E: reasoning that exhausts the cap with an empty answer fails 
   assert.deepEqual([e.inputTokens, e.outputTokens, e.reasoningTokens, e.tokenSource], [20, 100, 100, 'provider']);
 });
 test('AUD-FE6C-01 E2E: the DashScope profile is wired into the real adapter and the reservation covers thinking', async t => {
-  const w = await world(t, { dashscopeProfile: true });
+  const w = await world(t, { dashscope: true });
   // cap 100 -> request must carry max_tokens 100 + thinking_budget 50; 140 completion tokens fit the 150 reservation
   const ok = await w.run('Write one line. THINK_OVER_140');
   assert.equal(ok.status, 'review_required', JSON.stringify(ok.steps));

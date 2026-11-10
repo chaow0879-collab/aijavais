@@ -31,8 +31,6 @@ const { AuthStore } = require('./lib/auth');
 const { createV2Api } = require('./lib/v2-api');
 const { recordSystemCall } = require('./lib/usage-ledger');
 const REASONING = require('./lib/reasoning');
-/* 仅测试：非生产模式下可把本机 MOCK 主机当作 DashScope 推理配置，端到端验证 thinking_budget 接线（生产忽略） */
-if (process.env.AIJ_ENV !== 'production' && process.env.AIJ_TEST_REASONING_HOSTS) REASONING.configure({ testHosts: process.env.AIJ_TEST_REASONING_HOSTS.split(',').map(s => s.trim()).filter(Boolean) });
 let v2;
 
 const ROOT = __dirname;
