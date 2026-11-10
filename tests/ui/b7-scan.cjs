@@ -14,7 +14,8 @@ const left = t => { for (const w of ALLOW) t = t.split(w).join(' '); return [...
     const page = await ctx.newPage();
     for (const pth of (process.argv[2] || '/admin.html').split(',')) {
       await page.goto('http://localhost:' + app.port + pth); await page.waitForTimeout(1200);
-      console.log(pth, 'EMPTY:', JSON.stringify(left(await page.innerText('body'))));
+      await page.addStyleTag({ content: '.en{display:none!important}' });
+      console.log(pth, 'EMPTY:', JSON.stringify(left((await page.innerText('body')).split('Based on HALOFLUX by Ryder191 (RYDER CODE / Ms MAIKEBAIs CAT) · github.com/Ryder191/haloflux · modified').join(' '))));
     }
     if (!process.argv[2] || process.argv[2] === '/admin.html') {
       await app.call('POST', '/api/models/batch', { providerId: 'deepseek', apiKey: 'mock-key-1234', models: [{ modelId: 'deepseek-flash', capabilities: ['writing'] }] });

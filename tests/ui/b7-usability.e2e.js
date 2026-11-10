@@ -25,7 +25,8 @@ const ALLOW = ['AIJAVAIS', 'Word', 'Excel', 'PPT', ...BRANDS, ...LIST];
 function englishLeft(text) {
   let t = String(text);
   for (const w of [...ALLOW].sort((a, b) => b.length - a.length)) t = t.split(w).join(' ');
-  const words = t.match(/[A-Za-z][A-Za-z_]{2,}/g) || [];
+  // the panel truncates model labels to 12 characters: a fragment of a known model name is still a model name
+  const words = (t.match(/[A-Za-z][A-Za-z_]{2,}/g) || []).filter(w => !LIST.some(id => id.toLowerCase().startsWith(w.toLowerCase())));
   const json = /[{[]\s*"[^"]*"\s*:/.test(text);
   return { words: [...new Set(words)], json };
 }
@@ -179,6 +180,16 @@ function englishLeft(text) {
     assert.ok(full.usage.cost <= full.approval.maxCost);
     checks.push(['budget gate kept: explicit per-run approval, USD cap and rates from the RMB confirmation, MCP/code off', null]);
     await shot(page, '4-progress');
+    /* QA-B7-03: HALOFLUX keeps its look; every label has a Chinese primary text (English only as small .en sub-labels) */
+    const panel = await ctx.newPage();
+    await panel.goto(base + '/'); await panel.waitForTimeout(4500);
+    await panel.addStyleTag({ content: '.en{display:none!important}' });
+    const panelText = (await panel.innerText('body')).split('Based on HALOFLUX by Ryder191 (RYDER CODE / Ms MAIKEBAIs CAT) · github.com/Ryder191/haloflux · modified').join(' ');
+    assert.deepEqual(englishLeft(panelText).words, [], 'HALOFLUX primary labels');
+    assert.match(panelText, /接入模型[\s\S]*用量[\s\S]*错误[\s\S]*事件流/);
+    assert.ok(await panel.$('.ov.credit'), 'upstream attribution still shown');
+    await panel.close();
+    checks.push(['QA-B7-03 HALOFLUX: Chinese primary labels after a real run (English kept as small sub-labels), attribution kept', null]);
     await page.click('#s-adjust');
     await page.waitForSelector('#simple:not([hidden])');
     assert.equal(await page.inputValue('#s-goal'), '给社区咖啡店写一份周末促销方案'); await page.waitForSelector('#s-plan:not([hidden])');
