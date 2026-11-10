@@ -135,9 +135,28 @@ function englishLeft(text) {
     const whole = englishLeft(await page.innerText('body'));
     assert.deepEqual(whole.words, [], 'progress page shows English words: ' + whole.words); assert.equal(whole.json, false, 'no raw JSON');
     checks.push(['B7g one click -> confirm -> progress view -> steps done; whole page has no English technical words or raw JSON', null]);
+    const full0 = (await app.call('GET', '/api/v2/runs/' + (await page.evaluate(() => new URLSearchParams(location.search).get('run'))))).json.run;
     const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#s-download')]);
     const docx = fs.readFileSync(await dl.path());
     assert.equal(docx.subarray(0, 2).toString(), 'PK', 'real DOCX (zip)'); assert.match(dl.suggestedFilename(), /\.docx$/);
+    /* QA-B7-01: rework stays in simple mode — plain feedback, a fresh RMB confirmation, review step only */
+    const callsBefore = chats.length;
+    await page.click('#s-rework'); await page.fill('#s-rework-text', '语气再活泼一些，加上会员日优惠');
+    assert.deepEqual(englishLeft(await page.innerText('#s-progress')).words, []);
+    await page.click('#s-rework-go');
+    await page.waitForSelector('#s-confirm[open]');
+    const rwText = await page.innerText('#s-confirm');
+    assert.match(rwText, /确认修改[\s\S]*预计花费约 ¥\d+\.\d{2}，最多不超过 ¥\d+\.\d{2}，超过会自动停下。/); assert.doesNotMatch(rwText, /\$|USD|美元|Token/);
+    assert.deepEqual(englishLeft(rwText).words, []);
+    await shot(page, '4b-rework-confirm');
+    await page.click('#s-confirm-ok');
+    await page.waitForFunction(() => !document.querySelector('#s-result').hidden && /已完成，请查看成果/.test(document.querySelector('#s-state').textContent), null, { timeout: 30000 });
+    assert.equal(chats.length - callsBefore, 1, 'rework reran only the review step: ' + JSON.stringify(chats.slice(callsBefore)));
+    const rwRun = (await app.call('GET', '/api/v2/runs/' + (await page.evaluate(() => new URLSearchParams(location.search).get('run'))))).json.run;
+    assert.equal(rwRun.round, 2); assert.equal(rwRun.reviews.at(-1).decision, 'rework'); assert.equal(rwRun.approval.approvePaid, true);
+    assert.ok(rwRun.approval.maxCost > 0 && rwRun.approval.approvedAt > full0.approval.approvedAt, 'a new approval for the rework round');
+    assert.deepEqual(englishLeft(await page.innerText('body')).words, []);
+    checks.push(['QA-B7-01 rework in simple mode: plain feedback -> new RMB confirmation -> review step rerun, no expert form', null]);
     await page.click('#s-accept'); await page.waitForFunction(() => /已确认完成/.test(document.querySelector('#s-state').textContent));
     checks.push(['B7e chosen output (Word) downloads as a real DOCX; confirm completes the run', null]);
     const lastRun = async () => { const ps = (await app.call('GET', '/api/v2/projects')).json.projects; const pr = ps.sort((a, b) => b.createdAt - a.createdAt)[0]; const r = (await app.call('GET', '/api/v2/projects/' + pr.projectId)).json.runs[0]; return (await app.call('GET', '/api/v2/runs/' + r.runId)).json.run; };
@@ -149,11 +168,15 @@ function englishLeft(text) {
     assert.ok(full.usage.cost <= full.approval.maxCost);
     checks.push(['budget gate kept: explicit per-run approval, USD cap and rates from the RMB confirmation, MCP/code off', null]);
     await shot(page, '4-progress');
+    await page.click('#s-adjust');
+    await page.waitForSelector('#simple:not([hidden])');
+    assert.equal(await page.inputValue('#s-goal'), '给社区咖啡店写一份周末促销方案'); await page.waitForSelector('#s-plan:not([hidden])');
+    assert.equal(await page.isVisible('#project-name'), false, '调整团队 stays in simple mode');
+    checks.push(['QA-B7-04 调整团队 returns to the simple form prefilled (expert form not on the ordinary path)', null]);
 
     /* ---- B7e: over the per-run cap -> 效果优先 / 省钱, no silent downgrade; money runs out -> stop, keep finished work ---- */
     assert.equal((await app.call('PUT', '/api/models/' + byModel['deepseek-v4-pro'], { price: { currency: 'CNY', inputPerMillion: 40, outputPerMillion: 160 } })).status, 200);
     assert.equal((await app.call('POST', '/api/settings', { simpleRunCapCny: 0.2 })).status, 200);
-    await page.click('#s-new');
     await page.fill('#s-goal', '再写一份周末促销方案');
     await page.click('#s-go');
     await page.waitForSelector('#s-confirm[open]');

@@ -49,7 +49,8 @@
       <p id="s-state" role="status" aria-live="polite"></p>
       <div id="s-run-error" class="alert" role="alert" hidden></div>
       <div id="s-stop" class="alert" role="alert" hidden><div id="s-stop-text"></div><button id="s-stop-download" type="button" class="fixbtn">到此为止，下载已完成部分</button><button id="s-stop-more" type="button" disabled title="即将支持：追加预算后从停下的步骤继续">追加 ¥0.50 继续（即将支持）</button></div>
-      <div id="s-result" hidden><h3>成果</h3><div class="final" id="s-final"></div><div class="toolbar"><button id="s-download" type="button" class="primary">下载成果</button><button id="s-accept" type="button">满意，确认完成</button></div></div>
+      <div id="s-result" hidden><h3>成果</h3><div class="final" id="s-final"></div><div class="toolbar"><button id="s-download" type="button" class="primary">下载成果</button><button id="s-accept" type="button">满意，确认完成</button><button id="s-rework" type="button">不满意，要修改</button></div>
+        <div id="s-rework-box" hidden><label for="s-rework-text">哪里不满意、想怎么改？</label><textarea id="s-rework-text" rows="3" maxlength="2000" placeholder="例如：语气再活泼一些，加上会员日的优惠"></textarea><div class="toolbar"><button id="s-rework-go" type="button" class="primary">按意见修改</button><button id="s-rework-cancel" type="button">先不改了</button></div></div></div>
       <p class="hint">想看动画？<a href="/" target="_blank" rel="noopener">打开实时大屏</a>，每一步都会同步显示。</p>
       <button id="s-new" type="button">＋ 新建任务</button>
     </section>

@@ -122,7 +122,7 @@
     const project = {
       name: text.replace(/\s+/g, ' ').slice(0, 30),
       description: text + '\n\n想要的成果：' + out.label + (String(deadline || '').trim() ? '\n希望完成时间：' + String(deadline).trim() : ''),
-      standards: ['使用中文', '不编造事实或数据'], deliverables: [out.label], maxReworks: 0,
+      standards: ['使用中文', '不编造事实或数据'], deliverables: [out.label], maxReworks: 3,
       roles: chosen.roles.map(r => ({ roleId: r.spec.roleId, name: r.spec.name, duty: r.spec.duty, boundary: r.spec.boundary, standard: r.spec.standard, connectionId: r.model.connectionId, requiredCapabilities: [] })),
       steps: [
         { stepId: 'draft', roleId: 'drafter', title: '写出初稿', prompt: '任务：' + text + '\n' + out.ask, checks: [{ type: 'minLength', value: 20 }] },
@@ -131,6 +131,27 @@
     };
     const approval = { approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(chosen.maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
     return { ok: true, problems: [], skipped, options, chosen, roles: chosen.roles, summary: chosen.summary, project, approval, format: out.format, outputLabel: out.label, confirmText: confirmText(chosen), capCny: cap };
+  }
+  /* QA-B7-01 返工：只重做"审核并定稿"这一步（沿用已完成的初稿），按审核员单价重新估算，再确认一次人民币。
+   * 每轮返工都是新的显式批准，不继承上一次。snapshot = run.projectSnapshot. */
+  function rework({ models, snapshot, feedback = '', capCny = 5 } = {}) {
+    const byId = new Map((models || []).map(m => [m.connectionId, m]));
+    const roles = (snapshot && snapshot.roles) || [], reviewer = roles.find(r => r.roleId === 'reviewer') || roles[roles.length - 1];
+    const text = String(feedback || '').trim();
+    if (!text) return { ok: false, problems: [{ code: 'feedback_missing', text: '请先用一句话说说哪里不满意、想怎么改。' }] };
+    const missing = roles.map(r => byId.get(r.connectionId)).filter(m => !m || !cnyRate(m));
+    if (!reviewer || missing.length) return { ok: false, problems: [{ code: 'no_priced_model', text: '这个任务用到的模型现在价格未知或已被移除，按规定不调用。请新建任务。', fix: { action: 'add_model', label: '去管理中心查看' } }] };
+    const m = byId.get(reviewer.connectionId), r = cnyRate(m), goal = String(snapshot.description || '');
+    const inTok = EXPECT.systemTokens + Math.ceil((goal.length + text.length) * 1.2) + EXPECT.draftOut, outTok = EXPECT.reviewOut;
+    const est = (inTok * r.input + outTok * r.output) / 1e6;
+    const bound = ((EXPECT.systemBytes + bytes(goal) + bytes(text) + MAX_OUTPUT * 4 + 256) * r.input + (MAX_OUTPUT + (thinkingHost(m) ? MAX_OUTPUT / 2 : 0)) * r.output) / 1e6;
+    const cap = Math.max(0.1, Number(capCny) || 5), free = isLocal(m);
+    const needed = yuan10(Math.max(3 * est, bound)), maxCny = free ? 0 : Math.max(0.1, Math.min(cap, needed));
+    const option = { kind: 'quality', roles: [], summary: reviewer.name + ' → ' + Hints.platformLabel(m), estimateCny: free ? 0 : Math.max(0.01, yuan(est)), maxCny, neededCny: needed, overCap: !free && needed > cap, free };
+    const prices = {};
+    for (const role of roles) { const u = usdRate(byId.get(role.connectionId)); if (u) prices[role.connectionId] = u; }
+    const approval = { decision: 'rework', feedback: text, fromStepId: 'review', approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
+    return { ok: true, problems: [], skipped: [], options: { quality: option }, chosen: option, summary: option.summary, approval, confirmText: confirmText(option), capCny: cap };
   }
   function confirmText(o) {
     if (o.free) return '所选模型在本机运行，不产生费用。';
@@ -162,5 +183,5 @@
     if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null };
     return { text: '启动没有成功。', fix: { action: 'retry', label: '再试一次' }, detail: msg };
   }
-  return { plan, explain, summary, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
+  return { plan, rework, explain, summary, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
 });

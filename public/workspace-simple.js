@@ -4,7 +4,7 @@
  * 规则见 public/smart-plan.js；服务端的预算、Token、审批与就绪门禁全部不变。页面只显示中文，不显示原始 JSON。 */
 (() => {
   const $ = id => document.getElementById(id);
-  const S = { models: [], capCny: 5, picks: {}, plan: null, runId: null, projectId: null, timer: null, format: 'docx', outputLabel: 'Word 文档', busy: false, choice: 'quality' };
+  const S = { models: [], capCny: 5, picks: {}, plan: null, runId: null, projectId: null, snapshot: null, timer: null, format: 'docx', outputLabel: 'Word 文档', busy: false, choice: 'quality' };
   const OUT = window.SmartPlan.OUTPUTS, STATUS = { pending: '等待中', running: '进行中', done: '已完成', quality_failed: '质量检查没通过', failed: '没有完成', cancelled: '已取消', skipped: '已跳过' };
   const DL = { md: '下载文字稿', docx: '下载 Word 文档', xlsx: '下载 Excel 表格', pptx: '下载演示文稿' };
   const el = (tag, props = {}, kids = []) => { const n = document.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k === 'text') n.textContent = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n[k] = v; } n.append(...kids); return n; };
@@ -65,7 +65,9 @@
           el('span', { text: (o.kind === 'quality' ? '效果优先 约¥' + o.estimateCny.toFixed(2) : '省钱 约¥' + o.estimateCny.toFixed(2) + '（效果可能稍差）') + '，最多 ¥' + o.maxCny.toFixed(2) + (o.overCap ? '，可能中途停下' : '') + '。' + o.summary })]));
       } else body.append(el('p', { className: 'team', text: p.confirmText }), el('p', { text: '团队：' + p.summary }));
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
-      body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
+      if (!p.isRework) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
+      else body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' }));
+      $('s-confirm-title').textContent = p.isRework ? '确认修改' : '确认开始';
       const done = ok => { dlg.close(); resolve(ok ? (document.querySelector('input[name=s-choice]:checked')?.value || 'quality') : null); };
       $('s-confirm-ok').onclick = () => done(true); $('s-confirm-cancel').onclick = () => done(false);
       dlg.addEventListener('cancel', () => resolve(null), { once: true });
@@ -116,6 +118,7 @@
     let run;
     try { run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; } catch { $('s-state').textContent = '暂时连不上服务器，正在重试…'; return; }
     const steps = run.steps || [];
+    S.snapshot = run.projectSnapshot || S.snapshot; S.projectId = run.projectId || S.projectId;
     $('s-steps').replaceChildren(...steps.map(st => el('li', { className: st.status }, [el('strong', { text: st.title }), ' · ' + (STATUS[st.status] || '进行中')])));
     if (!steps.length) $('s-steps').replaceChildren(el('li', { className: 'running', text: '准备中…' }));
     const active = run.status === 'running' || run.executionActive;
@@ -124,7 +127,8 @@
     clearInterval(S.timer);
     const last = [...steps].reverse().find(st => st.status === 'done' && typeof st.output === 'string' && st.output.trim());
     if (last) { $('s-final').textContent = last.output; $('s-result').hidden = false; }
-    $('s-accept').hidden = run.status !== 'review_required';
+    $('s-accept').hidden = $('s-rework').hidden = run.status !== 'review_required';
+    if (run.status !== 'review_required') $('s-rework-box').hidden = true;
     if (run.status === 'failed' || run.status === 'cancelled') {
       const bad = steps.find(st => st.status === 'failed' || st.status === 'quality_failed');
       const info = window.SmartPlan.explain({ message: bad && bad.error || '' });
@@ -145,6 +149,32 @@
     const blob = await res.blob(), a = el('a', { href: URL.createObjectURL(blob), download: (S.outputLabel || '成果') + '.' + S.format });
     document.body.append(a); a.click(); a.remove();
   }
+  /* QA-B7-01：简单模式里返工——用人话写修改意见，再确认一次人民币（本轮的显式批准），不进高级设置 */
+  async function rework() {
+    $('s-run-error').hidden = true;
+    await loadModels();
+    const r = window.SmartPlan.rework({ models: S.models, snapshot: S.snapshot, feedback: $('s-rework-text').value, capCny: S.capCny });
+    if (!r.ok) return showError($('s-run-error'), r.problems[0], rework);
+    if (!(await confirm({ ...r, isRework: true }))) return;
+    $('s-result').hidden = true; $('s-state').textContent = '正在按你的意见修改…';
+    try {
+      await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/review', 'POST', r.approval);
+      $('s-rework-box').hidden = true; $('s-rework-text').value = '';
+      $('s-team').textContent = '正在按你的意见修改。' + r.confirmText;
+      clearInterval(S.timer); poll(); S.timer = setInterval(poll, 2000);
+    } catch (e) { $('s-result').hidden = false; showError($('s-run-error'), window.SmartPlan.explain(e), rework); }
+  }
+  /* 调整团队：回到简单表单（同样的需求、同样的团队），用“换一个”调整后重新开始；不进高级设置 */
+  function adjust() {
+    const snap = S.snapshot; reset();
+    if (!snap) return;
+    $('s-goal').value = String(snap.description || '').split('\n\n想要的成果')[0];
+    const label = ((/想要的成果：(.+)/.exec(snap.description || '') || [])[1] || '').split('\n')[0];
+    const key = Object.keys(OUT).find(k => OUT[k].label === label); if (key) document.querySelector(`input[name=s-output][value=${key}]`).checked = true;
+    for (const r of snap.roles || []) S.picks[r.roleId] = r.connectionId;
+    loadModels().then(() => preview(true)).catch(() => {});
+    $('s-plan').scrollIntoView({ block: 'center' });
+  }
   function reset() {
     clearInterval(S.timer); S.runId = null; S.picks = {}; S.choice = 'quality';
     $('s-progress').hidden = true; $('simple').hidden = false; $('s-error').hidden = true; $('s-plan').hidden = true;
@@ -157,7 +187,10 @@
     $('s-preview').addEventListener('click', async () => { $('s-error').hidden = true; await loadModels(); const p = preview(true); if (!p.ok) showError($('s-error'), p.problems[0], () => preview(true)); });
     $('s-advanced').addEventListener('click', () => { document.body.dataset.mode = 'advanced'; });
     $('s-back').addEventListener('click', () => { document.body.dataset.mode = 'simple'; });
-    $('s-adjust').addEventListener('click', () => { location.assign('/workspace.html?project=' + encodeURIComponent(S.projectId || '')); });
+    $('s-adjust').addEventListener('click', adjust);
+    $('s-rework').addEventListener('click', () => { $('s-rework-box').hidden = false; $('s-rework-text').focus(); });
+    $('s-rework-cancel').addEventListener('click', () => { $('s-rework-box').hidden = true; });
+    $('s-rework-go').addEventListener('click', rework);
     $('s-new').addEventListener('click', reset);
     $('s-download').addEventListener('click', download);
     $('s-stop-download').addEventListener('click', download);
