@@ -1,0 +1,66 @@
+name: AUDIT CodeAudit f8b638b (independent, read-only, AUD-B7R1)
+# Independent-CodeAudit evidence only. MOCK/pure tests; no secrets, no paid models, no deploy, no schedule.
+on:
+  push:
+    branches: [audit/f8b638b-20261110]
+    paths: [audit-evidence/f8b638b/**, .github/workflows/audit-f8b638b.yml]
+permissions:
+  contents: read
+concurrency: { group: audit-f8b638b, cancel-in-progress: false }
+env:
+  REVIEWED_SHA: f8b638b9e6776d4f93b5840f2c3b3b7e7f6f0a3c
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: audit, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with: { ref: f8b638b9e6776d4f93b5840f2c3b3b7e7f6f0a3c, path: reviewed, fetch-depth: 0, persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: Install poppler and LibreOffice (npm test needs them)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install Office parsers used by npm test
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Provenance
+        run: |
+          set -eu
+          test "$(git -C reviewed rev-parse HEAD)" = "$REVIEWED_SHA"
+          node --version; mkdir -p "$RUNNER_TEMP/out"
+          echo "reviewed=$(git -C reviewed rev-parse HEAD) tree=$(git -C reviewed rev-parse HEAD^{tree}) audit=$(git -C audit rev-parse HEAD)" | tee "$RUNNER_TEMP/out/source.txt"
+      - name: "1 Independent probes + mutations (auditor-written)"
+        if: success() || failure()
+        env: { REVIEWED_ROOT: "${{ github.workspace }}/reviewed", AUDIT_OUT: "${{ runner.temp }}/out" }
+        run: |
+          set -o pipefail
+          node --test --test-concurrency=1 --test-reporter=tap audit/audit-evidence/f8b638b/independent.test.cjs | tee "$RUNNER_TEMP/out/independent.tap"
+      - name: "2 tests/reasoning.test.js in reviewed tree"
+        if: success() || failure()
+        working-directory: reviewed
+        run: |
+          set -o pipefail
+          node --test --test-reporter=tap tests/reasoning.test.js | tee "$RUNNER_TEMP/out/reasoning.tap"
+      - name: "3 npm test in reviewed tree"
+        if: success() || failure()
+        working-directory: reviewed
+        run: |
+          set -o pipefail
+          node --test --test-reporter=tap tests/all.test.js | tee "$RUNNER_TEMP/out/npm-test.tap" | grep -E '^# (tests|pass|fail|skipped) |^not ok'
+      - name: "3b tests/b7-usability.test.js in reviewed tree (Node part of test:b7; browser part not run by audit)"
+        if: success() || failure()
+        working-directory: reviewed
+        run: |
+          set -o pipefail
+          node --test --test-reporter=tap tests/b7-usability.test.js | tee "$RUNNER_TEMP/out/b7.tap" | grep -E '^# (tests|pass|fail|skipped) |^not ok'
+      - name: "4 Provenance guard at reviewed HEAD"
+        if: success() || failure()
+        working-directory: reviewed
+        run: node tools/unattended-go-r57/sources.js | tee "$RUNNER_TEMP/out/sources-verify.json" | grep -A3 violations
+      - name: "5 Reviewed tree unchanged"
+        if: success() || failure()
+        run: git -C reviewed status --porcelain | tee "$RUNNER_TEMP/out/reviewed-status.txt"; test ! -s "$RUNNER_TEMP/out/reviewed-status.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: audit-f8b638b-evidence, path: "${{ runner.temp }}/out", retention-days: 30 }
