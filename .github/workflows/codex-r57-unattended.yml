@@ -8,6 +8,9 @@ name: R57 unattended candidate and preserved product
 on:
   push:
     branches: [integrate/codex-r57-unattended-go-gate, "claude/beautiful-pascal-xj5qd0", "claude/dev/**"]
+  # AUD-0EA9-02: PRs into main from any branch (e.g. cloud-assigned claude/<name>) also get these gates.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
