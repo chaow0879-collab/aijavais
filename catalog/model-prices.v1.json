@@ -11,7 +11,8 @@
       "outputPerMillion": 1.20,
       "basis": "peak-hour cache-miss rate (off-peak is half: 0.15 / 0.60)",
       "sources": ["https://www.maximem.ai/blog/deepseek-api-pricing-2026", "https://www.morphllm.com/deepseek-api"],
-      "verified": "secondary sources only; official page not reached from the build environment"
+      "verified": "BLOCKED: official page https://api-docs.deepseek.com/quick_start/pricing could not be read (2026-11-10: build proxy 403; fetch agent DNS failure). Values come from secondary sources only and keep the higher peak rate.",
+      "officialPage": "https://api-docs.deepseek.com/quick_start/pricing"
     },
     {
       "providerId": "dashscope",
@@ -21,7 +22,8 @@
       "outputPerMillion": 3.0,
       "basis": "pre-2026-08-27 list price (current official: 0.8 / 2.7, output includes thinking)",
       "sources": ["https://help.aliyun.com/zh/model-studio/model-pricing", "https://developer.aliyun.com/article/1761526"],
-      "verified": "official pricing page (Beijing region)"
+      "verified": "BLOCKED: official page could not be read directly (2026-11-10: build proxy 403; fetch agent DNS failure). Earlier 0.8 / 2.7 came from a web-search summary citing the official page, not a direct read; the higher pre-cut 1.0 / 3.0 is kept.",
+      "officialPage": "https://help.aliyun.com/zh/model-studio/model-pricing"
     }
   ]
 }
