@@ -3,7 +3,7 @@ const {execFileSync}=require('node:child_process'),path=require('node:path'),M=r
 const root=path.resolve(__dirname,'../..'),git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 const POST_R57=Object.freeze({base:'049a3376a2d08042fcac1833b324bc87b0137ba1',changes:Object.freeze({
   "AGENTS.md":{from:"100644 blob 784c6bc3d30d03a64b6512f6d4e908adbde815c0",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
-  "CLAUDE.md":{from:"100644 blob 9740136ae5e6cf6c57662756a837339b74c23f29",to:"100644 blob be27f3acab076fa43a040faf92dedcc47156d806",reason:"governance: Claude supreme commander, full planning authority (owner decisions 2026-11-09); WP-E2E-01 relay reports go to duty commander via send_message"},
+  "CLAUDE.md":{from:"100644 blob 9740136ae5e6cf6c57662756a837339b74c23f29",to:"100644 blob fedd75061eeb125cb050123319594713593f8e78",reason:"governance: Claude supreme commander, full planning authority (owner decisions 2026-11-09); WP-E2E-01 relay reports go to duty commander via send_message"},
   "README.md":{from:"100644 blob 26aed375f5795eda89b695037312d5b9e13336d7",to:"100644 blob 21a8a5aa1f419b95e3c64ed98a1f8d5133a46f31",reason:"docs: point to CLAUDE.md and #20 instead of removed handoff"},
   "collab/ACTIVE-DEVELOPMENT.md":{from:"100644 blob 6a630b8941f2cd2cf5c9e58072f8becf1b463664",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
   "collab/HANDOFF.md":{from:"100644 blob 3f300723be9115ea576ca8c62ccddf9a4b666c68",to:null,reason:"cleanup: obsolete Codex/ChatGPT-era handoff or legacy doc, superseded by CLAUDE.md + #20 (owner decision 2026-11-09)"},
@@ -17,7 +17,7 @@ const POST_R57=Object.freeze({base:'049a3376a2d08042fcac1833b324bc87b0137ba1',ch
   "collab/roles/code-audit.md":{from:null,to:"100644 blob c4b4b680c81856e0a8f025c571cb18093f9f587c",reason:"governance: independent audit session prompt"},
   "collab/roles/product-qa.md":{from:null,to:"100644 blob a6b0c34599d336818f1cafd1f7b82e77c745d291",reason:"governance: independent product QA session prompt"},
   "collab/roles/server-ops.md":{from:null,to:"100644 blob 660933ff4fcc9087249f9874e85be025e2ac1ce0",reason:"governance: server operations (aiops sudo, dispatch and discipline)"},
-  "docs/PLAN-DSH-INTEGRATION.md":{from:null,to:"100644 blob 5a56cbac539f98e31b7142061fbd03b29338763a",reason:"plan: DSH capability absorption and multi-task concurrency kernel (owner decision 2026-11-10)"},
+  "docs/PLAN-DSH-INTEGRATION.md":{from:null,to:"100644 blob 04f7610fb3be157402587d767f2d0b5f4340d025",reason:"plan: DSH capability absorption and multi-task concurrency kernel (owner decision 2026-11-10)"},
   "public/haloflux-workbench-r52/app.js":{from:"100644 blob a6652e82e2b678710f87107207a49652370a7a96",to:"100644 blob e6f73a18ec8b5d8d0534df96a7f22440e028ef1b",reason:"AUD-R55-01: own-property permission lookup"},
   "public/haloflux-workbench-r52/projector.js":{from:"100644 blob 93d1fcc526864ee5354948a3f829db2b14281903",to:"100644 blob 6db633c571fca8c2b4794c154c1be693a413c8a2",reason:"AUD-R55-01: null-prototype role/cost dictionaries"},
   "tests/agent-executor/executor.test.js":{from:"100644 blob f4507ef805fd55da328350cec115187852384383",to:"100644 blob c51addd8837c95d547ae2bb0c22d8ca928dbf0e3",reason:"WP-E2E-03: four-competing-processes test parses child stdout on close, not exit (stdout may not be drained at exit)"},
