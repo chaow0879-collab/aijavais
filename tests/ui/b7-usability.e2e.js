@@ -155,6 +155,8 @@ function englishLeft(text) {
     assert.match(await page.innerText('#s-team'), /团队：起草员 → .*｜审核员 → /);
     assert.match(await page.innerText('#s-steps'), /写出初稿 · 已完成[\s\S]*审核并定稿 · 已完成/);
     assert.match(await page.innerText('#s-final'), /周末促销方案/);
+    assert.match(await page.innerText('#s-spent'), /^这个任务累计已花约 (¥\d+\.\d{2}|不到 ¥0\.01)（估算，以厂商账单为准）。$/, 'O11 cumulative spend on the progress page');
+    checks.push(['O11 progress page and confirmations show 这个任务累计已花约 ¥X', null]);
     const whole = englishLeft(await page.innerText('body'));
     assert.deepEqual(whole.words, [], 'progress page shows English words: ' + whole.words); assert.equal(whole.json, false, 'no raw JSON');
     checks.push(['B7g one click -> confirm -> progress view -> steps done; whole page has no English technical words or raw JSON', null]);
@@ -169,6 +171,7 @@ function englishLeft(text) {
     await page.click('#s-rework-go');
     await page.waitForSelector('#s-confirm[open]');
     const rwText = await page.innerText('#s-confirm');
+    assert.match(rwText, /这个任务累计已花约 (¥\d+\.\d{2}|不到 ¥0\.01)（估算/, 'O11 cumulative spend in the rework confirmation');
     assert.match(rwText, /确认修改[\s\S]*预计花费约 ¥\d+\.\d{2}，最多不超过 ¥\d+\.\d{2}，超过会自动停下。/); assert.doesNotMatch(rwText, /\$|USD|美元|Token/);
     assert.deepEqual(englishLeft(rwText).words, []);
     await shot(page, '4b-rework-confirm');
@@ -193,7 +196,9 @@ function englishLeft(text) {
     await shot(page, '4-progress');
     /* QA-B7-03: HALOFLUX keeps its look; every label has a Chinese primary text (English only as small .en sub-labels) */
     const panel = await ctx.newPage();
-    await panel.goto(base + '/'); await panel.waitForTimeout(4500);
+    await panel.goto(base + '/');
+    // O12: wait for concrete state instead of a fixed sleep — the run's calls are counted and a route row names a model
+    await panel.waitForFunction(() => Number(document.querySelector('#k2').textContent) > 0 && [...document.querySelectorAll('#routes .nm')].some(n => n.textContent.trim() && n.textContent.trim() !== '—'), null, { timeout: 15000 });
     await panel.addStyleTag({ content: '.en{display:none!important}' });
     const panelText = (await panel.innerText('body')).split('Based on HALOFLUX by Ryder191 (RYDER CODE / Ms MAIKEBAIs CAT) · github.com/Ryder191/haloflux · modified').join(' ');
     assert.deepEqual(englishLeft(panelText).words, [], 'HALOFLUX primary labels');
@@ -267,9 +272,9 @@ function englishLeft(text) {
     await shot(page, '5-cost-zero');
     const seen = [box.text.split('\n')[0]];
     for (let i = 0; i < 3 && !(await page.isVisible('#panel-run')); i++) {
+      const prev = await page.$eval('#start-error', e => e.textContent);
       await page.click('#start-error button');
-      await page.waitForFunction(() => !document.querySelector('#panel-run').hidden || !document.querySelector('#start-error').hidden);
-      await page.waitForTimeout(300);
+      await page.waitForFunction(p => !document.querySelector('#panel-run').hidden || (!document.querySelector('#start-error').hidden && document.querySelector('#start-error').textContent !== p), prev);
       if (await page.isVisible('#start-error')) { const t = await page.innerText('#start-error'); seen.push(t.split('\n')[0] + ' [' + (await page.$eval('#start-error', e => e.textContent)).slice(-160) + ']'); assert.deepEqual(englishLeft(t).words, [], 'fix step shows English: ' + t); }
     }
     assert.ok(await page.isVisible('#panel-run'), 'run view opens after the fixes: ' + seen.join(' -> '));

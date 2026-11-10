@@ -6,6 +6,8 @@
   const $ = id => document.getElementById(id);
   const S = { models: [], capCny: 5, picks: {}, plan: null, runId: null, projectId: null, snapshot: null, timer: null, format: 'docx', outputLabel: 'Word 文档', busy: false, choice: 'quality' };
   const OUT = window.SmartPlan.OUTPUTS, STATUS = { pending: '等待中', running: '进行中', done: '已完成', quality_failed: '质量检查没通过', failed: '没有完成', cancelled: '已取消', skipped: '已跳过' };
+  /* O11：累计花费（估算，人民币；不足 1 分显示“不到 ¥0.01”） */
+  const spentText = usd => { const c = window.SmartPlan.spentCny(usd); return c > 0 && c < 0.01 ? '不到 ¥0.01' : '¥' + c.toFixed(2); };
   const DL = { md: '下载文字稿', docx: '下载 Word 文档', xlsx: '下载 Excel 表格', pptx: '下载演示文稿' };
   const el = (tag, props = {}, kids = []) => { const n = document.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k === 'text') n.textContent = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n[k] = v; } n.append(...kids); return n; };
   async function api(path, method = 'GET', body) {
@@ -65,6 +67,7 @@
           el('span', { text: (o.kind === 'quality' ? '效果优先 约¥' + o.estimateCny.toFixed(2) : '省钱 约¥' + o.estimateCny.toFixed(2) + '（效果可能稍差）') + '，最多 ¥' + o.maxCny.toFixed(2) + (o.overCap ? '，可能中途停下' : '') + '。' + o.summary })]));
       } else body.append(el('p', { className: 'team', text: p.confirmText }), el('p', { text: '团队：' + p.summary }));
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
+      body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : '¥0.00') + '（估算，以厂商账单为准）。' }));
       if (!p.isRework) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
       else body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' }));
       $('s-confirm-title').textContent = p.isRework ? '确认修改' : '确认开始';
@@ -119,6 +122,8 @@
     try { run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; } catch { $('s-state').textContent = '暂时连不上服务器，正在重试…'; return; }
     const steps = run.steps || [];
     S.snapshot = run.projectSnapshot || S.snapshot; S.projectId = run.projectId || S.projectId;
+    S.spentUsd = run.usage && run.usage.cost || 0;
+    $('s-spent').textContent = '这个任务累计已花约 ' + spentText(S.spentUsd) + '（估算，以厂商账单为准）。';
     $('s-steps').replaceChildren(...steps.map(st => el('li', { className: st.status }, [el('strong', { text: st.title }), ' · ' + (STATUS[st.status] || '进行中')])));
     if (!steps.length) $('s-steps').replaceChildren(el('li', { className: 'running', text: '准备中…' }));
     const active = run.status === 'running' || run.executionActive;
@@ -135,7 +140,7 @@
       if (info.budgetStop || info.overrun) {
         // 钱用完：停下来，不自动降级；已完成的部分可以下载
         const total = (run.projectSnapshot && run.projectSnapshot.steps || []).length || steps.length, doneN = steps.filter(st => st.status === 'done').length;
-        $('s-stop-text').textContent = `已完成 ${doneN}/${total} 步，花了约 ${(c => c > 0 && c < 0.01 ? '不到 ¥0.01' : '¥' + c.toFixed(2))(window.SmartPlan.spentCny(run.usage && run.usage.cost))}（估算，以厂商账单为准）。${info.text}下一步：可以先下载已完成的部分；如需做完，可请管理员提高单次上限后再新建一次。`;
+        $('s-stop-text').textContent = `已完成 ${doneN}/${total} 步，花了约 ${spentText(run.usage && run.usage.cost)}（估算，以厂商账单为准）。${info.text}下一步：可以先下载已完成的部分；如需做完，可请管理员提高单次上限后再新建一次。`;
         $('s-stop-download').hidden = !last; $('s-stop').hidden = false;
         $('s-result').hidden = true; $('s-stop').scrollIntoView({ block: 'center' });
         return;
