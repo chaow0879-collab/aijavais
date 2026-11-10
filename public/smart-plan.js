@@ -107,7 +107,7 @@
     const skipped = chats.filter(m => !cnyRate(m)).map(m => Hints.platformLabel(m));
     if (!text) problems.push({ code: 'goal_missing', text: '请先用一句话说说想做什么。' });
     if (!chats.length) problems.push({ code: 'no_model', text: '还没有可用的模型。请先添加一个模型（填一次密钥即可）。', fix: { action: 'add_model', label: '去添加模型' } });
-    else if (!pool.length) problems.push({ code: 'no_priced_model', text: '已接入的模型价格都未知，按规定不调用。请在管理中心为模型填写单价，或添加价格已知的模型。', fix: { action: 'add_model', label: '去管理中心填写单价' } });
+    else if (!pool.length) problems.push({ code: 'no_priced_model', text: '这些模型的价格未知，按规定不调用：' + skipped.join('、') + '。请到 管理中心 → 模型 → 编辑，在“单价：每百万字约多少”里填上服务商官网价格页的输入和输出价格（填一次即可），或改用价格已知的平台（如 DeepSeek、通义千问）。', fix: { action: 'add_model', label: '去管理中心填写单价' } });
     if (problems.length) return { ok: false, problems, skipped, roles: [], summary: '', options: {} };
     const cap = Math.max(0.1, Number(capCny) || 5), specs = roleSet(output);
     const quality = option(assign(pool, specs, picks, false), text, cap, 'quality');
