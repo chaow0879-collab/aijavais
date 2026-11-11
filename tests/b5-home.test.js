@@ -37,7 +37,8 @@ test('B5-2: only deepseek-v4-pro + qwen3.8-max -> simple mode plans directly wit
   assert.equal(p.estimatedNote, '', 'official prices need no estimate note');
   const q = Plan.plan({ models: [conn('c', 'deepseek', 'DeepSeek', 'deepseek-v9-preview'), conn('d', 'dashscope', '通义千问', 'qwen3.8-plus')], goal: '写一份方案', capCny: 5 });
   assert.equal(q.ok, true, JSON.stringify(q.problems));
-  assert.match(q.estimatedNote, /按偏高的估计价计算，实际花费通常更低/);
+  assert.match(q.estimatedNote, /只是估计，实际可能更高也可能更低/); assert.match(q.estimatedNote, /不会超过你确认的上限/);
+  assert.doesNotMatch(q.estimatedNote, /偏高|通常更低/, 'AUD-F100-01: never claims the estimate is conservative');
   assert.ok(q.approval.prices.c.outputPerMillion >= 27 / Plan.FX && q.approval.prices.d.outputPerMillion >= 36 / Plan.FX, 'estimate is never below the known highest price');
 });
 test('B5-2: unregistered platforms are still refused, named, and the user is never sent to edit unit prices; no self-contradicting advice', () => {

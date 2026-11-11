@@ -155,11 +155,11 @@
     const approval = { decision: 'rework', feedback: text, fromStepId: 'review', approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
     return { ok: true, problems: [], skipped: [], options: { quality: option }, chosen: option, summary: option.summary, approval, confirmText: confirmText(option), estimatedNote: estimatedNote([m]), capCny: cap };
   }
-  /* B5-2：用了“偏高估计价”的模型时，在确认框里如实说明 */
+  /* B5-2 / AUD-F100-01：用了估计价的模型时如实说明——只是估计（同平台最贵价×2），实际可能更高或更低；上限由服务端预算门禁强制 */
   const estimated = m => !!(m && m.price && m.price.basis === 'estimated_ceiling');
   function estimatedNote(list) {
     const names = [...new Set((list || []).filter(estimated).map(m => Hints.platformLabel(m)))];
-    return names.length ? names.join('、') + ' 还没有官方单价，按偏高的估计价计算，实际花费通常更低。' : '';
+    return names.length ? names.join('、') + ' 还没有官方单价，费用按估计价计算（同平台最贵模型价格的 2 倍），只是估计，实际可能更高也可能更低；无论哪种，花费都不会超过你确认的上限，到上限会自动停下。' : '';
   }
   function confirmText(o) {
     if (o.free) return '所选模型在本机运行，不产生费用。';
