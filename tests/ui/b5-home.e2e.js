@@ -22,7 +22,7 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     let body = ''; req.on('data', c => body += c); req.on('end', () => {
       const j = JSON.parse(body || '{}');
       const asked = JSON.stringify(j.messages || '');
-      const reply = j.max_tokens <= 32 ? '好' : asked.includes('MOCK_SORRY') ? '抱歉，我无法生成这个演示文稿。' : asked.includes('MOCK_SCRIPT') ? SCRIPT : '本地模型写出的成果文字，内容足够长。';
+      const reply = j.max_tokens <= 32 ? '好' : asked.includes('MOCK_SORRY') ? '抱歉，我无法生成这个演示文稿。' : asked.includes('MOCK_EMPTY') ? '' : asked.includes('MOCK_SCRIPT') ? SCRIPT : '本地模型写出的成果文字，内容足够长。';
       const send = () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n'); };
       if (hold && j.max_tokens > 32) held.push(send); else send();
     });
@@ -176,8 +176,8 @@ const ok = name => { results.push(name); console.log('PASS', name); };
 
     /* ---- QA-F2-1 / QA-F2-2: PPT preview = the deck; an unusable answer is said plainly, never exported as a shell ---- */
     hold = false;
-    const pptRun = async (marker, name) => {
-      const pr = (await app.call('POST', '/api/v2/projects', { name, description: name + '\n\n想要的成果：PPT 演示', roles: [{ roleId: 'w', name: '写手', duty: '写', standard: '可读', connectionId: id }], steps: [{ stepId: 's1', roleId: 'w', title: '写出演示稿', prompt: marker }] })).json.project;
+    const pptRun = async (marker, name, checks) => {
+      const pr = (await app.call('POST', '/api/v2/projects', { name, description: name + '\n\n想要的成果：PPT 演示', roles: [{ roleId: 'w', name: '写手', duty: '写', standard: '可读', connectionId: id }], steps: [{ stepId: 's1', roleId: 'w', title: '写出演示稿', prompt: marker, ...(checks ? { checks } : {}) }] })).json.project;
       const r = (await app.call('POST', '/api/v2/projects/' + pr.projectId + '/runs', { maxTokens: 20000, maxOutputTokens: 100, maxCost: 0, allowedTools: [] })).json.run;
       for (let i = 0; i < 100 && ['running', 'queued'].includes((await app.call('GET', '/api/v2/runs/' + r.runId)).json.run.status); i++) await H.sleep(50);
       return r.runId;
@@ -197,6 +197,20 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     await pp.click('#s-regenerate'); assert.ok(await pp.isVisible('#s-rework-box')); assert.match(await pp.inputValue('#s-rework-text'), /幻灯片 JSON 格式重新输出/);
     await shot(pp, '7-ppt-unusable');
     ok('PPT preview equals the deck (5 pages, no Markdown or designer notes); an apology is refused with 重新生成, no shell download (422 pptx_unusable)');
+    // B5-F3 (1): with the simple-mode quality check (>= 20 characters) an apology or an empty reply fails the run;
+    // the first screen must still say 没能生成合格的页面 (not 启动没有成功), show no download and offer 重新生成
+    for (const marker of ['MOCK_SORRY', 'MOCK_EMPTY']) {
+      const rid = await pptRun(marker, marker === 'MOCK_SORRY' ? '道歉演示二' : '空回复演示', [{ type: 'minLength', value: 20 }]);
+      assert.equal((await app.call('GET', '/api/v2/runs/' + rid)).json.run.status, 'failed', marker + ' fails the quality check');
+      await pp.goto(base + '/workspace.html?run=' + rid); await pp.waitForSelector('#s-run-error:not([hidden])');
+      const msg = await pp.innerText('#s-run-error');
+      assert.match(msg, /这次 PPT 没能生成合格的页面/, marker); assert.doesNotMatch(msg, /启动没有成功/, marker);
+      assert.equal(await pp.isVisible('#s-download'), false, marker + ': no download'); assert.equal(await pp.isVisible('#s-result'), false);
+      assert.ok(await pp.isVisible('#s-regenerate'));
+    }
+    await pp.click('#s-regenerate'); await pp.waitForSelector('#simple:not([hidden])');
+    assert.match(await pp.inputValue('#s-goal'), /空回复演示/, '重新生成 on a failed run goes back to the same request (new confirmation before any call)');
+    ok('B5-F3: an apology or empty reply (quality check failed) shows 没能生成合格的页面 first, no download, 重新生成 restarts with the same request');
 
     /* ---- B5-2: only deepseek-v4-pro + qwen3.8-max (remote, never called here) -> RMB confirmation directly ---- */
     const b = await app.call('POST', '/api/models/batch', { providerId: 'deepseek', apiKey: 'sk-B5-TEST-ONLY-0000', models: [{ modelId: 'deepseek-v4-pro', capabilities: ['writing', 'reasoning', 'chinese'] }] });

@@ -175,6 +175,12 @@
         $('s-result').hidden = true; $('s-stop').scrollIntoView({ block: 'center' });
         return;
       }
+      // B5-F3 (1): a PPT whose final page step was refused by the quality check (apology / empty reply) is the
+      // same case as a cover-only deck: say so first, never offer a download, offer 重新生成
+      if (S.format === 'pptx' && run.status === 'failed' && bad && (bad.status === 'quality_failed' || /empty or oversized output/i.test(bad.error || ''))) {
+        $('s-result').hidden = true;
+        return unusableDeck('这次 PPT 没能生成合格的页面：模型的回复是空的、太短、超长或者是道歉，不是演示稿内容。', { failed: true });
+      }
       showError($('s-run-error'), info, () => { $('s-progress').hidden = true; $('simple').hidden = false; go(); });
     }
   }
@@ -289,10 +295,13 @@
       return '第 ' + (i + 1) + ' 页　' + s.title + '\n' + pts.map(p => '　· ' + p).join('\n');
     }).join('\n\n');
   }
-  function unusableDeck(message) {
+  function unusableDeck(message, { failed = false } = {}) {
     $('s-download').hidden = true;
-    const box = $('s-run-error'); box.replaceChildren(el('div', { text: (message || '这次 PPT 没能生成合格的页面。') + ' 没有把空白文件当成成果。可以点“重新生成”，让审核岗位按幻灯片格式重做一遍（会再请你确认一次费用）。' }));
-    box.append(el('button', { type: 'button', className: 'fixbtn', id: 's-regenerate', text: '重新生成', onclick: () => { box.hidden = true; $('s-rework-box').hidden = false; $('s-rework-text').value = '上次没有生成合格的演示稿页面，请严格按要求的幻灯片 JSON 格式重新输出完整的演示稿，每页都要有标题和要点。'; $('s-rework-text').focus(); } }));
+    // 等你审核的运行：返工重做审核步骤；已失败的运行不能返工：回到同一目标和团队，重新确认费用后再开始
+    const box = $('s-run-error'); box.replaceChildren(el('div', { text: (message || '这次 PPT 没能生成合格的页面。') + ' 没有把空白文件当成成果。' + (failed ? '可以点“重新生成”，用同样的需求和团队再做一次（开始前会再请你确认费用）。' : '可以点“重新生成”，让审核岗位按幻灯片格式重做一遍（会再请你确认一次费用）。') }));
+    box.append(el('button', { type: 'button', className: 'fixbtn', id: 's-regenerate', text: '重新生成', onclick: () => { box.hidden = true;
+      if (failed) { adjust(); return; }
+      $('s-rework-box').hidden = false; $('s-rework-text').value = '上次没有生成合格的演示稿页面，请严格按要求的幻灯片 JSON 格式重新输出完整的演示稿，每页都要有标题和要点。'; $('s-rework-text').focus(); } }));
     box.hidden = false; box.scrollIntoView({ block: 'center' });
   }
   /* 非 PPT 的文字预览：去掉 Markdown 符号（#、**、`），列表符号换成“·” */
