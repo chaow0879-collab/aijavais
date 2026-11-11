@@ -182,6 +182,12 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
           UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
         run: npm run test:b7
+      - name: "B5 my-tasks home, top bar, switching, display-session isolation, price ceiling (local model fixture)"
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:b5
       - name: "#19 cost attribution + #17 workspace delivery checks (test:delivery-ui)"
         if: success() || failure()
         env:
