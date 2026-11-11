@@ -161,7 +161,8 @@
     if (active) return;
     clearInterval(S.timer);
     const last = [...steps].reverse().find(st => st.status === 'done' && typeof st.output === 'string' && st.output.trim());
-    if (last) { $('s-final').textContent = readable(last.output); $('s-result').hidden = false; if (S.format === 'pptx' && run.status !== 'failed' && run.status !== 'cancelled') deckPreview(); }
+    // B5-F3 (2): a fresh result (e.g. after 重新生成) brings the download back at once; deckPreview hides it again only if the deck is unusable
+    if (last) { $('s-final').textContent = readable(last.output); $('s-result').hidden = false; $('s-download').hidden = false; if (S.format === 'pptx' && run.status !== 'failed' && run.status !== 'cancelled') deckPreview(); }
     $('s-accept').hidden = $('s-rework').hidden = run.status !== 'review_required';
     if (run.status !== 'review_required') $('s-rework-box').hidden = true;
     if (run.status === 'failed' || run.status === 'cancelled') {
@@ -201,7 +202,7 @@
     const r = window.SmartPlan.rework({ models: S.models, snapshot: S.snapshot, feedback: $('s-rework-text').value, capCny: S.capCny });
     if (!r.ok) return showError($('s-run-error'), r.problems[0], rework);
     if (!(await confirm({ ...r, isRework: true }))) return;
-    $('s-result').hidden = true; $('s-state').textContent = '正在按你的意见修改…';
+    $('s-result').hidden = true; $('s-run-error').hidden = true; $('s-state').textContent = '正在按你的意见修改…';
     try {
       await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/review', 'POST', r.approval);
       $('s-rework-box').hidden = true; $('s-rework-text').value = '';

@@ -22,7 +22,7 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     let body = ''; req.on('data', c => body += c); req.on('end', () => {
       const j = JSON.parse(body || '{}');
       const asked = JSON.stringify(j.messages || '');
-      const reply = j.max_tokens <= 32 ? '好' : asked.includes('MOCK_SORRY') ? '抱歉，我无法生成这个演示文稿。' : asked.includes('MOCK_EMPTY') ? '' : asked.includes('MOCK_SCRIPT') ? SCRIPT : '本地模型写出的成果文字，内容足够长。';
+      const reply = j.max_tokens <= 32 ? '好' : asked.includes('上次没有生成合格') ? SCRIPT : asked.includes('MOCK_SORRY') ? '抱歉，我无法生成这个演示文稿。' : asked.includes('MOCK_EMPTY') ? '' : asked.includes('MOCK_SCRIPT') ? SCRIPT : '本地模型写出的成果文字，内容足够长。';
       const send = () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n'); };
       if (hold && j.max_tokens > 32) held.push(send); else send();
     });
@@ -211,6 +211,19 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     await pp.click('#s-regenerate'); await pp.waitForSelector('#simple:not([hidden])');
     assert.match(await pp.inputValue('#s-goal'), /空回复演示/, '重新生成 on a failed run goes back to the same request (new confirmation before any call)');
     ok('B5-F3: an apology or empty reply (quality check failed) shows 没能生成合格的页面 first, no download, 重新生成 restarts with the same request');
+    // B5-F3 (2): on a run awaiting review, 重新生成 reworks the final step; the new deck brings the download back without a reload
+    const rp = (await app.call('POST', '/api/v2/projects', { name: '返工演示', description: '返工演示\n\n想要的成果：PPT 演示', roles: [{ roleId: 'drafter', name: '起草', duty: '写', standard: '可读', connectionId: id }, { roleId: 'reviewer', name: '审核', duty: '审', standard: '可读', connectionId: id }],
+      steps: [{ stepId: 'draft', roleId: 'drafter', title: '写出初稿', prompt: '写初稿' }, { stepId: 'review', roleId: 'reviewer', title: '审核并定稿', prompt: 'MOCK_SORRY', handoff: 'previous' }] })).json.project;
+    const rr = (await app.call('POST', '/api/v2/projects/' + rp.projectId + '/runs', { maxTokens: 20000, maxOutputTokens: 100, maxCost: 0, allowedTools: [] })).json.run;
+    for (let i = 0; i < 100 && (await app.call('GET', '/api/v2/runs/' + rr.runId)).json.run.status !== 'review_required'; i++) await H.sleep(50);
+    await pp.goto(base + '/workspace.html?run=' + rr.runId); await pp.waitForSelector('#s-regenerate');
+    assert.equal(await pp.isVisible('#s-download'), false);
+    await pp.click('#s-regenerate'); await pp.waitForSelector('#s-rework-box:not([hidden])');
+    await pp.click('#s-rework-go'); await pp.waitForSelector('#s-confirm[open]'); await pp.click('#s-confirm-ok');
+    await pp.waitForFunction(() => /^第 1 页/.test(document.querySelector('#s-final').textContent) && !document.querySelector('#s-result').hidden, null, { timeout: 15000 });
+    assert.ok(await pp.isVisible('#s-download'), 'download is back right after the regenerated deck, no reload');
+    assert.equal(await pp.isVisible('#s-run-error'), false);
+    ok('B5-F3: 重新生成 on a run awaiting review reworks it; the new deck shows and the download button returns without a reload');
 
     /* ---- B5-2: only deepseek-v4-pro + qwen3.8-max (remote, never called here) -> RMB confirmation directly ---- */
     const b = await app.call('POST', '/api/models/batch', { providerId: 'deepseek', apiKey: 'sk-B5-TEST-ONLY-0000', models: [{ modelId: 'deepseek-v4-pro', capabilities: ['writing', 'reasoning', 'chinese'] }] });
