@@ -1193,6 +1193,9 @@ function serveStatic(req, res, url) {
   }
   /* 除登录页外，所有页面与资源都需要登录；管理中心只对管理员开放 */
   let pth = url.pathname;
+  /* B5-1: an administrator's home is "my tasks" (workspace task center); a read-only display session and
+   * the login redirect keep the HALOFLUX screen at /, which stays reachable at /panel.html for everyone allowed. */
+  if (pth === '/' && access.identify(req).kind === 'admin') { res.writeHead(302, { location: '/workspace.html', 'cache-control': 'no-store' }); return res.end(); }
   if (pth === '/') pth = '/panel.html';
   if (pth === '/admin') pth = '/admin.html';
   if (!PUBLIC_PAGES.has(pth)) {
