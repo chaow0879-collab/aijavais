@@ -5,7 +5,7 @@ const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const ROOT = path.join(__dirname, '..', '..');
 const SUITES = [
-  'tests/ui/admin.e2e.js', 'tests/ui/workspace.e2e.js', 'tests/ui/intake-draft.e2e.js', 'tests/ui/b7-usability.e2e.js',
+  'tests/ui/admin.e2e.js', 'tests/ui/workspace.e2e.js', 'tests/ui/intake-draft.e2e.js', 'tests/ui/b7-usability.e2e.js', 'tests/ui/b5-home.e2e.js',
   'tests/ui/industry.e2e.js', 'tests/ui/claude-delivery.e2e.js', 'tests/ui/claude-universal-intake.e2e.js',
   'tests/haloflux-workbench-r54/workbench-live.e2e.js'
 ];

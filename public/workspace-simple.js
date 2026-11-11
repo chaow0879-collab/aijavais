@@ -4,7 +4,7 @@
  * 规则见 public/smart-plan.js；服务端的预算、Token、审批与就绪门禁全部不变。页面只显示中文，不显示原始 JSON。 */
 (() => {
   const $ = id => document.getElementById(id);
-  const S = { models: [], capCny: 5, picks: {}, plan: null, runId: null, projectId: null, snapshot: null, timer: null, format: 'docx', outputLabel: 'Word 文档', busy: false, choice: 'quality' };
+  const S = { models: [], excluded: new Set(), capCny: 5, picks: {}, plan: null, runId: null, projectId: null, snapshot: null, timer: null, format: 'docx', outputLabel: 'Word 文档', busy: false, choice: 'quality' };
   const OUT = window.SmartPlan.OUTPUTS, STATUS = { pending: '等待中', running: '进行中', done: '已完成', quality_failed: '质量检查没通过', failed: '没有完成', cancelled: '已取消', skipped: '已跳过' };
   /* O11：累计花费（估算，人民币；不足 1 分显示“不到 ¥0.01”） */
   const spentText = usd => { const c = window.SmartPlan.spentCny(usd); return c > 0 && c < 0.01 ? '不到 ¥0.01' : '¥' + c.toFixed(2); };
@@ -28,16 +28,23 @@
     if (c && c.settings && Number(c.settings.simpleRunCapCny) > 0) S.capCny = Number(c.settings.simpleRunCapCny);
     $('ws-guide').hidden = window.SmartPlan.chat(S.models).length > 0;
   }
-  function showError(box, info, retry) {
+  /* B5-2：普通用户不被赶去管理中心。模型不能用时，在当前页一键换成其它可用模型；
+   * 只有一个可用模型都没有时，才提示“请管理员添加模型”。 */
+  const pool = () => S.models.filter(m => !S.excluded.has(m.connectionId));
+  function showError(box, info, retry, ctx = {}) {
     box.replaceChildren(el('div', { text: info.text }));
     const fix = info.fix;
-    if (fix && (fix.action === 'add_model' || fix.action === 'fix_model')) box.append(el('a', { className: 'fixbtn', href: '/admin.html', text: fix.label }));
+    if (fix && fix.action === 'fix_model') {
+      const others = window.SmartPlan.usable(pool()).filter(m => m.connectionId !== ctx.connectionId);
+      if (ctx.connectionId && others.length && retry) box.append(el('button', { type: 'button', className: 'fixbtn', text: '自动换成其它可用模型', onclick: () => { S.excluded.add(ctx.connectionId); for (const k of Object.keys(S.picks)) if (S.picks[k] === ctx.connectionId) delete S.picks[k]; box.hidden = true; retry(); } }));
+      else box.append(el('div', { className: 'hint', text: '没有其它可用的模型了，请管理员添加模型。' }));
+    } else if (fix && fix.action === 'add_model') box.append(el('a', { className: 'fixbtn', href: '/admin.html', text: fix.label })); // 一个模型都没有：只能先添加
     else if (fix && retry) box.append(el('button', { type: 'button', className: 'fixbtn', text: fix.label, onclick: () => { box.hidden = true; retry(); } }));
     if (info.detail) box.append(el('details', {}, [el('summary', { text: '给管理员看的详细信息' }), el('div', { text: info.detail })]));
     box.hidden = false; box.scrollIntoView({ block: 'center' });
   }
   function makePlan(choice) {
-    return window.SmartPlan.plan({ models: S.models, goal: $('s-goal').value, output: output(), deadline: $('s-deadline').value, capCny: S.capCny, picks: S.picks, choice: choice || S.choice });
+    return window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value, output: output(), deadline: $('s-deadline').value, capCny: S.capCny, picks: S.picks, choice: choice || S.choice });
   }
   function renderSwap(p) {
     const box = $('s-swap'); box.replaceChildren();
@@ -45,13 +52,13 @@
       const i = r.candidates.indexOf(r.model.connectionId); S.picks[r.spec.roleId] = r.candidates[(i + 1) % r.candidates.length]; preview(true);
     } }));
   }
-  function skippedText(p) { return p.skipped && p.skipped.length ? '这些模型的价格未知，按规定不调用，已换成其它模型：' + p.skipped.join('、') + '。' : ''; }
+  function skippedText(p) { return p.skipped && p.skipped.length ? '这些模型所在的平台没有登记价格，按规定不调用，已换成其它模型：' + p.skipped.join('、') + '。' : ''; }
   function preview(show) {
     S.plan = makePlan();
     if (show) {
       $('s-plan').hidden = !S.plan.ok;
       $('s-plan-team').textContent = S.plan.ok ? '智能分配：' + S.plan.summary : '';
-      $('s-plan-note').textContent = S.plan.ok ? S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : '') + ' ' + skippedText(S.plan) : '';
+      $('s-plan-note').textContent = S.plan.ok ? [S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : ''), S.plan.estimatedNote, skippedText(S.plan)].filter(Boolean).join(' ') : '';
       if (S.plan.ok) renderSwap(S.plan);
     }
     return S.plan;
@@ -67,6 +74,7 @@
           el('span', { text: (o.kind === 'quality' ? '效果优先 约¥' + o.estimateCny.toFixed(2) : '省钱 约¥' + o.estimateCny.toFixed(2) + '（效果可能稍差）') + '，最多 ¥' + o.maxCny.toFixed(2) + (o.overCap ? '，可能中途停下' : '') + '。' + o.summary })]));
       } else body.append(el('p', { className: 'team', text: p.confirmText }), el('p', { text: '团队：' + p.summary }));
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
+      if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: p.estimatedNote }));
       body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : '¥0.00') + '（估算，以厂商账单为准）。' }));
       if (!p.isRework) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
       else body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' }));
@@ -96,7 +104,7 @@
         if (m && m.status === 'available') continue;
         $('s-busy').textContent = '正在检查「' + window.ModelHints.platformLabel(r.model) + '」能否连接…';
         const t = await api('/api/providers/' + encodeURIComponent(r.model.connectionId) + '/test', 'POST', { approvePaid: true });
-        if (!t.ok) throw Object.assign(Error(t.error || ''), { code: 'model_unverified', modelName: window.ModelHints.platformLabel(r.model) });
+        if (!t.ok) throw Object.assign(Error(t.error || ''), { code: 'model_unverified', modelName: window.ModelHints.platformLabel(r.model), connectionId: r.model.connectionId });
         if (m) m.status = 'available';
       }
       $('s-busy').textContent = '正在开始执行…';
@@ -105,7 +113,7 @@
       showProgress(p);
       window.AIJWorkspace?.refreshProjects();
     } catch (e) {
-      showError($('s-error'), window.SmartPlan.explain(e, { modelName: e.modelName }), go);
+      showError($('s-error'), window.SmartPlan.explain(e, { modelName: e.modelName }), go, { connectionId: e.connectionId });
     } finally { S.busy = false; $('s-go').disabled = false; $('s-busy').textContent = ''; }
   }
   function showProgress(p) {
@@ -182,8 +190,51 @@
   }
   function reset() {
     clearInterval(S.timer); S.runId = null; S.picks = {}; S.choice = 'quality';
-    $('s-progress').hidden = true; $('simple').hidden = false; $('s-error').hidden = true; $('s-plan').hidden = true;
-    history.replaceState(null, '', '/workspace.html');
+    $('home').hidden = true; $('s-progress').hidden = true; $('simple').hidden = false; $('s-error').hidden = true; $('s-plan').hidden = true;
+    history.replaceState(null, '', '/workspace.html?new=1');
+  }
+  /* B5-1 我的任务：一句话汇总 + 按“进行中 / 等你审核 / 已停下 / 已完成 / 草稿”分组的卡片，点卡片进该任务的进度页。
+   * 数据来自管理员接口 /api/v2/tasks（顶栏每 5 秒刷新一次并广播 aij:tasks）。 */
+  const GROUPS = [['running', '进行中'], ['review', '等你审核'], ['stopped', '已停下'], ['done', '已完成'], ['draft', '草稿']];
+  const GTEXT = Object.fromEntries(GROUPS);
+  let TASKS = null;
+  const taskHref = t => t.runId ? '/workspace.html?run=' + encodeURIComponent(t.runId) : '/workspace.html?project=' + encodeURIComponent(t.projectId);
+  const when = ts => { const d = Date.now() - ts; return d < 60e3 ? '刚刚' : d < 3600e3 ? Math.floor(d / 60e3) + ' 分钟前' : d < 86400e3 ? Math.floor(d / 3600e3) + ' 小时前' : new Date(ts).toLocaleDateString('zh-CN'); };
+  const progressText = t => { if (!t.runId) return '还没开始'; const total = t.stepsTotal || 1; return t.group === 'running' ? '第 ' + Math.min(t.stepsDone + 1, total) + '/' + total + ' 步' + (t.currentRole ? ' · ' + t.currentRole + '正在做' : '') : '完成 ' + t.stepsDone + '/' + total + ' 步'; };
+  const running = () => (TASKS ? TASKS.tasks.filter(t => t.group === 'running').sort((a, b) => b.updatedAt - a.updatedAt) : []);
+  function card(t) {
+    const a = el('a', { className: 'tcard ' + t.group, href: taskHref(t) }, [el('strong', { text: t.name }),
+      el('div', { className: 'meta' }, [el('span', { className: 'tag', text: GTEXT[t.group] }), progressText(t)]),
+      el('div', { className: 'meta', text: '已花约 ' + spentText(t.costUsd) + ' · ' + when(t.updatedAt) + (t.downloadable && t.group !== 'running' ? ' · 有成果可下载' : '') })]);
+    a.dataset.projectId = t.projectId; if (t.runId) a.dataset.runId = t.runId;
+    return a;
+  }
+  function renderHome() {
+    if (!TASKS) return;
+    const c = TASKS.counts;
+    $('home-sum').textContent = '正在运行 ' + c.running + ' 个（最多同时 ' + TASKS.maxConcurrent + ' 个）· 等你审核 ' + c.review + ' 个 · 已完成 ' + c.done + ' 个' + (c.stopped ? ' · 已停下 ' + c.stopped + ' 个' : '') + (c.draft ? ' · 草稿 ' + c.draft + ' 个' : '');
+    $('home-groups').replaceChildren(...GROUPS.map(([g, name]) => { const list = TASKS.tasks.filter(t => t.group === g).sort((a, b) => b.updatedAt - a.updatedAt); return list.length ? el('section', { className: 'tgroup' }, [el('h3', { text: name + '（' + list.length + '）' }), el('div', { className: 'tcards' }, list.map(card))]) : null; }).filter(Boolean));
+  }
+  function renderRunNav() {
+    const list = running(), i = list.findIndex(t => t.runId === S.runId), go = t => location.assign(taskHref(t));
+    const others = list.filter(t => t.runId !== S.runId);
+    $('s-prev').hidden = $('s-next').hidden = !others.length;
+    if (!others.length) return;
+    const n = list.length, prev = i >= 0 ? list[(i - 1 + n) % n] : others[others.length - 1], next = i >= 0 ? list[(i + 1) % n] : others[0];
+    $('s-prev').onclick = () => go(prev); $('s-next').onclick = () => go(next);
+    const mine = TASKS.tasks.find(t => t.runId === S.runId);
+    if (mine && !$('s-team').textContent) $('s-team').textContent = '任务：' + mine.name;
+  }
+  function onTasks(data) {
+    if (!data || !Array.isArray(data.tasks)) return;
+    TASKS = data; renderHome();
+    if (!$('s-progress').hidden) renderRunNav();
+  }
+  addEventListener('aij:tasks', e => onTasks(e.detail));
+  /* 从进度页链接直接打开时，按任务当初选的成果格式下载 */
+  function restoreFormat(run) {
+    const label = ((/想要的成果：(.+)/.exec(run.projectSnapshot && run.projectSnapshot.description || '') || [])[1] || '').split('\n')[0];
+    const o = Object.values(OUT).find(x => x.label === label); if (o) { S.format = o.format; S.outputLabel = o.label; }
   }
   window.AIJSimple = { reset };
   addEventListener('DOMContentLoaded', async () => {
@@ -203,6 +254,14 @@
     const q = new URLSearchParams(location.search);
     if (q.get('project')) document.body.dataset.mode = 'advanced';
     try { await loadModels(); } catch { /* 页面其余部分仍可用 */ }
-    if (q.get('run')) { S.runId = q.get('run'); try { const run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; S.projectId = run.projectId; showProgress(null); } catch { reset(); } }
+    if (q.get('run')) { S.runId = q.get('run'); try { const run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; S.projectId = run.projectId; restoreFormat(run); showProgress(null); } catch { reset(); } }
+    else if (!q.get('project') && q.get('new') !== '1') {
+      // 默认落点“我的任务”；一个任务都没有时直接给新建表单（0 次额外点击），并附一句引导
+      $('simple').hidden = true;
+      try { onTasks(await api('/api/v2/tasks')); } catch { TASKS = null; }
+      if (TASKS && TASKS.tasks.length) $('home').hidden = false;
+      else { $('simple').hidden = false; $('s-first').hidden = false; }
+    }
+    try { if (!TASKS) onTasks(await api('/api/v2/tasks')); else renderRunNav(); } catch { /* 顶栏会继续刷新 */ }
   });
 })();

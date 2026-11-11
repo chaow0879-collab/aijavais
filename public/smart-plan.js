@@ -107,7 +107,9 @@
     const skipped = chats.filter(m => !cnyRate(m)).map(m => Hints.platformLabel(m));
     if (!text) problems.push({ code: 'goal_missing', text: '请先用一句话说说想做什么。' });
     if (!chats.length) problems.push({ code: 'no_model', text: '还没有可用的模型。请先添加一个模型（填一次密钥即可）。', fix: { action: 'add_model', label: '去添加模型' } });
-    else if (!pool.length) problems.push({ code: 'no_priced_model', text: '这些模型的价格未知，按规定不调用：' + skipped.join('、') + '。请到 管理中心 → 模型 → 编辑，在“单价：每百万字约多少”里填上服务商官网价格页的输入和输出价格（填一次即可），或改用价格已知的平台（如 DeepSeek、通义千问）。', fix: { action: 'add_model', label: '去管理中心填写单价' } });
+    // B5-2: known platforms always get a price (official or a conservative estimated ceiling), so this only
+    // happens when every model is on a platform without any registered price. Never send the user to edit prices.
+    else if (!pool.length) problems.push({ code: 'no_priced_model', text: '现在的模型都来自没有登记价格的平台，按规定不调用：' + skipped.join('、') + '。请管理员添加已登记价格平台的模型。' });
     if (problems.length) return { ok: false, problems, skipped, roles: [], summary: '', options: {} };
     const cap = Math.max(0.1, Number(capCny) || 5), specs = roleSet(output);
     const quality = option(assign(pool, specs, picks, false), text, cap, 'quality');
@@ -130,7 +132,7 @@
       ],
     };
     const approval = { approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(chosen.maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
-    return { ok: true, problems: [], skipped, options, chosen, roles: chosen.roles, summary: chosen.summary, project, approval, format: out.format, outputLabel: out.label, confirmText: confirmText(chosen), capCny: cap };
+    return { ok: true, problems: [], skipped, options, chosen, roles: chosen.roles, summary: chosen.summary, project, approval, format: out.format, outputLabel: out.label, confirmText: confirmText(chosen), estimatedNote: estimatedNote(chosen.roles.map(r => r.model)), capCny: cap };
   }
   /* QA-B7-01 返工：只重做"审核并定稿"这一步（沿用已完成的初稿），按审核员单价重新估算，再确认一次人民币。
    * 每轮返工都是新的显式批准，不继承上一次。snapshot = run.projectSnapshot. */
@@ -140,7 +142,7 @@
     const text = String(feedback || '').trim();
     if (!text) return { ok: false, problems: [{ code: 'feedback_missing', text: '请先用一句话说说哪里不满意、想怎么改。' }] };
     const missing = roles.map(r => byId.get(r.connectionId)).filter(m => !m || !cnyRate(m));
-    if (!reviewer || missing.length) return { ok: false, problems: [{ code: 'no_priced_model', text: '这个任务用到的模型现在价格未知或已被移除，按规定不调用。请新建任务。', fix: { action: 'add_model', label: '去管理中心查看' } }] };
+    if (!reviewer || missing.length) return { ok: false, problems: [{ code: 'no_priced_model', text: '这个任务用到的模型现在没有登记价格或已被移除，按规定不调用。请点“＋ 新建任务”重新开始。' }] };
     const m = byId.get(reviewer.connectionId), r = cnyRate(m), goal = String(snapshot.description || '');
     const inTok = EXPECT.systemTokens + Math.ceil((goal.length + text.length) * 1.2) + EXPECT.draftOut, outTok = EXPECT.reviewOut;
     const est = (inTok * r.input + outTok * r.output) / 1e6;
@@ -151,7 +153,13 @@
     const prices = {};
     for (const role of roles) { const u = usdRate(byId.get(role.connectionId)); if (u) prices[role.connectionId] = u; }
     const approval = { decision: 'rework', feedback: text, fromStepId: 'review', approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
-    return { ok: true, problems: [], skipped: [], options: { quality: option }, chosen: option, summary: option.summary, approval, confirmText: confirmText(option), capCny: cap };
+    return { ok: true, problems: [], skipped: [], options: { quality: option }, chosen: option, summary: option.summary, approval, confirmText: confirmText(option), estimatedNote: estimatedNote([m]), capCny: cap };
+  }
+  /* B5-2 / AUD-F100-01：用了估计价的模型时如实说明——只是估计（同平台最贵价×2），实际可能更高或更低；上限由服务端预算门禁强制 */
+  const estimated = m => !!(m && m.price && m.price.basis === 'estimated_ceiling');
+  function estimatedNote(list) {
+    const names = [...new Set((list || []).filter(estimated).map(m => Hints.platformLabel(m)))];
+    return names.length ? names.join('、') + ' 还没有官方单价，费用按估计价计算（同平台最贵模型价格的 2 倍），只是估计，实际可能更高也可能更低；无论哪种，花费都不会超过你确认的上限，到上限会自动停下。' : '';
   }
   function confirmText(o) {
     if (o.free) return '所选模型在本机运行，不产生费用。';
@@ -184,5 +192,5 @@
     if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null };
     return { text: '启动没有成功。', fix: { action: 'retry', label: '再试一次' }, detail: msg };
   }
-  return { plan, rework, explain, summary, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
+  return { plan, rework, explain, summary, estimatedNote, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
 });
