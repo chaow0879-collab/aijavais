@@ -11,6 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const H = require('../helpers');
+const SCRIPT = fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'ppt', 'owner-5-pages-script.md'), 'utf8');
 
 const SHOTS = process.env.UI_SHOTS || null;
 const results = [];
@@ -20,7 +21,9 @@ const ok = name => { results.push(name); console.log('PASS', name); };
   const mock = http.createServer((req, res) => {
     let body = ''; req.on('data', c => body += c); req.on('end', () => {
       const j = JSON.parse(body || '{}');
-      const send = () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: j.max_tokens <= 32 ? '好' : '本地模型写出的成果文字，内容足够长。' } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n'); };
+      const asked = JSON.stringify(j.messages || '');
+      const reply = j.max_tokens <= 32 ? '好' : asked.includes('MOCK_SORRY') ? '抱歉，我无法生成这个演示文稿。' : asked.includes('MOCK_SCRIPT') ? SCRIPT : '本地模型写出的成果文字，内容足够长。';
+      const send = () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n'); };
       if (hold && j.max_tokens > 32) held.push(send); else send();
     });
   });
@@ -170,6 +173,30 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     await shot(phone, '4-phone');
     ok('phone width: top bar, running badge and summary usable without horizontal scroll');
     hold = false; for (const f of held.splice(0)) f();
+
+    /* ---- QA-F2-1 / QA-F2-2: PPT preview = the deck; an unusable answer is said plainly, never exported as a shell ---- */
+    hold = false;
+    const pptRun = async (marker, name) => {
+      const pr = (await app.call('POST', '/api/v2/projects', { name, description: name + '\n\n想要的成果：PPT 演示', roles: [{ roleId: 'w', name: '写手', duty: '写', standard: '可读', connectionId: id }], steps: [{ stepId: 's1', roleId: 'w', title: '写出演示稿', prompt: marker }] })).json.project;
+      const r = (await app.call('POST', '/api/v2/projects/' + pr.projectId + '/runs', { maxTokens: 20000, maxOutputTokens: 100, maxCost: 0, allowedTools: [] })).json.run;
+      for (let i = 0; i < 100 && ['running', 'queued'].includes((await app.call('GET', '/api/v2/runs/' + r.runId)).json.run.status); i++) await H.sleep(50);
+      return r.runId;
+    };
+    const scriptRun = await pptRun('MOCK_SCRIPT', '任职资格演示'), sorryRun = await pptRun('MOCK_SORRY', '道歉演示');
+    const pp = await (await adminCtx()).newPage();
+    await pp.goto(base + '/workspace.html?run=' + scriptRun); await pp.waitForSelector('#s-result:not([hidden])');
+    await pp.waitForFunction(() => /^第 1 页/.test(document.querySelector('#s-final').textContent));
+    const preview = await pp.innerText('#s-final');
+    assert.match(preview, /第 1 页　任职资格体系：让成长有标准、有路径[\s\S]*第 5 页　总结/); assert.doesNotMatch(preview, /[#*]|视觉建议|设计建议|备注|---/);
+    assert.equal(preview.match(/^第 \d+ 页/gm).length, 5, 'preview has the same 5 pages as the PPT');
+    await pp.goto(base + '/workspace.html?run=' + sorryRun); await pp.waitForSelector('#s-run-error:not([hidden])');
+    assert.match(await pp.innerText('#s-run-error'), /这次 PPT 没能生成合格的页面[\s\S]*没有把空白文件当成成果/);
+    assert.equal(await pp.isVisible('#s-download'), false, 'no download of a shell'); assert.ok(await pp.isVisible('#s-regenerate'));
+    const exp = await app.call('POST', '/api/v2/runs/' + sorryRun + '/export', { format: 'pptx' });
+    assert.equal(exp.status, 422); assert.equal(exp.json.code, 'pptx_unusable');
+    await pp.click('#s-regenerate'); assert.ok(await pp.isVisible('#s-rework-box')); assert.match(await pp.inputValue('#s-rework-text'), /幻灯片 JSON 格式重新输出/);
+    await shot(pp, '7-ppt-unusable');
+    ok('PPT preview equals the deck (5 pages, no Markdown or designer notes); an apology is refused with 重新生成, no shell download (422 pptx_unusable)');
 
     /* ---- B5-2: only deepseek-v4-pro + qwen3.8-max (remote, never called here) -> RMB confirmation directly ---- */
     const b = await app.call('POST', '/api/models/batch', { providerId: 'deepseek', apiKey: 'sk-B5-TEST-ONLY-0000', models: [{ modelId: 'deepseek-v4-pro', capabilities: ['writing', 'reasoning', 'chinese'] }] });

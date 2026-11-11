@@ -141,7 +141,7 @@
   function showProgress(p) {
     $('simple').hidden = true; $('s-progress').hidden = false;
     $('s-team').textContent = p ? '团队：' + p.summary + '。' + p.confirmText : '';
-    $('s-download').textContent = DL[S.format] || '下载成果';
+    $('s-download').textContent = DL[S.format] || '下载成果'; $('s-download').hidden = false;
     $('s-result').hidden = true; $('s-run-error').hidden = true; $('s-stop').hidden = true; $('s-steps').replaceChildren();
     history.replaceState(null, '', '/workspace.html?run=' + encodeURIComponent(S.runId));
     scrollTo(0, 0);
@@ -161,7 +161,7 @@
     if (active) return;
     clearInterval(S.timer);
     const last = [...steps].reverse().find(st => st.status === 'done' && typeof st.output === 'string' && st.output.trim());
-    if (last) { $('s-final').textContent = readable(last.output); $('s-result').hidden = false; }
+    if (last) { $('s-final').textContent = readable(last.output); $('s-result').hidden = false; if (S.format === 'pptx' && run.status !== 'failed' && run.status !== 'cancelled') deckPreview(); }
     $('s-accept').hidden = $('s-rework').hidden = run.status !== 'review_required';
     if (run.status !== 'review_required') $('s-rework-box').hidden = true;
     if (run.status === 'failed' || run.status === 'cancelled') {
@@ -180,7 +180,11 @@
   }
   async function download() {
     const res = await fetch('/api/v2/runs/' + encodeURIComponent(S.runId) + '/export', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ format: S.format }) });
-    if (!res.ok) { showError($('s-run-error'), { text: '成果文件暂时生成不了，请稍后再试。', fix: { action: 'retry', label: '再试一次' } }, download); return; }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (err.code === 'pptx_unusable') return unusableDeck(err.error);
+      showError($('s-run-error'), { text: '成果文件暂时生成不了，请稍后再试。', fix: { action: 'retry', label: '再试一次' } }, download); return;
+    }
     const blob = await res.blob(), a = el('a', { href: URL.createObjectURL(blob), download: (S.outputLabel || '成果') + '.' + S.format });
     document.body.append(a); a.click(); a.remove();
   }
@@ -274,16 +278,36 @@
     const o = Object.values(OUT).find(x => x.label === label); if (o) { S.format = o.format; S.outputLabel = o.label; }
   }
   /* B5-F2：PPT 的最终输出是幻灯片 JSON——页面上显示成人能读的提纲，不显示原始 JSON */
+  /* QA-F2-2：PPT 预览用服务端同一套解析（和下载的 PPT 一致：每页标题 + 要点，不含提示语和 Markdown 符号）
+   * QA-F2-1：解析不出合格页面时明确告诉用户，不把空壳当成果，并提供“重新生成” */
+  async function deckPreview() {
+    let d; try { d = await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/deck'); } catch { return; }
+    if (!d.usable) return unusableDeck('这次 PPT 没能生成合格的页面：' + d.reason + '。');
+    $('s-final').textContent = d.slides.map((s, i) => {
+      const pts = [s.subtitle, s.quote, ...s.bullets, ...s.cards.map(c => c.title + (c.text ? '：' + c.text : '')), ...s.steps.map(c => c.title + (c.text ? '：' + c.text : '')),
+        ...[s.left, s.right].filter(Boolean).flatMap(c => [c.title + '：', ...c.bullets.map(b => '  ' + b)])].filter(Boolean);
+      return '第 ' + (i + 1) + ' 页　' + s.title + '\n' + pts.map(p => '　· ' + p).join('\n');
+    }).join('\n\n');
+  }
+  function unusableDeck(message) {
+    $('s-download').hidden = true;
+    const box = $('s-run-error'); box.replaceChildren(el('div', { text: (message || '这次 PPT 没能生成合格的页面。') + ' 没有把空白文件当成成果。可以点“重新生成”，让审核岗位按幻灯片格式重做一遍（会再请你确认一次费用）。' }));
+    box.append(el('button', { type: 'button', className: 'fixbtn', id: 's-regenerate', text: '重新生成', onclick: () => { box.hidden = true; $('s-rework-box').hidden = false; $('s-rework-text').value = '上次没有生成合格的演示稿页面，请严格按要求的幻灯片 JSON 格式重新输出完整的演示稿，每页都要有标题和要点。'; $('s-rework-text').focus(); } }));
+    box.hidden = false; box.scrollIntoView({ block: 'center' });
+  }
+  /* 非 PPT 的文字预览：去掉 Markdown 符号（#、**、`），列表符号换成“·” */
+  const plain = t => String(t).split('\n').map(l => l.replace(/^\s{0,3}#{1,6}\s+/, '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1').replace(/`([^`]*)`/g, '$1')
+    .replace(/^(\s*)[-*+]\s+/, '$1· ').replace(/^\s*([-*_])(\s*\1){2,}\s*$/, '')).join('\n').replace(/\n{3,}/g, '\n\n');
   function readable(text) {
     try {
       const j = JSON.parse(String(text).replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''));
-      if (!j || !Array.isArray(j.slides)) return text;
+      if (!j || !Array.isArray(j.slides)) return plain(text);
       return j.slides.map((s, i) => {
         const pts = [...(s.subtitle ? [s.subtitle] : []), ...(s.quote ? [s.quote] : []), ...(s.bullets || []), ...(s.cards || []).map(c => (c.title || '') + (c.text ? '：' + c.text : '')),
           ...(s.steps || []).map(c => (c.title || '') + (c.text ? '：' + c.text : '')), ...['left', 'right'].filter(k => s[k]).flatMap(k => [(s[k].title || '') + '：', ...(s[k].bullets || []).map(b => '  ' + b)])];
         return '第 ' + (i + 1) + ' 页　' + (s.title || '') + '\n' + pts.filter(Boolean).map(p => '　· ' + p).join('\n');
       }).join('\n\n');
-    } catch { return text; }
+    } catch { return plain(text); }
   }
   window.AIJSimple = { reset };
   addEventListener('DOMContentLoaded', async () => {

@@ -83,8 +83,17 @@ test('AUD-6BBD-01: hostile 200 000-character lines are parsed in well under a se
     const deck = S.buildDeck({ title: 'x', text });
     const ms = Number(process.hrtime.bigint() - t0) / 1e6;
     assert.ok(ms < 1000, name + ' took ' + ms.toFixed(0) + ' ms'); assert.ok(deck.slides.length >= 1);
-    const t1 = process.hrtime.bigint(); createDeliverable('pptx', { title: 'x', text }); assert.ok(Number(process.hrtime.bigint() - t1) / 1e6 < 2000, name + ' export');
+    const t1 = process.hrtime.bigint();
+    try { createDeliverable('pptx', { title: 'x', text }); } catch (e) { assert.equal(e.code, 'pptx_unusable', name + ': only the "no real pages" refusal is acceptable'); }
+    assert.ok(Number(process.hrtime.bigint() - t1) / 1e6 < 2000, name + ' export');
   }
   // the normal owner fixture is unchanged by the length caps
   assert.deepEqual(S.buildDeck({ title: 't', text: SCRIPT, pageCount: 5 }).slides.map(s => s.title), ['任职资格体系：让成长有标准、有路径', '什么是任职资格体系', '体系的三大构成', '如何落地实施', '总结']);
+});
+
+test('QA-F2-1: an apology or cover-only answer is refused (422 pptx_unusable), never a silent shell', () => {
+  for (const text of ['抱歉，我无法生成这个演示文稿。', '第1页：封面\n标题：任职资格\n\n第2页：说明\n- 抱歉，作为AI我无法完成这个任务', '第1页：封面\n标题：只有封面\n\n第2页：\n**视觉建议：** 留白']) {
+    assert.throws(() => createDeliverable('pptx', { title: '做一个任职资格体系的概念介绍，5页', text }), e => e.code === 'pptx_unusable' && e.status === 422 && /没能生成合格的页面/.test(e.message), text);
+  }
+  assert.equal(S.assess(S.buildDeck({ title: 't', text: SCRIPT }), SCRIPT).usable, true);
 });
