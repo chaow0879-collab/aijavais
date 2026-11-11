@@ -132,7 +132,7 @@
       ],
     };
     const approval = { approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(chosen.maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
-    return { ok: true, problems: [], skipped, options, chosen, roles: chosen.roles, summary: chosen.summary, project, approval, format: out.format, outputLabel: out.label, confirmText: confirmText(chosen), estimatedNote: estimatedNote(chosen.roles.map(r => r.model)), capCny: cap };
+    return { ok: true, problems: [], skipped, options, chosen, roles: chosen.roles, summary: chosen.summary, project, approval, format: out.format, outputLabel: out.label, confirmText: confirmText(chosen, chosen.roles.some(r => estimated(r.model))), estimatedNote: estimatedNote(chosen.roles.map(r => r.model)), capCny: cap };
   }
   /* QA-B7-01 返工：只重做"审核并定稿"这一步（沿用已完成的初稿），按审核员单价重新估算，再确认一次人民币。
    * 每轮返工都是新的显式批准，不继承上一次。snapshot = run.projectSnapshot. */
@@ -153,16 +153,19 @@
     const prices = {};
     for (const role of roles) { const u = usdRate(byId.get(role.connectionId)); if (u) prices[role.connectionId] = u; }
     const approval = { decision: 'rework', feedback: text, fromStepId: 'review', approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
-    return { ok: true, problems: [], skipped: [], options: { quality: option }, chosen: option, summary: option.summary, approval, confirmText: confirmText(option), estimatedNote: estimatedNote([m]), capCny: cap };
+    return { ok: true, problems: [], skipped: [], options: { quality: option }, chosen: option, summary: option.summary, approval, confirmText: confirmText(option, estimated(m)), estimatedNote: estimatedNote([m]), capCny: cap };
   }
-  /* B5-2 / AUD-F100-01：用了估计价的模型时如实说明——只是估计（同平台最贵价×2），实际可能更高或更低；上限由服务端预算门禁强制 */
+  /* B5-2 / AUD-F100-01：用了估计价的模型时如实说明——只是估计（同平台最贵价×2），实际可能更高或更低；
+   * 引擎按估计价计算并在估计上限处停下，真实单价更高时实际账单可能超出，以厂商账单为准 */
   const estimated = m => !!(m && m.price && m.price.basis === 'estimated_ceiling');
   function estimatedNote(list) {
     const names = [...new Set((list || []).filter(estimated).map(m => Hints.platformLabel(m)))];
-    return names.length ? names.join('、') + ' 还没有官方单价，费用按估计价计算（同平台最贵模型价格的 2 倍），只是估计，实际可能更高也可能更低；无论哪种，花费都不会超过你确认的上限，到上限会自动停下。' : '';
+    return names.length ? names.join('、') + ' 还没有官方单价，费用按估计价计算（同平台最贵模型价格的 2 倍），只是估计，实际可能更高也可能更低。上限也按估计价计算，到估计上限会自动停下；如果真实单价更高，实际账单可能超出上限，以厂商账单为准。' : '';
   }
-  function confirmText(o) {
+  function confirmText(o, byEstimate = false) {
     if (o.free) return '所选模型在本机运行，不产生费用。';
+    // AUD-F100-01: with an estimated price the cap is computed from the estimate, so it is not a guarantee
+    if (byEstimate) return `预计花费约 ¥${o.estimateCny.toFixed(2)}，按估计价计算的上限是 ¥${o.maxCny.toFixed(2)}，到这个数会自动停下；实际账单以厂商为准，可能超出。`;
     return `预计花费约 ¥${o.estimateCny.toFixed(2)}，最多不超过 ¥${o.maxCny.toFixed(2)}，超过会自动停下。`;
   }
   function summary(roles) {
