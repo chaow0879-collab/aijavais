@@ -20,7 +20,8 @@
   const output = () => document.querySelector('input[name=s-output]:checked')?.value || 'word';
   function build() {
     $('s-output').replaceChildren(...Object.entries(OUT).map(([k, o]) => el('label', {}, [el('input', { type: 'radio', name: 's-output', value: k, checked: k === 'word' }), o.label])));
-    for (const id of ['s-output', 's-goal', 's-deadline']) $(id).addEventListener('input', () => { S.picks = {}; if (!$('s-plan').hidden) preview(true); });
+    for (const id of ['s-output', 's-goal', 's-deadline']) $(id).addEventListener('input', () => { S.picks = {}; if (!$('s-plan').hidden) preview(true); showAuto(); });
+    $('s-budget-cny').addEventListener('input', () => { $('s-budget-warn').hidden = true; S.budgetAck = null; if (!$('s-plan').hidden) preview(true); });
   }
   async function loadModels() {
     const [m, c] = await Promise.all([api('/api/models'), api('/api/config').catch(() => null)]);
@@ -43,8 +44,23 @@
     if (info.detail) box.append(el('details', {}, [el('summary', { text: '给管理员看的详细信息' }), el('div', { text: info.detail })]));
     box.hidden = false; box.scrollIntoView({ block: 'center' });
   }
+  /* B5-F2：可选预算（人民币）。空着=自动；填了就按它做上限（不超过管理员的单次上限），引擎门禁不变 */
+  const budget = () => { const v = Number($('s-budget-cny').value); return $('s-budget-cny').value.trim() && Number.isFinite(v) && v > 0 ? v : null; };
   function makePlan(choice) {
-    return window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value, output: output(), deadline: $('s-deadline').value, capCny: S.capCny, picks: S.picks, choice: choice || S.choice });
+    return window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value, output: output(), deadline: $('s-deadline').value, capCny: S.capCny, picks: S.picks, choice: choice || S.choice, budgetCny: budget() });
+  }
+  function showAuto() {
+    const p = window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value || '写一份文字成果', output: output(), capCny: S.capCny, picks: S.picks });
+    $('s-budget-auto').textContent = !p.ok ? '自动：添加模型后会自动估算' : p.chosen.free ? '自动：本机模型，不花钱' : '自动：约 ¥' + p.suggestedCny.toFixed(2) + '（建议金额）';
+  }
+  /* 填的金额比建议金额低：一句人话 + 两个按钮，用户选了“就用这个金额”才继续 */
+  function budgetCheck(p) {
+    if (!p.underBudget || S.budgetAck === p.budgetCny) return true;
+    $('s-budget-warn-text').textContent = '预算可能不够，做到一半会停下（已完成的部分仍可下载）。建议金额约 ¥' + p.suggestedCny.toFixed(2) + '，你填的是 ¥' + p.chosen.maxCny.toFixed(2) + '。';
+    $('s-budget-suggest').onclick = () => { $('s-budget-cny').value = p.suggestedCny.toFixed(2); $('s-budget-warn').hidden = true; S.budgetAck = null; if (!$('s-plan').hidden) preview(true); };
+    $('s-budget-keep').onclick = () => { S.budgetAck = p.budgetCny; $('s-budget-warn').hidden = true; go(); };
+    $('s-budget-warn').hidden = false; $('s-budget-warn').scrollIntoView({ block: 'center' });
+    return false;
   }
   function renderSwap(p) {
     const box = $('s-swap'); box.replaceChildren();
@@ -73,6 +89,7 @@
         for (const o of opts) body.append(el('label', { className: 'choice' }, [el('input', { type: 'radio', name: 's-choice', value: o.kind, checked: o.kind === 'quality' }),
           el('span', { text: (o.kind === 'quality' ? '效果优先 约¥' + o.estimateCny.toFixed(2) : '省钱 约¥' + o.estimateCny.toFixed(2) + '（效果可能稍差）') + (p.estimatedNote ? '，估计上限 ¥' : '，最多 ¥') + o.maxCny.toFixed(2) + (o.overCap ? '，可能中途停下' : '') + '。' + o.summary })]));
       } else body.append(el('p', { className: 'team', text: p.confirmText }), el('p', { text: '团队：' + p.summary }));
+      if (p.budgetCny != null && !p.isRework) body.append(el('p', { className: 'hint', id: 's-confirm-budget', text: p.budgetClipped ? '你填的 ¥' + p.budgetCny.toFixed(2) + ' 超过了单次上限 ¥' + p.capCny.toFixed(2) + '，按 ¥' + p.capCny.toFixed(2) + ' 计算。' : '上限按你填的金额：¥' + p.chosen.maxCny.toFixed(2) + (p.underBudget ? '（比建议金额低，可能做到一半会停下）' : '') + '。' }));
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
       if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: p.estimatedNote }));
       body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : '¥0.00') + '（估算，以厂商账单为准）。' }));
@@ -91,6 +108,7 @@
     await loadModels();
     const first = preview(false);
     if (!first.ok) return showError($('s-error'), first.problems[0], go);
+    if (!budgetCheck(first)) return;
     const choice = await confirm(first);
     if (!choice) return;
     S.choice = choice;
@@ -256,7 +274,7 @@
     $('s-accept').addEventListener('click', async () => { await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/review', 'POST', { decision: 'approve', feedback: '用户在简单模式确认成果' }); poll(); });
     const q = new URLSearchParams(location.search);
     if (q.get('project')) document.body.dataset.mode = 'advanced';
-    try { await loadModels(); } catch { /* 页面其余部分仍可用 */ }
+    try { await loadModels(); showAuto(); } catch { /* 页面其余部分仍可用 */ }
     if (q.get('run')) { S.runId = q.get('run'); try { const run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; S.projectId = run.projectId; restoreFormat(run); showProgress(null); } catch { reset(); } }
     else if (!q.get('project') && q.get('new') !== '1') {
       // B5-F2：默认落点永远是“我的任务”（顶栏“我的任务”在任何页面点了都显示任务列表）；

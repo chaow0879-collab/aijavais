@@ -52,6 +52,22 @@ test('B5-2: unregistered platforms are still refused, named, and the user is nev
   assert.equal(rw.ok, false); assert.doesNotMatch(rw.problems[0].text, /管理中心/); assert.equal(rw.problems[0].fix, undefined);
 });
 
+test('B5-F2: optional RMB budget — the user amount becomes the cap (never above the per-run cap); too low is flagged; gates unchanged', () => {
+  const models = [conn('a', 'deepseek', 'DeepSeek', 'deepseek-v4-pro'), conn('b', 'dashscope', '通义千问', 'qwen3.8-max')];
+  const auto = Plan.plan({ models, goal: '起草一个PPT', capCny: 5 });
+  assert.equal(auto.budgetCny, null); assert.equal(auto.underBudget, false); assert.equal(auto.chosen.maxCny, auto.suggestedCny, 'auto = suggested amount');
+  const mine = Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: 2 });
+  assert.equal(mine.chosen.maxCny, 2); assert.equal(mine.approval.maxCost, Math.floor(2 / Plan.FX * 10000) / 10000, 'engine cap = the user amount in USD');
+  assert.equal(mine.underBudget, false); assert.equal(mine.approval.approvePaid, true); assert.deepEqual(Object.keys(mine.approval.prices).sort(), ['a', 'b']);
+  assert.match(mine.confirmText, /最多不超过 ¥2\.00/);
+  const low = Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: auto.suggestedCny / 2 });
+  assert.equal(low.underBudget, true, 'below the suggested amount is flagged'); assert.ok(low.chosen.maxCny < auto.suggestedCny);
+  assert.equal(low.options.saving, undefined, 'no silent downgrade: the user decides');
+  const high = Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: 50 });
+  assert.equal(high.chosen.maxCny, 5); assert.equal(high.budgetClipped, true, 'never above the administrator per-run cap');
+  for (const bad of [0, -1, 'abc', null, undefined, NaN]) assert.equal(Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: bad }).budgetCny, null, String(bad));
+});
+
 /* ---------------- B5-1 server: task summary + root redirect ---------------- */
 async function fixture(t) {
   const mock = http.createServer((req, res) => { let b = ''; req.on('data', c => b += c); req.on('end', () => {

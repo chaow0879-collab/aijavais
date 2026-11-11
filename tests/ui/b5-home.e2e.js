@@ -179,6 +179,26 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     await shot(page, '5-confirm');
     await page.click('#s-confirm-cancel');
     ok('B5-2: deepseek-v4-pro + qwen3.8-max plan directly to a RMB confirmation; no "管理中心 → 编辑单价" on the page');
+    /* ---- B5-F2: optional RMB budget ---- */
+    assert.match(await page.innerText('#s-budget-auto'), /^自动：约 ¥\d+\.\d{2}（建议金额）$/);
+    const suggested = Number((await page.innerText('#s-budget-auto')).match(/¥(\d+\.\d{2})/)[1]);
+    await page.fill('#s-budget-cny', String(Math.max(0.1, suggested / 4).toFixed(2)));
+    await page.click('#s-go'); await page.waitForSelector('#s-budget-warn:not([hidden])');
+    assert.match(await page.innerText('#s-budget-warn'), /预算可能不够，做到一半会停下/);
+    assert.equal(await page.isVisible('#s-confirm[open]'), false, 'no confirmation before the user decides');
+    await page.click('#s-budget-suggest');
+    assert.equal(Number(await page.inputValue('#s-budget-cny')), suggested, '改成建议金额 fills the suggested amount');
+    await page.fill('#s-budget-cny', String(Math.max(0.1, suggested / 4).toFixed(2)));
+    await page.click('#s-go'); await page.waitForSelector('#s-budget-warn:not([hidden])');
+    await page.click('#s-budget-keep'); await page.waitForSelector('#s-confirm[open]');
+    const cdlg = await page.innerText('#s-confirm');
+    assert.match(cdlg, /上限按你填的金额：¥\d+\.\d{2}（比建议金额低，可能做到一半会停下）/); assert.doesNotMatch(cdlg, /USD|美元|Token/i);
+    await page.click('#s-confirm-cancel');
+    await page.fill('#s-budget-cny', '2'); await page.click('#s-go'); await page.waitForSelector('#s-confirm[open]');
+    assert.match(await page.innerText('#s-confirm'), /最多不超过 ¥2\.00[\s\S]*上限按你填的金额：¥2\.00。/);
+    await shot(page, '6-budget');
+    await page.click('#s-confirm-cancel');
+    ok('B5-F2 budget: auto shows the suggested ¥; too low -> plain warning with 改成建议金额 / 就用这个金额; the user amount becomes the cap');
     console.log('\nB5 BROWSER CHECKS PASSED:', results.length);
   } finally {
     hold = false; for (const f of held.splice(0)) { try { f(); } catch { /* closed */ } }

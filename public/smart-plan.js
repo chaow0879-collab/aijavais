@@ -96,12 +96,16 @@
     });
     return { estimate: yuan(estimate), needed: yuan10(Math.max(3 * estimate, reserveNeed)) };
   }
-  function option(roles, goal, capCny, kind) {
+  function option(roles, goal, capCny, kind, budgetCny = null) {
     const c = cost(roles, goal), free = roles.every(r => isLocal(r.model));
-    const maxCny = free ? 0 : Math.max(0.1, Math.min(capCny, c.needed));
-    return { kind, roles, summary: summary(roles), estimateCny: free ? 0 : Math.max(0.01, c.estimate), maxCny, neededCny: c.needed, overCap: !free && c.needed > capCny, free };
+    // B5-F2：用户自己填了人民币上限就按它（不超过管理员设的单次上限）；没填就“自动”= 需要的金额与单次上限取小
+    const fixed = budgetCny != null && !free;
+    const maxCny = free ? 0 : fixed ? Math.max(0.1, Math.min(capCny, yuan10(budgetCny))) : Math.max(0.1, Math.min(capCny, c.needed));
+    return { kind, roles, summary: summary(roles), estimateCny: free ? 0 : Math.max(0.01, c.estimate), maxCny, neededCny: c.needed, autoCny: free ? 0 : Math.max(0.1, Math.min(capCny, c.needed)),
+      overCap: !free && !fixed && c.needed > capCny, underBudget: fixed && maxCny < c.needed, userBudget: fixed, free };
   }
-  function plan({ models, goal, output = 'word', deadline = '', capCny = 5, picks = {}, choice = 'quality' } = {}) {
+  function plan({ models, goal, output = 'word', deadline = '', capCny = 5, picks = {}, choice = 'quality', budgetCny = null } = {}) {
+    const budget = Number(budgetCny) > 0 && Number.isFinite(Number(budgetCny)) ? Number(budgetCny) : null;
     const problems = [], out = OUTPUTS[output] || OUTPUTS.text, text = String(goal || '').trim();
     const chats = chat(models), pool = usable(models);
     const skipped = chats.filter(m => !cnyRate(m)).map(m => Hints.platformLabel(m));
@@ -112,7 +116,7 @@
     else if (!pool.length) problems.push({ code: 'no_priced_model', text: '现在的模型都来自没有登记价格的平台，按规定不调用：' + skipped.join('、') + '。请管理员添加已登记价格平台的模型。' });
     if (problems.length) return { ok: false, problems, skipped, roles: [], summary: '', options: {} };
     const cap = Math.max(0.1, Number(capCny) || 5), specs = roleSet(output);
-    const quality = option(assign(pool, specs, picks, false), text, cap, 'quality');
+    const quality = option(assign(pool, specs, picks, false), text, cap, 'quality', budget);
     const options = { quality };
     if (quality.overCap) {
       const saving = option(assign(pool, specs, picks, true), text, cap, 'saving');
@@ -132,7 +136,8 @@
       ],
     };
     const approval = { approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(chosen.maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
-    return { ok: true, problems: [], skipped, options, chosen, roles: chosen.roles, summary: chosen.summary, project, approval, format: out.format, outputLabel: out.label, confirmText: confirmText(chosen, chosen.roles.some(r => estimated(r.model))), estimatedNote: estimatedNote(chosen.roles.map(r => r.model)), capCny: cap };
+    return { ok: true, problems: [], skipped, options, chosen, roles: chosen.roles, summary: chosen.summary, project, approval, format: out.format, outputLabel: out.label, confirmText: confirmText(chosen, chosen.roles.some(r => estimated(r.model))), estimatedNote: estimatedNote(chosen.roles.map(r => r.model)), capCny: cap,
+      budgetCny: budget, suggestedCny: chosen.autoCny, underBudget: !!chosen.underBudget, budgetClipped: budget != null && budget > cap };
   }
   /* QA-B7-01 返工：只重做"审核并定稿"这一步（沿用已完成的初稿），按审核员单价重新估算，再确认一次人民币。
    * 每轮返工都是新的显式批准，不继承上一次。snapshot = run.projectSnapshot. */
