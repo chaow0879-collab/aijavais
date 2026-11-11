@@ -2,7 +2,7 @@
  * backend request bodies. Editing never authorizes anything: the run request it builds is only a
  * proposal that the backend validates again (budget, paid approval, tool permission, readiness). */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./planner.js'), require('./contract.js'));
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./planner.js'), require('../../lib/work-contract.js'));
   else root.R52Editor = factory(root.R52Planner, root.R52Contract);
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (P, C) {
   'use strict';

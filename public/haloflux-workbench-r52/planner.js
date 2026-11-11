@@ -4,7 +4,7 @@
  * blocks. It never calls a model; every plan it makes is labelled SIMULATED. A backend (existing
  * /api/v2/intake/plan or a future R53 contract) can replace tool/model status with server truth. */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('../project-intake/universal-team.js'), require('./contract.js'));
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('../../lib/planner/universal-team.js'), require('../../lib/work-contract.js'));
   else root.R52Planner = factory(root.AIJUniversalTeam, root.R52Contract);
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (U, C) {
   'use strict';

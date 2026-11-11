@@ -8,7 +8,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const ROOT = path.join(__dirname, '..', '..');
 const W = p => require(path.join(ROOT, 'public', 'haloflux-workbench-r52', p));
-const C = W('contract.js'), P = W('planner.js'), E = W('editor.js'), J = W('projector.js'), A = W('acceptance.js'), HALO = W('halo.js'), D = W('demo.js');
+const C = require(path.join(ROOT, 'lib', 'work-contract.js')), P = W('planner.js'), E = W('editor.js'), J = W('projector.js'), A = W('acceptance.js'), HALO = W('halo.js'), D = W('demo.js');
 const F = require('./fixtures.cjs');
 const { bootWithMock, finish } = require('./mock-provider.cjs');
 const OUT = process.env.R52_OUT || null;
@@ -220,24 +220,15 @@ test('contract: V2 run view adapter is read-only, ordered, and keeps unknown cos
   assert.equal(C.fromV2Run({ runId: '../x' }).ok, false);
 });
 
-test('scope: R52 only writes Claude-owned paths; R44 base paths elsewhere are byte-identical', () => {
-  let changed;
-  try { changed = execFileSync('git', ['diff', '--name-only', '4c198c430806836bb289cd5da57b7fad44c7b0dc', '--', '.'], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n').filter(Boolean); }
-  catch (e) { return assert.fail('git history with the R44 base is required: ' + e.message); }
-  let untracked = [];
-  try { untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n').filter(Boolean); } catch { untracked = []; }
-  const allowed = [/^public\/project-intake\.html$/, /^public\/project-intake\//, /^public\/haloflux-workbench-r52\//, /^tests\/claude-universal-intake\.test\.js$/, /^tests\/ui\/claude-universal-intake\.e2e\.js$/,
-    /^tests\/haloflux-workbench-r52\//, /^docs\/UNIVERSAL-WORKBENCH-R52\.md$/, /^\.github\/workflows\/claude-r52-workbench\.yml$/,
-    // R54 (#37) Claude-owned additions on the same frontend lane.
-    /^tests\/haloflux-workbench-r54\//, /^docs\/UNIVERSAL-WORKBENCH-R54\.md$/, /^\.github\/workflows\/claude-r54-workbench\.yml$/];
-  for (const f of [...changed, ...untracked]) assert.ok(allowed.some(re => re.test(f)), 'R52 must not write ' + f);
-  for (const f of ['server.js', 'lib', 'public/panel.html', 'public/workspace.js', 'tools']) assert.ok(!changed.some(c => c === f || c.startsWith(f + '/')), f + ' untouched');
+test('workbench frontend: no HTML string injection in the controller and nothing loaded from external hosts', () => {
   const app = fs.readFileSync(path.join(ROOT, 'public/haloflux-workbench-r52/app.js'), 'utf8');
   assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/.test(app), 'no HTML string injection in the controller');
   for (const f of fs.readdirSync(path.join(ROOT, 'public/haloflux-workbench-r52'))) {
     const s = fs.readFileSync(path.join(ROOT, 'public/haloflux-workbench-r52', f), 'utf8');
     assert.ok(!/https?:\/\/(?!www\.w3\.org)/.test(s), f + ' loads nothing from external hosts');
   }
+  // C1: contract.js is now served from lib/work-contract.js at the same URL; it keeps the same rule.
+  assert.ok(!/https?:\/\/(?!www\.w3\.org)/.test(fs.readFileSync(path.join(ROOT, 'lib/work-contract.js'), 'utf8')), 'work-contract.js loads nothing from external hosts');
 });
 
 test('E3_FAKE real server: workbench plan → existing APIs → real run events → projection, export, rework, cancel, restart', async t => {

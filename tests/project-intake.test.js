@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const E = require('../public/project-intake/engine.js');
-const catalog = require('../public/project-intake/catalog.v1.json');
+const E = require('../lib/planner/rules.js');
+const catalog = require('../lib/planner/catalog.v1.json');
 const full = id => catalog.templates.find(t => t.id === id);
 const base = (templateId, description = '我需要完成一套实际可落地的项目方案与交付文件') => ({ templateId, description });
 

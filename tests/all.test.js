@@ -39,3 +39,11 @@ require('./code-exec.test.js');
 require('./industry-mock-e2e.test.js');
 require('./fault-regression.test.js');
 require('./regression-guard.test.js');
+// C1: every product suite runs here (formerly separate CI steps or scripts).
+require('./claude-delivery-checks.test.js'); require('./claude-delivery-http.test.js');
+require('./claude-universal-intake.test.js');
+require('./universal-workflow-r53/workflow.test.js'); require('./universal-workflow-r53/faults.test.js'); require('./universal-workflow-r53/protocol.test.js');
+require('./universal-workflow-r53/interop.test.js'); require('./universal-workflow-r53/r55-contract.test.js');
+require('./haloflux-workbench-r52/workbench.test.js');
+require('./haloflux-workbench-r54/live-contract.test.js');
+require('./p2/guards.test.js'); require('./p2/preflight.test.js');

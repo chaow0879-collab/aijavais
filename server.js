@@ -1180,6 +1180,14 @@ async function api(req, res, url) {
 }
 
 const PUBLIC_PAGES = new Set(['/login.html']);
+/* Server-owned modules that the browser also runs (one source of truth; the server never requires public/).
+ * Exact-path map only, same login gate as every other asset. */
+const SHARED_ASSETS = Object.freeze({
+  '/project-intake/engine.js': path.join(ROOT, 'lib', 'planner', 'rules.js'),
+  '/project-intake/universal-team.js': path.join(ROOT, 'lib', 'planner', 'universal-team.js'),
+  '/project-intake/catalog.v1.json': path.join(ROOT, 'lib', 'planner', 'catalog.v1.json'),
+  '/haloflux-workbench-r52/contract.js': path.join(ROOT, 'lib', 'work-contract.js'),
+});
 function serveStatic(req, res, url) {
   const ip = access.clientIp(req);
   /* 大屏观看链接：一次性令牌换只读会话 Cookie，并去掉地址栏里的令牌 */
@@ -1205,8 +1213,9 @@ function serveStatic(req, res, url) {
   }
   let rel;
   try { rel = decodeURIComponent(pth); } catch { res.writeHead(400); return res.end('bad request'); }
-  const file = path.normalize(path.join(PUBLIC, rel));
-  if (file !== PUBLIC && !file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end('forbidden'); }
+  const shared = Object.hasOwn(SHARED_ASSETS, rel) ? SHARED_ASSETS[rel] : null;
+  const file = shared || path.normalize(path.join(PUBLIC, rel));
+  if (!shared && file !== PUBLIC && !file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end('forbidden'); }
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('not found'); }
     const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';

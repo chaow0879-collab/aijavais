@@ -22,3 +22,4 @@ playwright-report
 *.p12
 *.pfx
 backups
+tools/relay

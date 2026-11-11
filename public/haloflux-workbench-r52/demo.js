@@ -2,7 +2,7 @@
  * so a user can preview what HALOFLUX will show. Every event carries evidence "DEMO" and
  * source "demo"; the UI shows the DEMO badge and never counts these as work or cost. */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./contract.js'));
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('../../lib/work-contract.js'));
   else root.R52Demo = factory(root.R52Contract);
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (C) {
   'use strict';

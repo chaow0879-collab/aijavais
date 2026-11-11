@@ -1,12 +1,8 @@
 name: Agent scheduler V1 readonly validation
+# C1 (2026-11-11): relay line frozen. Manual dispatch only, at ref claude/relay-r57-final (the last commit
+# before relay code moved to tools/relay/). Product CI is .github/workflows/product.yml.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'tools/agent-scheduler/**'
-      - 'tests/agent-scheduler/**'
-      - 'docs/AGENT-SCHEDULER-V1.md'
-      - '.github/workflows/agent-scheduler-v1.yml'
 permissions:
   contents: read
 jobs:

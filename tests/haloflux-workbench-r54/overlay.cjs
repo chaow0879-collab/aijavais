@@ -1,42 +1,24 @@
 'use strict';
-// R54 E3 harness: materialise the FIXED R53 backend (integrate/codex-r53-universal-workflow@397b46c,
-// read-only) as a temporary local clone in a private temp dir, then overlay ONLY the Claude-owned
-// frontend files from this checkout. Nothing of R53 is committed to the R54 branch; no worktree.
-// The result is a real server (HTTP + auth + SQLite) running R53 backend code with the R54 UI.
+// R54 E3 harness: boots the CURRENT checkout (HTTP + auth + SQLite) with a local MOCK model.
+// C1 consolidation: the historical overlay onto the frozen R53 backend (397b46c) now lives only on the
+// frozen relay ref claude/relay-r57-final (tools/universal-workflow-r53/run-r54-integrated.cjs there);
+// the product suite runs these unchanged R54 assertions against this exact tree, as that runner did in memory.
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
 const { execFileSync } = require('node:child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const R53_SHA = '397b46c18e25aaddc3e92886693da4ef3f2528d3';
+const R53_SHA = (() => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return 'WORKING_TREE'; } })();
 const OWNED = ['public/haloflux-workbench-r52', 'public/project-intake', 'public/project-intake.html'];
 
-function ensureR53() {
-  try { execFileSync('git', ['cat-file', '-e', R53_SHA + '^{commit}'], { cwd: ROOT, stdio: 'ignore' }); return; } catch { /* fetch below */ }
-  try { execFileSync('git', ['fetch', '--no-tags', 'origin', 'integrate/codex-r53-universal-workflow'], { cwd: ROOT, stdio: 'ignore', timeout: 60000 }); } catch { /* reported below */ }
-  try { execFileSync('git', ['cat-file', '-e', R53_SHA + '^{commit}'], { cwd: ROOT, stdio: 'ignore' }); }
-  catch { throw new Error('BLOCKED: R53 contract commit ' + R53_SHA + ' is not available; fetch integrate/codex-r53-universal-workflow'); }
-}
 let cached = null;
 function materialize() {
   if (cached) return cached;
-  ensureR53();
-  // A temporary local clone (not a worktree) detached at the exact R53 commit, so the backend's own
-  // provenance (git rev-parse HEAD -> source_sha) is real. Only the Claude-owned files are then replaced.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'r54-overlay-'));
-  execFileSync('git', ['clone', '-q', '--shared', '--no-checkout', ROOT, dir]);
-  execFileSync('git', ['-C', dir, 'checkout', '-q', '--detach', R53_SHA]);
-  for (const rel of OWNED) {
-    const src = path.join(ROOT, rel), dst = path.join(dir, rel);
-    fs.rmSync(dst, { recursive: true, force: true });
-    fs.cpSync(src, dst, { recursive: true });
-  }
   const files = [];
   const walk = d => { for (const n of fs.readdirSync(d)) { const p = path.join(d, n); if (fs.statSync(p).isDirectory()) walk(p); else files.push(path.relative(ROOT, p)); } };
   for (const rel of OWNED) { const p = path.join(ROOT, rel); if (fs.statSync(p).isDirectory()) walk(p); else files.push(rel); }
-  const changed = execFileSync('git', ['-C', dir, 'status', '--porcelain'], { encoding: 'utf8' }).split('\n').filter(Boolean).map(l => l.slice(3));
-  cached = { dir, r53: R53_SHA, overlaid: files.sort(), changedVsR53: changed };
+  cached = { dir: ROOT, r53: R53_SHA, overlaid: files.sort(), changedVsR53: [] };
   return cached;
 }
 // Boot the overlay server with a local MOCK provider. mode: ok | hang | unknown (no usage reported).

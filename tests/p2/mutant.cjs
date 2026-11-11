@@ -6,7 +6,7 @@ const mutations = {
  permission: ['project-engine.js', 'if (!approval.allowedTools.includes(toolId))', 'if (false)'],
  duplicate: ['project-store.js', 'rejectModelRequestDuplicate(previous, paramsHash) {', 'rejectModelRequestDuplicate(previous, paramsHash) { return;'],
  recovery: ['project-store.js', "const knownUnsent = request.state === 'claimed';", 'const knownUnsent = true;'],
- capacity: ['intake-draft.js', "op.responded && op.underlying !== 'pending'", 'op.responded']
+ capacity: ['planner/ai-draft.js', "op.responded && op.underlying !== 'pending'", 'op.responded']
 };
 const [file, from, to] = mutations[process.env.P2_MUTANT];
 Module._extensions['.js'] = (m, filename) => {

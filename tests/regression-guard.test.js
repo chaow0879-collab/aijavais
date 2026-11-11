@@ -20,7 +20,7 @@ test('regression guard: prior P1/ledger tests still exist and keep at least thei
 });
 
 test('regression guard: no new environment hooks or test-only switches in production code', () => {
-  const files = [path.join(ROOT, 'server.js'), ...fs.readdirSync(path.join(ROOT, 'lib')).filter(f => f.endsWith('.js')).map(f => path.join(ROOT, 'lib', f))];
+  const files = [path.join(ROOT, 'server.js'), ...fs.readdirSync(path.join(ROOT, 'lib'), { recursive: true }).filter(f => f.endsWith('.js')).map(f => path.join(ROOT, 'lib', f))]; // C1: includes lib/planner/
   const seen = new Set();
   for (const f of files) {
     const src = fs.readFileSync(f, 'utf8');

@@ -2,9 +2,9 @@ name: Claude R56 event hand-off bridge (#39)
 # Dedicated workflow for feat/claude-r56-event-handoff-bridge only: push/manual, read-only token,
 # no schedule, no secrets, no OIDC, no deployment. The 10-minute/event workflow is a DISABLED template
 # under tools/event-handoff-r56/templates and is not installed here.
+# C1 (2026-11-11): relay line frozen. Manual dispatch only, at ref claude/relay-r57-final (the last commit
+# before relay code moved to tools/relay/). Product CI is .github/workflows/product.yml.
 on:
-  push:
-    branches: [feat/claude-r56-event-handoff-bridge]
   workflow_dispatch:
 permissions:
   contents: read

@@ -2,9 +2,9 @@ name: Claude R54 workbench live contract (#37)
 # Dedicated workflow for feat/claude-r54-workbench-live-contract-ux only. Local server + local MOCK
 # model; the R53 backend (397b46c) is used read-only through a temporary local clone in RUNNER_TEMP.
 # No secrets, no paid APIs, no schedule, no deployment. Shared ci.yml is not edited.
+# C1 (2026-11-11): relay line frozen. Manual dispatch only, at ref claude/relay-r57-final (the last commit
+# before relay code moved to tools/relay/). Product CI is .github/workflows/product.yml.
 on:
-  push:
-    branches: [feat/claude-r54-workbench-live-contract-ux]
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,8 +1,7 @@
 name: Codex P2 followups validation
+# C1 (2026-11-11): relay line frozen. Manual dispatch only, at ref claude/relay-r57-final (the last commit
+# before relay code moved to tools/relay/). Product CI is .github/workflows/product.yml.
 on:
-  push:
-    branches: [feat/codex-v2-p2-followups]
-  pull_request:
   workflow_dispatch:
 permissions:
   contents: read

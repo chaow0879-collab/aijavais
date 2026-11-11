@@ -1,7 +1,7 @@
 name: R46 auto handoff control (Fake only)
+# C1 (2026-11-11): relay line frozen. Manual dispatch only, at ref claude/relay-r57-final (the last commit
+# before relay code moved to tools/relay/). Product CI is .github/workflows/product.yml.
 on:
-  push:
-    branches: [feat/codex-r46-auto-handoff-control]
   workflow_dispatch:
 permissions:
   contents: read

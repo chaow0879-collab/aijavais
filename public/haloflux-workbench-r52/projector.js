@@ -9,7 +9,7 @@
  *  - cost: unknown stays unknown (null); it is never added as 0.
  *  - connection loss / silence make the view stale; nothing advances on its own. */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./contract.js'));
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('../../lib/work-contract.js'));
   else root.R52Projector = factory(root.R52Contract);
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (C) {
   'use strict';

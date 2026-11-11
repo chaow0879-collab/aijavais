@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test tests/all.test.js",
+    "test:product": "node --test tests/all.test.js",
+    "test:product:ui": "node tests/ui/run-all.cjs",
     "test:ui": "node tests/ui/admin.e2e.js",
     "test:workspace": "node tests/ui/workspace.e2e.js",
     "test:intake": "node tests/ui/intake-draft.e2e.js",
@@ -18,7 +20,9 @@
     "test:release-industry": "AIJ_RELEASE_VALIDATION=1 node --test tests/industry-mock-e2e.test.js",
     "test:delivery": "node --test tests/claude-delivery-checks.test.js tests/claude-delivery-http.test.js",
     "test:release-delivery": "AIJ_RELEASE_VALIDATION=1 node --test tests/claude-delivery-checks.test.js tests/claude-delivery-http.test.js",
-    "test:delivery-ui": "node tests/ui/claude-delivery.e2e.js"
+    "test:delivery-ui": "node tests/ui/claude-delivery.e2e.js",
+    "test:release": "npm run test:release-industry && npm run test:release-delivery",
+    "test:relay": "node --test --test-concurrency=1 --test-skip-pattern=^scope: tools/relay/tests/*/*.test.js"
   },
   "engines": {
     "node": ">=24.0.0"

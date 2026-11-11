@@ -1,0 +1,105 @@
+name: AIJAVAIS product CI
+# C1 (2026-11-11): the single product CI. Relay workflows are manual-only (see tools/relay/README.md).
+on:
+  push:
+    branches: ["claude/**", main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: product-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install poppler and LibreOffice so PDF reading, conversion and rendering are tested for real
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends bubblewrap poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install independent Office parsers used to cross-check generated files
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Report optional programs
+        run: |
+          pdftotext -v; soffice --version
+          node -e "console.log(JSON.stringify(require('./lib/code-exec').codeExecStatus()))"
+      - name: All product tests (npm test = test:product; local protocol fixtures, no paid APIs)
+        env:
+          INDUSTRY_E2E_OUT: ${{ runner.temp }}/industry-e2e
+          R53_EVIDENCE_DIR: ${{ runner.temp }}/universal-evidence
+          R55_EVIDENCE_DIR: ${{ runner.temp }}/universal-evidence
+          CLAUDE_DELIVERY_OUT: ${{ runner.temp }}/claude-delivery
+        run: npm test
+      - name: Release parsing gate (strict independent Office parsing)
+        if: success() || failure()
+        env:
+          INDUSTRY_E2E_OUT: ${{ runner.temp }}/industry-e2e-release
+          CLAUDE_DELIVERY_OUT: ${{ runner.temp }}/claude-delivery-release
+        run: npm run test:release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: product-evidence
+          path: |
+            ${{ runner.temp }}/industry-e2e
+            ${{ runner.temp }}/industry-e2e-release
+            ${{ runner.temp }}/claude-delivery
+            ${{ runner.temp }}/claude-delivery-release
+            ${{ runner.temp }}/universal-evidence
+          if-no-files-found: ignore
+  browser:
+    runs-on: ubuntu-24.04  # pinned: Playwright 1.56.1 does not support ubuntu-latest (26.04) images
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install isolated, pinned browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/aij-ui-deps" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/aij-ui-deps/node_modules/.bin/playwright" install --with-deps chromium
+          mkdir -p "$RUNNER_TEMP/aij-ui-shots"
+      - name: All product browser suites (local model fixtures only)
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:product:ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-screenshots
+          path: ${{ runner.temp }}/aij-ui-shots
+          if-no-files-found: ignore
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build independent production image
+        run: docker build --tag aijavais:ci .
+      - name: Verify pdftotext is present in the image
+        run: docker run --rm --entrypoint pdftotext aijavais:ci -v
+      - name: Start isolated backend and verify health (no public host port)
+        run: |
+          docker run --detach --name aij-ci aijavais:ci
+          for attempt in $(seq 1 30); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' aij-ci)" = healthy ]; then exit 0; fi
+            if [ "$(docker inspect --format '{{.State.Status}}' aij-ci)" = exited ]; then exit 1; fi
+            sleep 2
+          done
+          exit 1
+      - name: Remove isolated container and its generated test data
+        if: always()
+        run: docker rm --force --volumes aij-ci || true

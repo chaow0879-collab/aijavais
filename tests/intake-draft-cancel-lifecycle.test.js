@@ -11,7 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
 const { ProjectStore } = require('../lib/project-store');
-const { IntakeDraftService, MAX_SLOTS } = require('../lib/intake-draft');
+const { IntakeDraftService, MAX_SLOTS } = require('../lib/planner/ai-draft');
 const { createV2Api } = require('../lib/v2-api');
 const { controlledProvider, hangingHttpProvider, httpCallModel, okResult } = require('./fixtures/lifecycle-provider.cjs');
 

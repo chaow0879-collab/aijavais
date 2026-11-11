@@ -1,5 +1,5 @@
 'use strict';
-const test=require('node:test'),assert=require('node:assert/strict'),{boot,finished,approval}=require('./helpers.cjs'),C=require('../../public/haloflux-workbench-r52/contract'),J=require('../../public/haloflux-workbench-r52/projector');
+const test=require('node:test'),assert=require('node:assert/strict'),{boot,finished,approval}=require('./helpers.cjs'),C=require('../../lib/work-contract'),J=require('../../public/haloflux-workbench-r52/projector');
 test('R53 actual server stream feeds frozen R52 projector; per-work seq is stable/continuous and replay-safe',async t=>{const f=await boot(t),draft=(await f.app.call('POST','/api/v2/universal/plan',{goal:'为陨石收藏设计可编辑的借展记录文档和审核清单',domain:'陨石收藏',outputs:['document'],acceptance:'每项内容有来源或待核实说明'})).json;
  const p=draft.project;p.roles=p.roles.slice(0,1).concat(p.roles.at(-1));p.roles.forEach(r=>r.connectionId=f.model);p.steps=p.steps.filter(s=>p.roles.some(r=>r.roleId===s.roleId));
  const project=(await f.app.call('POST','/api/v2/universal/projects',{project:p})).json.project;

@@ -8,7 +8,7 @@ const { chromium } = require('playwright');
 const H = require('../helpers');
 const sample = require('../fixtures/ai-draft.cjs');
 async function realLifecycleBodies(){
-  const os=require('node:os');const {ProjectStore}=require('../../lib/project-store');const {IntakeDraftService}=require('../../lib/intake-draft');
+  const os=require('node:os');const {ProjectStore}=require('../../lib/project-store');const {IntakeDraftService}=require('../../lib/planner/ai-draft');
   const {controlledProvider}=require('../fixtures/lifecycle-provider.cjs');
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'aij-ui-lifecycle-')),store=new ProjectStore({dir}),P=controlledProvider({mode:'ignore'});
   const c={connectionId:'m',modelId:'MOCK-UI',protocol:'openai',baseUrl:'https://mock.invalid/v1',enabled:true,ready:true,status:'available',pricingMode:'paid_api',updatedAt:1};

@@ -1,9 +1,9 @@
 name: Claude universal intake (#28 R44)
 # Dedicated workflow for feat/claude-v2-universal-intake-r44 only. Local server, no model,
 # no secrets, no paid APIs, no schedule. The shared ci.yml is not edited by this package.
+# C1 (2026-11-11): relay line frozen. Manual dispatch only, at ref claude/relay-r57-final (the last commit
+# before relay code moved to tools/relay/). Product CI is .github/workflows/product.yml.
 on:
-  push:
-    branches: [feat/claude-v2-universal-intake-r44]
   workflow_dispatch:
 permissions:
   contents: read

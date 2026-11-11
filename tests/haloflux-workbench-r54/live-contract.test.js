@@ -9,7 +9,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const ROOT = path.join(__dirname, '..', '..');
 const W = p => require(path.join(ROOT, 'public', 'haloflux-workbench-r52', p));
-const C = W('contract.js'), P = W('planner.js'), E = W('editor.js'), J = W('projector.js'), A = W('acceptance.js'), L = W('live-r53.js');
+const C = require(path.join(ROOT, 'lib', 'work-contract.js')), P = W('planner.js'), E = W('editor.js'), J = W('projector.js'), A = W('acceptance.js'), L = W('live-r53.js');
 const { bootR53, settled, materialize, R53_SHA } = require('./overlay.cjs');
 const F = require('../haloflux-workbench-r52/fixtures.cjs');
 const OUT = process.env.R54_OUT || null;

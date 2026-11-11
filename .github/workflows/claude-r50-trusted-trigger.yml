@@ -2,9 +2,9 @@ name: Claude R50 trusted trigger (#33)
 # Dedicated validation for feat/claude-r50-trusted-trigger-signing only. Push/manual on the
 # development branch; never scheduled, never triggered by issues/PRs/webhooks, no secrets,
 # no OIDC token request, no model, no GitHub state write. Synthetic keys live in tests only.
+# C1 (2026-11-11): relay line frozen. Manual dispatch only, at ref claude/relay-r57-final (the last commit
+# before relay code moved to tools/relay/). Product CI is .github/workflows/product.yml.
 on:
-  push:
-    branches: [feat/claude-r50-trusted-trigger-signing]
   workflow_dispatch:
 permissions:
   contents: read

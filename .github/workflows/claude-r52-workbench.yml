@@ -1,9 +1,9 @@
 name: Claude R52 universal workbench (#35)
 # Dedicated workflow for feat/claude-r52-universal-halo-workbench only. Local server + local MOCK
 # model, no secrets, no paid APIs, no schedule, no deployment. Shared ci.yml is not edited.
+# C1 (2026-11-11): relay line frozen. Manual dispatch only, at ref claude/relay-r57-final (the last commit
+# before relay code moved to tools/relay/). Product CI is .github/workflows/product.yml.
 on:
-  push:
-    branches: [feat/claude-r52-universal-halo-workbench]
   workflow_dispatch:
 permissions:
   contents: read

@@ -4,9 +4,9 @@ name: Claude agent pilot R45 (#29)
 # real_agent_launches stays 0. The official CLIs are installed only to verify, on a real
 # GitHub-hosted ephemeral runner, that they exist and expose the non-interactive flags the
 # runner needs (--version / --help only; no model request). No schedule, no dispatch chain.
+# C1 (2026-11-11): relay line frozen. Manual dispatch only, at ref claude/relay-r57-final (the last commit
+# before relay code moved to tools/relay/). Product CI is .github/workflows/product.yml.
 on:
-  push:
-    branches: [feat/claude-r45-trusted-runner-pilot]
   workflow_dispatch:
 permissions:
   contents: read

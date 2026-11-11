@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { ProjectStore } = require('../lib/project-store');
-const { IntakeDraftService } = require('../lib/intake-draft');
+const { IntakeDraftService } = require('../lib/planner/ai-draft');
 const sample = require('./fixtures/ai-draft.cjs');
 
 function fixture(t, invoke) {

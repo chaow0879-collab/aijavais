@@ -4,9 +4,9 @@
 // configured or called; nothing here is a real-model (E4) or human (E5) result.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const E = require('../public/project-intake/engine.js');
-const U = require('../public/project-intake/universal-team.js');
-const catalog = require('../public/project-intake/catalog.v1.json');
+const E = require('../lib/planner/rules.js');
+const U = require('../lib/planner/universal-team.js');
+const catalog = require('../lib/planner/catalog.v1.json');
 const H = require('./helpers');
 
 // Three industries that do not appear anywhere in the template catalog (names, keywords, summaries).

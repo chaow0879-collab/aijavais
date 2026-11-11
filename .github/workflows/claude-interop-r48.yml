@@ -2,9 +2,9 @@ name: Claude interop R48 (#31)
 # Dedicated validation for feat/claude-r48-cross-runner-conformance only. Executes the frozen
 # R45 (0b95251) and R46 (a1a258a) code read-only from exact SHAs; a missing source is
 # BLOCKED_SOURCE (the job fails), never a fallback. No secrets, no model, no schedule.
+# C1 (2026-11-11): relay line frozen. Manual dispatch only, at ref claude/relay-r57-final (the last commit
+# before relay code moved to tools/relay/). Product CI is .github/workflows/product.yml.
 on:
-  push:
-    branches: [feat/claude-r48-cross-runner-conformance]
   workflow_dispatch:
 permissions:
   contents: read

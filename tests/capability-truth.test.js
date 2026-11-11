@@ -12,11 +12,11 @@ const http = require('node:http');
 const SEC = require('../lib/security');
 const { ModelRegistry } = require('../lib/models');
 const { createV2Api } = require('../lib/v2-api');
-const { validateDraft } = require('../lib/intake-draft');
+const { validateDraft } = require('../lib/planner/ai-draft');
 const sample = require('./fixtures/ai-draft.cjs');
 const CATALOG = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'catalog', 'providers.v1.json'), 'utf8'));
 const ENV = { LOCAL_MODEL_TARGETS: '127.0.0.1:11434' };
-const SOFTWARE = require('../public/project-intake/catalog.v1.json').templates.find(t => t.id === 'software-development');
+const SOFTWARE = require('../lib/planner/catalog.v1.json').templates.find(t => t.id === 'software-development');
 const roleMap = id => Object.fromEntries(SOFTWARE.roles.map(r => [r.id, id]));
 const registry = (env = ENV) => new ModelRegistry({ catalog: CATALOG, policy: SEC.policyFromEnv(env), env });
 function localModel(r) {

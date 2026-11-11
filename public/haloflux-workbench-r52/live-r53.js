@@ -3,7 +3,7 @@
  * the controller performs requests; this module only builds bodies, maps responses and explains
  * server refusals. The server stays the only authority for approval, rework, criteria and acceptance. */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./contract.js'), require('./planner.js'));
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('../../lib/work-contract.js'), require('./planner.js'));
   else root.R54Live = factory(root.R52Contract, root.R52Planner);
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (C, P) {
   'use strict';
