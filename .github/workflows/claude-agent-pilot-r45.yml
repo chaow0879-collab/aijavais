@@ -1,0 +1,82 @@
+name: Claude agent pilot R45 (#29)
+# Dedicated validation for feat/claude-r45-trusted-runner-pilot only. No secrets are
+# referenced, so no credential can reach the runner: live CLI execution stays refused and
+# real_agent_launches stays 0. The official CLIs are installed only to verify, on a real
+# GitHub-hosted ephemeral runner, that they exist and expose the non-interactive flags the
+# runner needs (--version / --help only; no model request). No schedule, no dispatch chain.
+on:
+  push:
+    branches: [feat/claude-r45-trusted-runner-pilot]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: claude-agent-pilot-r45-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pilot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Record exact SHA and runner facts
+        run: |
+          echo "tested_sha=$GITHUB_SHA runner_environment=$RUNNER_ENVIRONMENT os=$RUNNER_OS"
+          git --version; gh --version | head -1; timeout --version | head -1
+      - name: Install pinned official CLIs (verification only, no credentials)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/cli" --no-package-lock @anthropic-ai/claude-code@2.1.318 @openai/codex@0.167.0
+          echo "$RUNNER_TEMP/cli/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: R45 tests on the ephemeral runner (fake CLI only; official CLI never invoked by tests)
+        env:
+          R45_PREFLIGHT_OUT: ${{ runner.temp }}/r45/preflight.json
+        run: |
+          mkdir -p "$RUNNER_TEMP/r45"
+          node --test tests/agent-pilot-r45/*.test.js
+      - name: Real preflight (official CLIs present, credentials absent, zero model calls)
+        run: |
+          node tools/agent-pilot-r45/cli.js preflight | tee "$RUNNER_TEMP/r45/preflight-cli.json"
+          node -e "
+            const r=require(process.env.RUNNER_TEMP+'/r45/preflight-cli.json');
+            const out={runner:r.runner.ephemeral_github_hosted,claude:[r.clis.claude.status,r.clis.claude.version,r.clis.claude.reason],codex:[r.clis.codex.status,r.clis.codex.version,r.clis.codex.reason],creds:[r.credentials.claude.status,r.credentials.codex.status],live_ready:r.live_ready,model_calls:r.model_calls_made,blocking:r.blocking};
+            console.log('R45_PREFLIGHT '+JSON.stringify(out));
+            if(r.model_calls_made!==0||r.live_ready.claude||r.live_ready.codex||!r.runner.ephemeral_github_hosted)process.exit(1);"
+      - name: Live path is refused on a real runner with the real CLI installed
+        run: |
+          node -e "
+            const H=require('./tests/agent-pilot-r45/helpers.cjs');require('fs').writeFileSync(process.env.RUNNER_TEMP+'/r45/envelope.json',JSON.stringify(H.envelope()));"
+          set +e
+          AIJ_PILOT_LIVE=1 node tools/agent-pilot-r45/cli.js run --envelope "$RUNNER_TEMP/r45/envelope.json" --state-dir "$RUNNER_TEMP/r45/state" --live | tee "$RUNNER_TEMP/r45/live-refusal.json"
+          set -e
+          node -e "
+            const o=require(process.env.RUNNER_TEMP+'/r45/live-refusal.json');console.log('R45_LIVE_REFUSAL '+o.state+' '+o.reason+' launches='+o.agent_launch.actual_agent_launches);
+            if(o.state!=='REJECTED'||o.agent_launch.actual_agent_launches!==0||o.agent_launch.process_launches!==0)process.exit(1);"
+      - name: Hash evidence
+        if: always()
+        run: cd "$RUNNER_TEMP/r45" && find . -maxdepth 1 -type f -name '*.json' -print0 | sort -z | xargs -0 sha256sum || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-agent-pilot-r45-evidence
+          path: |
+            ${{ runner.temp }}/r45/*.json
+          if-no-files-found: ignore
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install poppler and LibreOffice (existing suite needs them)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Existing suite unaffected (npm test) and R44 universal intake still passing
+        run: |
+          npm test
+          node --test tests/claude-universal-intake.test.js

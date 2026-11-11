@@ -1,267 +1,715 @@
 <!doctype html>
 <!--
-  AI 接入管理界面 — 与 panel.html 配套。
+  AIJAVAIS 管理中心 — 与大屏 panel.html 配套（本页可修改；panel.html 受保护不改）。
   视觉沿用 HALOFLUX（Copyright (c) 2026 Ryder191，PolyForm Noncommercial 1.0.0）的配色风格。
   Based on HALOFLUX by Ryder191 (RYDER CODE / Ms MAIKEBAIs CAT) — https://github.com/Ryder191/haloflux — modified.
 -->
 <html lang="zh-CN">
 <head>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%2398e0cf' stroke-width='3'/%3E%3C/svg%3E">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI 接入管理 · 龙创星环</title>
+<title>AIJAVAIS 管理中心</title>
 <style>
-:root{--bg:#08090b;--panel:#0e0f12;--line:#25282e;--line2:#3a3e46;--text:#cfd2d8;--dim:#8a8f99;--white:#f4f5f7;--pink:#f0a6c6;--teal:#98e0cf;--red:#ff7b7b;--gold:#d6c46a}
+:root{--bg:#08090b;--panel:#0e0f12;--panel2:#0b0c0f;--line:#25282e;--line2:#3a3e46;--text:#cfd2d8;--dim:#8a8f99;--white:#f4f5f7;--pink:#f0a6c6;--teal:#98e0cf;--red:#ff7b7b;--gold:#d6c46a;--blue:#8fc3ff}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--text);font:13px/1.5 "JetBrains Mono",Consolas,"Microsoft YaHei",monospace}
+html,body{margin:0;background:var(--bg);color:var(--text);font:13px/1.55 "JetBrains Mono",Consolas,"Microsoft YaHei",monospace}
 a{color:var(--teal)}
-header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:14px 22px;border-bottom:1px solid var(--line);background:#0a0b0d;position:sticky;top:0;z-index:5}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 22px;border-bottom:1px solid var(--line);background:#0a0b0d;position:sticky;top:0;z-index:5}
 header h1{margin:0;font-size:18px;color:var(--white);letter-spacing:1px}
 header .sub{font-size:11px;color:var(--dim)}
-.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);padding:3px 10px;font-size:12px;border-radius:3px;color:var(--text)}
+nav{display:flex;gap:4px;flex-wrap:wrap;padding:10px 22px 0;max-width:1400px;margin:0 auto}
+nav button{border-bottom:none;border-radius:3px 3px 0 0}
+nav button.on{background:#cfd2d8;color:#000;border-color:#cfd2d8;font-weight:700}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);padding:3px 10px;font-size:12px;border-radius:3px;color:var(--text);text-decoration:none}
 .dot{width:8px;height:8px;border-radius:50%;background:#555}
 .dot.on{background:var(--teal);box-shadow:0 0 8px var(--teal)}
 .dot.work{background:var(--pink);box-shadow:0 0 10px var(--pink);animation:bl 1s steps(1) infinite}
 @keyframes bl{50%{opacity:.35}}
-main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;padding:16px 22px 40px;max-width:1500px;margin:0 auto}
-@media (max-width:1050px){main{grid-template-columns:minmax(0,1fr)}}
+main{padding:0 22px 40px;max-width:1400px;margin:0 auto}
+.pane{display:none;border-top:1px solid var(--line2);padding-top:16px}
+.pane.on{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.pane.one.on{grid-template-columns:minmax(0,1fr)}
+@media (max-width:1000px){.pane.on{grid-template-columns:minmax(0,1fr)}}
 .col{display:flex;flex-direction:column;gap:16px;min-width:0}
-section{border:1px solid var(--line);background:var(--panel);padding:14px 16px}
+section{border:1px solid var(--line);background:var(--panel);padding:14px 16px;min-width:0}
 h2{margin:0 0 10px;font-size:12px;letter-spacing:1.4px;color:var(--white);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 h2 small{font-weight:400;color:var(--dim);letter-spacing:0;font-size:11px}
+h3{margin:12px 0 6px;font-size:12px;color:var(--white)}
 .note{color:var(--dim);font-size:11px;margin:6px 0}
-.warn{color:var(--gold)}
+.warn{color:var(--gold)}.ok{color:var(--teal)}.bad{color:var(--red)}
 button,select,input,textarea{font:inherit;color:var(--text);background:#141519;border:1px solid var(--line2);padding:6px 9px;border-radius:3px;min-height:34px}
 button{cursor:pointer;background:#1a1c21}
 button:hover{border-color:#cfd2d8;color:var(--white)}
 button.pri{background:#cfd2d8;color:#000;border-color:#cfd2d8;font-weight:700}
 button.pri:hover{background:#fff}
 button.danger:hover{border-color:var(--red);color:var(--red)}
-button:disabled{opacity:.5;cursor:default}
+button.sm{min-height:28px;padding:3px 8px;font-size:12px}
+button:disabled{opacity:.45;cursor:default}
 input:focus,select:focus,textarea:focus{outline:1px solid var(--teal);outline-offset:0}
-textarea{width:100%;min-height:96px;resize:vertical}
+textarea{width:100%;min-height:110px;resize:vertical}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.prov{border:1px solid var(--line);padding:10px 12px;margin-top:10px;background:#0b0c0f}
-.prov.dis{opacity:.6}
+.row.end{align-items:flex-end}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px}
 @media (max-width:620px){.grid2{grid-template-columns:minmax(0,1fr)}}
 label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--dim)}
 label input,label select{width:100%}
 label.chk{flex-direction:row;align-items:center;gap:6px;font-size:12px;color:var(--text)}
 label.chk input{width:auto;min-height:0}
-.res{font-size:12px;margin-left:4px}
-.ok{color:var(--teal)}.bad{color:var(--red)}
-pre{margin:6px 0 0;padding:10px;background:#0b0c0f;border:1px solid var(--line);overflow:auto;font:12px/1.5 "JetBrains Mono",Consolas,monospace;color:var(--text);white-space:pre-wrap;word-break:break-all}
+.steps{counter-reset:s}
+.stepx{border-left:2px solid var(--line2);padding:4px 0 10px 14px;position:relative}
+.stepx::before{counter-increment:s;content:counter(s);position:absolute;left:-11px;top:2px;width:20px;height:20px;border-radius:50%;background:#1a1c21;border:1px solid var(--line2);font-size:11px;display:flex;align-items:center;justify-content:center;color:var(--white)}
+.stepx.done{border-left-color:var(--teal)}
+.stepx.done::before{border-color:var(--teal);color:var(--teal)}
+.stepx .t{font-size:12px;color:var(--white);margin-bottom:5px}
+.card{border:1px solid var(--line);padding:10px 12px;margin-top:10px;background:var(--panel2)}
+.card.dis{opacity:.6}
+.card .top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.card .name{color:var(--white);font-size:13px}
+.badge{display:inline-block;border:1px solid var(--line2);border-radius:3px;padding:0 6px;font-size:11px;margin-left:4px;white-space:nowrap}
+.badge.available{color:var(--teal);border-color:var(--teal)}
+.badge.untested{color:var(--blue);border-color:var(--blue)}
+.badge.error,.badge.not_ready{color:var(--red);border-color:var(--red)}
+.badge.disabled{color:var(--dim)}
+.badge.paid_api{color:var(--gold);border-color:var(--gold)}
+.badge.free_tier,.badge.local{color:var(--teal)}
+.badge.unknown{color:var(--dim)}
+.caps{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.caps span{font-size:11px;color:var(--dim);border:1px dashed var(--line2);padding:0 5px;border-radius:3px}
+.capbox{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px}
+.role{border-top:1px dashed var(--line);padding-top:8px;margin-top:8px}
+.role .rn{color:var(--white)}
+pre{margin:6px 0 0;padding:10px;background:var(--panel2);border:1px solid var(--line);overflow:auto;font:12px/1.5 "JetBrains Mono",Consolas,monospace;white-space:pre-wrap;word-break:break-all}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}
 .tabs button.on{background:#cfd2d8;color:#000;border-color:#cfd2d8}
-.step{border:1px solid var(--line);margin-top:8px;background:#0b0c0f}
-.step .hd{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:12px;color:var(--white)}
-.step .bd{padding:8px 10px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto;font-size:12px}
+.step{border:1px solid var(--line);margin-top:8px;background:var(--panel2)}
+.step .hd{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:12px;color:var(--white);flex-wrap:wrap}
+.step .bd{padding:8px 10px;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto;font-size:12px}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
 th{color:var(--dim);font-weight:600;font-size:11px}
 td.w{color:var(--pink)}td.e{color:var(--red)}
-.toast{position:fixed;right:18px;bottom:18px;background:#1a1c21;border:1px solid var(--line2);padding:8px 14px;max-width:420px;display:none;z-index:9;font-size:12px}
+.issues{margin:6px 0 0;padding-left:18px;font-size:12px}
+.issues .error{color:var(--red)}.issues .warn{color:var(--gold)}.issues .info{color:var(--dim)}
+.toast{position:fixed;right:18px;bottom:18px;background:#1a1c21;border:1px solid var(--line2);padding:8px 14px;max-width:460px;display:none;z-index:20;font-size:12px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:15;padding:16px}
+.modal.on{display:flex}
+.modal .box{background:var(--panel);border:1px solid var(--line2);max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:16px 18px}
+.rec{border:1px solid var(--line);padding:8px 10px;margin-top:8px;background:var(--panel2);font-size:12px}
+.rec ul{margin:4px 0;padding-left:18px}
+.hidden{display:none !important}
+.newtask{background:var(--teal);color:#071311;font-weight:700;border-radius:8px;padding:7px 14px;text-decoration:none}
+.guide{margin:12px 22px 0;border:1px solid var(--teal);border-radius:10px;padding:12px 16px;background:#0f1a1a}
+.guide ol{margin:6px 0 0;padding-left:20px}.guide li{margin:4px 0}.guide li.done{color:var(--dim);text-decoration:line-through}.guide li.cur{font-weight:700}
+.brow.nonchat{opacity:.65}.sugg{font-size:11px;color:#ffcf85;border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:6px}
 </style>
 </head>
 <body>
+<div style="padding:8px 22px;border-bottom:1px solid #25282e"><a href="/workspace.html">AIJAVAIS V2 工作台：立项、协作、审核与文件交付 →</a> · <a href="/project-intake.html">项目立项向导</a> · <a href="/capabilities.html">能力中心与就绪检查（首次使用请先看这里）</a></div>
 <header>
   <div>
-    <h1>AI 接入管理</h1>
-    <div class="sub">外部 AI 开始工作 → 大屏立刻转动 · Based on HALOFLUX by Ryder191 (modified)</div>
+    <h1>AIJAVAIS 管理中心</h1>
+    <div class="sub">模型接入 · AI 团队 · 任务 · 大屏信号 · Based on HALOFLUX by Ryder191 (modified)</div>
   </div>
   <div class="row">
     <span class="chip"><i class="dot" id="dot"></i><span id="conn">连接中…</span></span>
-    <a class="chip" href="/panel.html" target="_blank" rel="noopener">打开大屏 ↗</a>
+    <a class="newtask" id="newTaskBtn" href="/workspace.html?new=1">＋ 新建任务</a>
+    <a class="chip" href="/workspace.html">项目工作台 →</a>
+    <a class="chip" href="/" target="_blank" rel="noopener">打开大屏 ↗</a>
+    <button class="sm" id="logoutBtn">退出登录</button>
   </div>
 </header>
+<nav id="nav">
+  <button data-pane="models" class="on">模型</button>
+  <button data-pane="teams">AI 团队</button>
+  <button data-pane="run">运行任务</button>
+  <button data-pane="live">实时状态</button>
+  <button data-pane="ingest">外部接入</button>
+  <button data-pane="settings">设置</button>
+</nav>
+<div class="guide hidden" id="guide" role="note"><strong>首次使用：两步开始</strong><ol><li id="g1">① 添加模型：在下方选服务商、粘贴密钥，点“连接并全部添加”</li><li id="g2">② 新建任务：<a href="/workspace.html?new=1">去项目工作台新建任务 →</a></li></ol></div>
 
 <main>
-  <div class="col">
-    <section id="secProviders">
-      <h2>外部 AI 供应商 <small>API Key 只保存在本机 data/config.json</small></h2>
-      <div class="row" id="presetBtns"></div>
-      <p class="note">网页版会员（ChatGPT Plus、Claude Pro 等）与 API 是两套账户，这里需要各平台的 API Key。模型名请按各平台官网填写。</p>
-      <div id="provList"></div>
-    </section>
+  <!-- ======================= 模型 ======================= -->
+  <div class="pane on" id="pane-models">
+    <div class="col">
+      <section>
+        <h2>添加模型 <small>五步完成，技术字段默认隐藏</small></h2>
+        <div class="steps">
+          <div class="stepx" id="w1"><div class="t">选择 AI 服务商</div>
+            <select id="wProv" style="width:100%"></select>
+            <p class="note" id="wProvNote"></p>
+          </div>
+          <div class="stepx" id="w2"><div class="t">粘贴密钥</div>
+            <input id="wKey" type="password" autocomplete="off" placeholder="在服务商官网的密钥管理页面创建" style="width:100%">
+            <p class="note" id="wKeyNote">密钥只保存在你自己的服务器上，任何页面都不会再显示完整密钥。</p>
+          </div>
+          <div class="stepx" id="w3"><div class="t">添加模型（推荐“连接并全部添加”）</div>
+            <div class="row"><button id="wDiscover">获取模型列表</button><select id="wModelSel" class="hidden" style="min-width:220px"></select></div>
+            <input id="wModel" placeholder="或直接填写模型名" style="width:100%;margin-top:6px">
+            <p class="note" id="wModelNote">模型名以服务商为准；平台不预置、不猜测模型名。</p>
+            <div class="row" style="margin-top:8px"><button class="pri" id="wAddAll">连接并全部添加</button><button id="wRefresh" class="hidden">刷新：补齐新模型</button></div>
+            <p class="note">填好密钥后点一下即可：自动读取该服务商的模型，跳过向量、重排、语音、图像、翻译等非对话模型和带日期的旧版本，其余全部添加；每个模型“擅长什么”按名称自动推断（<b>建议，未经验证</b>，以后可在右侧“编辑”里改）。同一服务商的模型共用这一份密钥。</p>
+            <div id="wAllRes" class="note" role="status"></div>
+          </div>
+          <div class="stepx" id="w4"><div class="t">测试连接</div>
+            <div class="row"><button id="wTest">测试</button><span id="wTestRes" class="note"></span></div>
+          </div>
+          <div class="stepx" id="w5"><div class="t">保存</div>
+            <div class="grid2">
+              <label>显示名称（大屏上显示）<input id="wName" placeholder="如：我的主力模型"></label>
+              <label>费用类型<select id="wPricing"><option value="unknown">费用未知（按可能付费处理）</option><option value="paid_api">按量付费</option><option value="free_tier">已确认有免费额度</option><option value="local">本地模型（不产生费用）</option></select></label>
+            </div>
+            <label style="margin-top:8px">这个模型擅长什么（可多选，用于团队推荐；属于你的声明，平台不会替你编造）</label>
+            <div class="capbox" id="wCaps"></div>
+            <p class="note hidden" id="wCapsSugg"><span class="sugg">建议，未经验证</span> 已按模型名预勾，可修改。</p>
+            <details style="margin-top:8px"><summary class="note" style="cursor:pointer">高级（一般不用填）</summary>
+              <div class="grid2" style="margin-top:6px">
+                <label>Base URL<input id="wBase" placeholder="按服务商自动填写"></label>
+                <label>协议<select id="wProto"><option value="openai">OpenAI 兼容</option><option value="anthropic">Anthropic</option></select></label>
+                <label>或使用环境变量（不填密钥时）<input id="wEnv" placeholder="如 ANTHROPIC_API_KEY 或 AIJ_XXX_KEY"></label>
+              </div>
+            </details>
+            <div class="row" style="margin-top:10px"><button class="pri" id="wSave">保存模型</button><span id="wSaveRes" class="note"></span></div>
+          </div>
+        </div>
+        <p class="note warn">网页版的付费会员不包含调用额度，这里需要在各平台单独申请的密钥。不要共享或借用他人的账号。</p>
+      </section>
+    </div>
+    <div class="col">
+      <section>
+        <h2>已接入的模型 <small id="mSum"></small></h2>
+        <div id="mList"></div>
+      </section>
+    </div>
+  </div>
 
-    <section id="secRun">
-      <h2>双模型协同任务 <small>A 起草 → B 审核 → A 修订，全程驱动大屏</small></h2>
-      <textarea id="task" placeholder="输入要交给两个模型的任务，例如：根据评审九步流程，设计“申诉处理”模块的数据表结构。"></textarea>
-      <div class="row" style="margin-top:8px">
-        <label>模型 A（起草 / 修订）<select id="selA"></select></label>
-        <label>模型 B（审核）<select id="selB"></select></label>
-        <label>流程<select id="mode"><option value="full">起草 → 审核 → 修订</option><option value="review">起草 → 审核</option><option value="single">仅 A 起草</option></select></label>
-        <button class="pri" id="runBtn" style="align-self:flex-end">运行</button>
-      </div>
-      <p class="note warn">任务内容会发送给所选 AI 的服务商。涉及人事、薪酬、干部盘点等敏感信息，请先脱敏，或只选择合规的服务商。</p>
-      <div id="runOut"></div>
+  <!-- ======================= 团队 ======================= -->
+  <div class="pane" id="pane-teams">
+    <div class="col">
+      <section>
+        <h2>建立 AI 团队 <small>选模板 → 给每个岗位分配模型</small></h2>
+        <div class="grid2">
+          <label>团队模板<select id="tTpl"></select></label>
+          <label>团队名称<input id="tName" placeholder="如：公文小组"></label>
+        </div>
+        <p class="note" id="tTplNote"></p>
+        <div id="tRoles"></div>
+        <h3>费用策略</h3>
+        <div class="row">
+          <label>选择方式<select id="tMode"><option value="free_first">免费优先（本地 / 免费额度优先）</option><option value="quality_first">按岗位指定的主模型</option></select></label>
+          <label class="chk" style="align-self:flex-end"><input type="checkbox" id="tPaid"> 允许自动使用付费 API（不勾选时，每次用到付费或费用未知的模型都会先问你）</label>
+        </div>
+        <div class="row" style="margin-top:10px"><button class="pri" id="tCreate">建立团队</button><span id="tRes" class="note"></span></div>
+        <p class="note" id="tPlanned"></p>
+      </section>
+    </div>
+    <div class="col">
+      <section>
+        <h2>我的团队 <small>模型可以随时更换，团队与岗位不变</small></h2>
+        <div id="teamList"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ======================= 运行 ======================= -->
+  <div class="pane" id="pane-run">
+    <div class="col">
+      <section>
+        <h2>运行任务 <small>全程驱动大屏</small></h2>
+        <textarea id="task" placeholder="输入任务，例如：比较三种方案的成本与风险，给出推荐和依据。"></textarea>
+        <div class="row end" style="margin-top:8px">
+          <label>由谁来做<select id="runBy"><option value="team">AI 团队</option><option value="models">直接选模型</option></select></label>
+          <label id="runTeamL">团队<select id="runTeam"></select></label>
+          <label id="runAL" class="hidden">模型 A（起草 / 修订）<select id="selA"></select></label>
+          <label id="runBL" class="hidden">模型 B（审核）<select id="selB"></select></label>
+          <label>流程<select id="mode"><option value="full">起草 → 审核 → 修订</option><option value="review">起草 → 审核</option><option value="single">只起草</option></select></label>
+          <button class="pri" id="runBtn">运行</button>
+        </div>
+        <p class="note warn">任务内容会发送给所选模型的服务商。个人信息、财务、客户或商业机密等敏感内容请先脱敏，或只使用本地模型。</p>
+        <div id="runOut"></div>
+      </section>
+    </div>
+    <div class="col">
+      <section>
+        <h2>最近任务 <small><button class="sm" id="runsRefresh">刷新</button></small></h2>
+        <div style="overflow:auto"><table><thead><tr><th>时间</th><th>任务</th><th>团队 / 模型</th><th>状态</th></tr></thead><tbody id="runsBody"></tbody></table></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ======================= 实时状态 ======================= -->
+  <div class="pane one" id="pane-live">
+    <section>
+      <h2>实时状态 <small id="liveSum"></small></h2>
+      <div style="overflow:auto"><table><thead><tr><th>智能体</th><th>来源</th><th>状态</th><th>任务</th><th>调用</th><th>Token（真实 / 估算）</th><th>错误</th></tr></thead><tbody id="liveBody"><tr><td colspan="7" class="note">暂无信号</td></tr></tbody></table></div>
+      <p class="note">来源：平台观察 = 平台自己发起并看到的模型调用；外部上报 = 外部程序报告，平台未独立验证；演示 = 模拟数据，不计入统计。</p>
     </section>
   </div>
 
-  <div class="col">
-    <section id="secLive">
-      <h2>实时状态 <small id="liveSum"></small></h2>
-      <div style="overflow:auto"><table><thead><tr><th>智能体</th><th>状态</th><th>任务</th><th>调用</th><th>Token</th><th>错误</th></tr></thead><tbody id="liveBody"><tr><td colspan="6" class="note">暂无信号</td></tr></tbody></table></div>
-    </section>
+  <!-- ======================= 外部接入 ======================= -->
+  <div class="pane" id="pane-ingest">
+    <div class="col">
+      <section id="secSignal">
+        <h2>接入任意外部 AI <small>推送一条状态，大屏就转</small></h2>
+        <div class="row">
+          <button id="demoBtn">模拟开工 15 秒</button>
+          <button data-sig="start">发送：开工</button>
+          <button data-sig="stream">输出中</button>
+          <button data-sig="done">完成</button>
+          <button data-sig="error">报错</button>
+        </div>
+        <p class="note">上面的按钮不需要任何 API Key，用来先看效果。下面是真实接入的写法：</p>
+        <div class="tabs" id="tabs"></div>
+        <pre id="snippet"></pre>
+        <div class="row" style="margin-top:6px"><button id="copySnip">复制</button><span class="note" id="snipNote"></span></div>
+      </section>
+    </div>
+    <div class="col">
+      <section>
+        <h2>上报凭证 <small>给别的电脑 / 程序用，只能上报事件</small></h2>
+        <div class="row end">
+          <label>名称<input id="igName" placeholder="如 office-pc"></label>
+          <label>允许的 agent 名（逗号分隔，可空）<input id="igAgents" placeholder="如 claude-code,my-ai"></label>
+          <button class="pri" id="igCreate">创建</button>
+        </div>
+        <pre id="igNew" class="hidden"></pre>
+        <div id="igList"></div>
+        <p class="note">所有外部上报都需要凭证（服务器管理员可用 AIJ_LOCAL_INGEST=1 允许本机免凭证上报）。凭证明文只显示一次，服务器只保存它的哈希值；凭证只能上报事件，不能登录或查看数据。</p>
+      </section>
+    </div>
+  </div>
 
-    <section id="secSignal">
-      <h2>接入任意外部 AI <small>推送一条状态，大屏就转</small></h2>
-      <div class="row">
-        <button id="demoBtn">模拟开工 15 秒</button>
-        <button data-sig="start">发送：开工</button>
-        <button data-sig="stream">输出中</button>
-        <button data-sig="done">完成</button>
-        <button data-sig="error">报错</button>
-      </div>
-      <p class="note">上面的按钮不需要任何 API Key，用来先看效果。下面是真实接入的写法：</p>
-      <div class="tabs" id="tabs"></div>
-      <pre id="snippet"></pre>
-      <div class="row" style="margin-top:6px"><button id="copySnip">复制</button><span class="note" id="snipNote"></span></div>
-    </section>
-
-    <section id="secSettings">
-      <h2>显示与安全设置</h2>
+  <!-- ======================= 设置 ======================= -->
+  <div class="pane one" id="pane-settings">
+    <section>
+      <h2>显示与运行设置</h2>
       <label class="chk"><input type="checkbox" id="setText"> 在大屏上显示模型输出的文字片段（默认关闭，只显示状态、耗时、token）</label>
       <div class="grid2" style="margin-top:10px">
+        <label>默认模型（没指定模型时使用）<select id="setDefault"></select></label>
+        <label>简单模式单次任务上限（元）<input type="number" id="setCap" min="0.1" max="1000" step="0.1"></label>
         <label>无信号自动待机（秒）<input type="number" id="setIdle" min="10" max="3600"></label>
-        <label>Claude 单次最大输出 token<input type="number" id="setMax" min="256" max="64000"></label>
+        <label>单次最大输出 token<input type="number" id="setMax" min="256" max="64000"></label>
         <label>单次请求超时（秒）<input type="number" id="setTimeout" min="30" max="1800"></label>
       </div>
-      <div class="row" style="margin-top:10px"><button class="pri" id="saveSettings">保存设置</button><span class="res" id="setRes"></span></div>
+      <div class="row" style="margin-top:10px"><button class="pri" id="saveSettings">保存设置</button><span class="note" id="setRes"></span></div>
       <p class="note" id="srvInfo"></p>
+    </section>
+    <section style="margin-top:16px">
+      <h2>账户与安全 <small>个人部署：一个管理员密码</small></h2>
+      <div class="grid2">
+        <label>当前密码<input type="password" id="pwCur" autocomplete="current-password"></label>
+        <label>新密码（至少 10 个字符）<input type="password" id="pwNew" autocomplete="new-password"></label>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="pri" id="pwSave">修改密码</button><span class="note" id="pwRes"></span></div>
+      <p class="note">修改密码后，其它设备上的登录会全部失效。忘记密码：在服务器本机运行 <code>node tools/reset-password.js --yes</code>。</p>
+      <h3>登录会话</h3>
+      <div style="overflow:auto"><table><thead><tr><th>类型</th><th>来源</th><th>最近活动</th><th>到期</th><th></th></tr></thead><tbody id="sessBody"></tbody></table></div>
+      <div class="row" style="margin-top:8px"><button class="danger" id="logoutAll">退出所有设备</button></div>
+      <h3>大屏观看链接</h3>
+      <div class="row end">
+        <label>名称<input id="dlLabel" placeholder="如：会议室大屏"></label>
+        <label>有效小时<input type="number" id="dlHours" value="24" min="1" max="720"></label>
+        <button id="dlCreate">生成链接</button>
+      </div>
+      <pre id="dlOut" class="hidden"></pre>
+      <p class="note">链接 10 分钟内有效、只能打开一次；打开后的大屏只读，看不到模型原文，可在上面的会话列表中随时撤销。</p>
     </section>
   </div>
 </main>
+
+<div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
 <div class="toast" id="toast"></div>
 
+<script src="/model-hints.js"></script>
 <script>
 const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let CFG = null, TOKEN = sessionStorage.getItem('aiPanelToken') || '';
-let snipTab = 'node';
+let CFG = null, MODELS = [], TEAMS = [], TPL = null;
+const plat = m => ModelHints.platformLabel(m);
+/* 单价显示为“每百万字约 ¥X”（内部仍按每百万 Token 存；美元按 7.5 换算，只用于显示） */
+const priceText = p => { const f = p.currency === 'USD' ? 7.5 : 1, y = n => '¥' + (Math.round(n * f * 100) / 100).toFixed(2); return '输入 ' + y(p.inputPerMillion) + '、输出 ' + y(p.outputPerMillion) + ' / 每百万字'; };
+const STATUS = { available: '可用', untested: '未测试', error: '出错', disabled: '已停用', not_ready: '未就绪' };
+const PRICE = { paid_api: '按量付费', free_tier: '免费额度', local: '本地', unknown: '费用未知' };
 
-function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', ms); }
+function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', ms); }
+function modal(html) { $('#modalBox').innerHTML = html; $('#modal').classList.add('on'); }
+function closeModal() { $('#modal').classList.remove('on'); }
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.dataset.close !== undefined) closeModal(); });
 
-async function api(path, method = 'GET', body) {
-  const headers = { 'content-type': 'application/json' };
-  if (TOKEN) headers['x-admin-token'] = TOKEN;
-  let r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  if (r.status === 401) {
-    const t = prompt('请输入管理令牌（见服务启动窗口或 data/config.json）');
-    if (!t) throw new Error('需要管理令牌');
-    TOKEN = t.trim(); sessionStorage.setItem('aiPanelToken', TOKEN);
-    headers['x-admin-token'] = TOKEN;
-    r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  }
+async function api(path, method = 'GET', body, { raw = false } = {}) {
+  const headers = body === undefined ? {} : { 'content-type': 'application/json' };
+  const r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
+  if (r.status === 401) { location.href = '/login.html?next=/admin.html'; throw new Error('登录已失效，请重新登录'); }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  if (raw) return { status: r.status, json: j };
+  if (!r.ok) { const e = new Error(j.error || ('HTTP ' + r.status)); e.data = j; e.status = r.status; throw e; }
   return j;
 }
 
-/* ---------- 供应商 ---------- */
-const hintFor = p => { const x = Object.values(CFG.presets).find(v => v.baseUrl && v.baseUrl === p.baseUrl); return x ? x.modelHint : '模型名'; };
-function renderPresets() {
-  $('#presetBtns').innerHTML = Object.entries(CFG.presets).map(([k, v]) => `<button data-preset="${esc(k)}">＋ ${esc(v.label)}</button>`).join('');
-}
-function renderProviders() {
-  const list = CFG.providers;
-  $('#provList').innerHTML = list.length ? list.map(p => `
-    <div class="prov ${p.enabled ? '' : 'dis'}" data-id="${esc(p.id)}">
-      <div class="grid2">
-        <label>名称<input data-f="label" value="${esc(p.label)}"></label>
-        <label>类型<select data-f="type"><option value="anthropic" ${p.type === 'anthropic' ? 'selected' : ''}>Anthropic（Claude）</option><option value="openai" ${p.type === 'openai' ? 'selected' : ''}>OpenAI 兼容（ChatGPT / Kimi / DeepSeek…）</option></select></label>
-        <label>Base URL<input data-f="baseUrl" value="${esc(p.baseUrl)}"></label>
-        <label>模型名<input data-f="model" value="${esc(p.model)}" placeholder="${esc(hintFor(p))}"></label>
-        <label>API Key ${p.hasKey ? '<span class="ok">已保存 ' + esc(p.keyHint) + '</span>' : (p.envReady ? '<span class="ok">已读取环境变量</span>' : '<span class="bad">未设置</span>')}
-          <input data-f="apiKey" type="password" autocomplete="off" placeholder="${p.hasKey ? '留空保持不变' : '粘贴 API Key'}"></label>
-        <label>或使用环境变量名<input data-f="envKey" value="${esc(p.envKey)}" placeholder="如 ANTHROPIC_API_KEY"></label>
-        <label>角色说明（给自己看）<input data-f="role" value="${esc(p.role)}" placeholder="如：架构 / 标准库 / 文档"></label>
-        <label class="chk" style="align-self:end"><input data-f="enabled" type="checkbox" ${p.enabled ? 'checked' : ''}> 启用</label>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button class="pri" data-act="save">保存</button>
-        <button data-act="test">测试连接</button>
-        <button class="danger" data-act="del">删除</button>
-        <span class="res" data-res></span>
-      </div>
-    </div>`).join('') : '<p class="note">还没有添加。点上面的按钮添加 Claude / ChatGPT / Kimi 等。</p>';
-  const opts = list.filter(p => p.enabled).map(p => `<option value="${esc(p.id)}">${esc(p.label)}${p.model ? ' · ' + esc(p.model) : ''}</option>`).join('');
-  const a = $('#selA').value, b = $('#selB').value;
-  $('#selA').innerHTML = opts; $('#selB').innerHTML = opts;
-  if (a) $('#selA').value = a;
-  if (b) $('#selB').value = b; else if (list.filter(p => p.enabled).length > 1) $('#selB').selectedIndex = 1;
-}
-function readCard(card) {
-  const o = { id: card.dataset.id };
-  card.querySelectorAll('[data-f]').forEach(el => { o[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value; });
-  return o;
-}
-$('#presetBtns').addEventListener('click', async e => {
-  const k = e.target.dataset.preset; if (!k) return;
-  const v = CFG.presets[k];
-  try {
-    await api('/api/providers', 'POST', { label: v.label, type: v.type, baseUrl: v.baseUrl, envKey: v.envKey, model: '' });
-    await load(); toast('已添加 ' + v.label + '，请填写模型名和 API Key');
-  } catch (err) { toast(err.message); }
-});
-$('#provList').addEventListener('click', async e => {
-  const act = e.target.dataset.act; if (!act) return;
-  const card = e.target.closest('.prov'), res = card.querySelector('[data-res]'), id = card.dataset.id;
-  try {
-    if (act === 'save') { await api('/api/providers', 'POST', readCard(card)); await load(); toast('已保存'); }
-    else if (act === 'del') { if (!confirm('删除这个供应商？')) return; await api('/api/providers/' + id, 'DELETE'); await load(); }
-    else if (act === 'test') {
-      await api('/api/providers', 'POST', readCard(card));
-      res.className = 'res'; res.textContent = '测试中…（大屏会开始转动）';
-      const r = await api('/api/providers/' + id + '/test', 'POST', {});
-      res.className = 'res ' + (r.ok ? 'ok' : 'bad');
-      res.textContent = r.ok ? `连接正常 · ${r.ms} ms · ${r.tokens} token` : '失败：' + r.error;
-      load();
-    }
-  } catch (err) { res.className = 'res bad'; res.textContent = err.message; }
+/* ---------- 导航 ---------- */
+$('#nav').addEventListener('click', e => {
+  const p = e.target.dataset.pane; if (!p) return;
+  $$('#nav button').forEach(b => b.classList.toggle('on', b === e.target));
+  $$('.pane').forEach(x => x.classList.toggle('on', x.id === 'pane-' + p));
+  if (p === 'run') loadRuns();
+  if (p === 'ingest') loadIngest();
+  if (p === 'settings') loadSessions();
 });
 
-/* ---------- 双模型任务 ---------- */
+/* ======================= 模型：添加向导 ======================= */
+const prov = () => CFG.catalog.providers.find(p => p.providerId === $('#wProv').value);
+function renderWizard() {
+  const simple = CFG.catalog.providers.filter(p => p.simple), adv = CFG.catalog.providers.filter(p => !p.simple);
+  $('#wProv').innerHTML = `<optgroup label="常用服务商">${simple.map(p => `<option value="${esc(p.providerId)}">${esc(p.name)}</option>`).join('')}</optgroup>`
+    + `<optgroup label="其它">${adv.map(p => `<option value="${esc(p.providerId)}">${esc(p.name)}</option>`).join('')}</optgroup>`;
+  $('#wCaps').innerHTML = Object.entries(CFG.catalog.capabilities).map(([k, v]) => `<label class="chk"><input type="checkbox" value="${esc(k)}"> ${esc(v)}</label>`).join('');
+  onProv();
+}
+function onProv() {
+  const p = prov();
+  $('#wProvNote').innerHTML = esc(p.pricingNote || '') + (p.providerId === 'ollama' && !CFG.server.localTargets.length ? ' <span class="bad">当前服务没有设置 LOCAL_MODEL_TARGETS，无法连接本地模型。</span>' : '');
+  $('#w2').classList.toggle('hidden', !!p.noKey);
+  $('#wBase').value = p.baseUrl || ''; $('#wProto').value = p.protocol; $('#wEnv').value = '';
+  $('#wPricing').value = p.pricingMode;
+  $('#wBase').closest('details').open = p.providerId === 'custom';
+  $('#wDiscover').disabled = !p.modelsEndpoint;
+  $('#wModelSel').classList.add('hidden'); $('#wTestRes').textContent = ''; $('#wSaveRes').textContent = '';
+  $('#wAllRes').textContent = ''; $('#wAddAll').disabled = !p.modelsEndpoint; if (MODELS) syncRefresh();
+  $$('.stepx').forEach(x => x.classList.remove('done'));
+}
+$('#wProv').addEventListener('change', onProv);
+const wInput = () => ({
+  providerId: $('#wProv').value, apiKey: $('#wKey').value.trim(), modelId: $('#wModel').value.trim(),
+  baseUrl: $('#wBase').value.trim(), protocol: $('#wProto').value, envKey: $('#wEnv').value.trim(),
+  displayName: $('#wName').value.trim(), pricingMode: $('#wPricing').value,
+  capabilities: $$('#wCaps input:checked').map(x => x.value),
+});
+$('#wKey').addEventListener('input', () => $('#w2').classList.toggle('done', !!$('#wKey').value.trim()));
+$('#wModel').addEventListener('input', () => $('#w3').classList.toggle('done', !!$('#wModel').value.trim()));
+$('#wDiscover').addEventListener('click', async () => {
+  $('#wModelNote').textContent = '正在向服务商读取模型列表…';
+  try {
+    const r = await api('/api/models/discover', 'POST', { providerId: $('#wProv').value, apiKey: $('#wKey').value.trim(), baseUrl: $('#wBase').value.trim() });
+    if (!r.ok) { $('#wModelNote').innerHTML = `<span class="bad">${esc(r.hint || r.error)}</span> <span class="note">${esc(r.error)}</span>`; return; }
+    $('#wModelSel').innerHTML = '<option value="">— 选择模型 —</option>' + r.models.map(m => `<option>${esc(m)}</option>`).join('');
+    $('#wModelSel').classList.remove('hidden');
+    $('#wModelNote').textContent = `读取到 ${r.models.length} 个模型。`;
+
+  } catch (e) { $('#wModelNote').textContent = e.message; }
+});
+function suggestSingle() {
+  const caps = ModelHints.suggestCapabilities($('#wModel').value.trim(), Object.keys(CFG.catalog.capabilities));
+  $$('#wCaps input').forEach(x => x.checked = caps.includes(x.value));
+  $('#wCapsSugg').classList.toggle('hidden', !caps.length);
+}
+$('#wModelSel').addEventListener('change', () => { $('#wModel').value = $('#wModelSel').value; $('#w3').classList.toggle('done', !!$('#wModel').value); suggestSingle(); });
+$('#wModel').addEventListener('change', suggestSingle);
+/* B7a（修订）：连接并全部添加 / 刷新补齐。能力按名称自动推断，用户不填不确认。 */
+function sameProvider() { return MODELS.filter(m => m.providerId === $('#wProv').value); }
+function showAddAllResult(added, skipped, existing) {
+  const box = $('#wAllRes');
+  box.className = added.length ? 'ok' : 'note';
+  box.innerHTML = `已添加 ${added.length} 个，已自动跳过 ${skipped.length} 个（非对话类或旧快照）${existing ? `，${existing} 个以前已添加` : ''}。`
+    + (added.length ? `<details><summary>查看已添加的模型</summary>${added.map(c => esc(plat(c))).join('<br>')}</details>` : '')
+    + (skipped.length ? `<details><summary>查看跳过的模型和原因</summary>${skipped.map(x => esc(x.modelId) + ' · ' + esc(x.reason)).join('<br>')}</details>` : '')
+    + (added.length ? '<div class="note">开始任务时系统会自动检查要用到的模型能否连接（会真实调用一次，费用极少）。</div>' : '');
+}
+async function addAll(fromConnectionId) {
+  const box = $('#wAllRes'); box.className = 'note'; box.textContent = '正在连接服务商并读取模型列表…';
+  try {
+    const disc = await api('/api/models/discover', 'POST', fromConnectionId ? { connectionId: fromConnectionId } : { providerId: $('#wProv').value, apiKey: $('#wKey').value.trim(), baseUrl: $('#wBase').value.trim() });
+    if (!disc.ok) { box.className = 'bad'; box.textContent = '没能连上服务商：' + (disc.hint || disc.error); return; }
+    const pick = ModelHints.selectForAutoAdd(disc.models), have = new Set(sameProvider().map(m => m.modelId));
+    const fresh = pick.keep.filter(id => !have.has(id)), existing = pick.keep.length - fresh.length;
+    if (!fresh.length) { showAddAllResult([], pick.skipped, existing); return; }
+    const caps = Object.keys(CFG.catalog.capabilities);
+    const body = { providerId: $('#wProv').value, pricingMode: $('#wPricing').value, models: fresh.map(id => ({ modelId: id, capabilities: ModelHints.suggestCapabilities(id, caps) })) };
+    if (fromConnectionId) body.keyFromConnectionId = fromConnectionId;
+    else Object.assign(body, { apiKey: $('#wKey').value.trim(), baseUrl: $('#wBase').value.trim(), protocol: $('#wProto').value, envKey: $('#wEnv').value.trim() });
+    const r = await api('/api/models/batch', 'POST', body);
+    $('#wKey').value = ''; $('#w5').classList.add('done');
+    await load(false);
+    showAddAllResult(r.connections, pick.skipped, existing);
+  } catch (e) { box.className = 'bad'; box.textContent = e.message; }
+}
+$('#wAddAll').addEventListener('click', () => addAll());
+$('#wRefresh').addEventListener('click', () => { const src = sameProvider()[0]; if (src) addAll(src.connectionId); });
+function syncRefresh() { $('#wRefresh').classList.toggle('hidden', !sameProvider().length || !prov().modelsEndpoint); }
+$('#wTest').addEventListener('click', async () => {
+  if (!confirm('连接测试会真实调用所选模型一次（最多回复几个字），可能产生极少费用。是否批准这一次测试？')) return;
+  $('#wTestRes').className = 'note'; $('#wTestRes').textContent = '测试中…（大屏会转动）';
+  try {
+    const r = await api('/api/models/probe', 'POST', { ...wInput(), approvePaid: true });
+    $('#wTestRes').className = r.ok ? 'ok' : 'bad';
+    $('#wTestRes').textContent = r.ok ? `连接正常 · ${r.ms} ms · 回复「${r.reply}」` : (r.hint || '') + '（' + r.error + '）';
+    $('#w4').classList.toggle('done', r.ok);
+  } catch (e) { $('#wTestRes').className = 'bad'; $('#wTestRes').textContent = e.message; }
+});
+$('#wSave').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/models', 'POST', wInput());
+    $('#w5').classList.add('done'); $('#wSaveRes').className = 'ok'; $('#wSaveRes').textContent = '已保存：' + r.connection.displayName;
+    $('#wKey').value = ''; $('#wModel').value = ''; $('#wName').value = ''; $$('#wCaps input').forEach(x => x.checked = false);
+    await load();
+  } catch (e) { $('#wSaveRes').className = 'bad'; $('#wSaveRes').textContent = e.message; }
+});
+
+/* ======================= 模型：列表与操作 ======================= */
+function refsOf(id) { const out = []; for (const t of TEAMS) for (const r of t.roles) { if (r.primaryConnectionId === id) out.push(t.name + '/' + r.name); else if (r.fallbackConnectionIds.includes(id)) out.push(t.name + '/' + r.name + '（备用）'); } return out; }
+function renderModels() {
+  const def = CFG.settings.defaultConnectionId;
+  $('#mSum').textContent = MODELS.length ? `${MODELS.length} 个 · 可用 ${MODELS.filter(m => m.status === 'available').length}` : '';
+  $('#mList').innerHTML = MODELS.length ? MODELS.map(m => {
+    const refs = refsOf(m.connectionId);
+    return `<div class="card ${m.enabled ? '' : 'dis'}" data-id="${esc(m.connectionId)}">
+      <div class="top"><span class="name">${esc(plat(m))}${m.displayName && m.displayName !== plat(m) ? ` <span class="note">（${esc(m.displayName)}）</span>` : ''}${m.connectionId === def ? ' <span class="badge available">默认</span>' : ''}</span>
+        <span><span class="badge ${esc(m.status)}">${esc(STATUS[m.status] || m.status)}</span><span class="badge ${esc(m.pricingMode)}">${esc(PRICE[m.pricingMode])}</span></span></div>
+      <div class="note" title="编号 ${esc(m.connectionId)}">${esc(m.providerName)} · 模型 ${esc(m.modelId || '（未填写）')} · 密钥${m.hasKey ? '已保存（尾号 ' + esc(m.keyHint.replace(/[^0-9A-Za-z]/g, '')) + '）' : m.envReady ? '来自环境变量' : '未填写'}${m.price ? ' · 单价约 ' + priceText(m.price) : ' · 单价未知'}</div>
+      ${m.lastTest && !m.lastTest.ok ? `<div class="bad" style="font-size:12px">诊断：${esc(m.lastTest.hint || m.lastTest.error)}</div>` : ''}
+      <div class="caps">${(m.capabilities || []).map(c => `<span>${esc(CFG.catalog.capabilities[c] || c)}</span>`).join('') || '<span>未登记能力</span>'}</div>
+      <div class="note">团队引用：${refs.length ? esc(refs.join('、')) : '无'}</div>
+      <div class="row" style="margin-top:6px">
+        <button class="sm" data-act="test">测试 / 诊断</button>
+        <button class="sm" data-act="toggle">${m.enabled ? '停用' : '启用'}</button>
+        <button class="sm" data-act="edit">更换模型 / 编辑</button>
+        ${m.connectionId === def ? '' : '<button class="sm" data-act="default">设为默认</button>'}
+        <button class="sm danger" data-act="del">删除</button>
+        <span class="note" data-res></span>
+      </div></div>`;
+  }).join('') : '<p class="note">还没有接入模型。用左边的向导添加第一个（会自动成为默认模型）。</p>';
+}
+$('#mList').addEventListener('click', async e => {
+  const act = e.target.dataset.act; if (!act) return;
+  const card = e.target.closest('.card'), id = card.dataset.id, res = card.querySelector('[data-res]'), m = MODELS.find(x => x.connectionId === id);
+  try {
+    if (act === 'test') {
+      if (!confirm('连接测试会真实调用这个模型一次（最多回复几个字），可能产生极少费用。是否批准这一次测试？')) return;
+      res.className = 'note'; res.textContent = '测试中…';
+      const r = await api(`/api/models/${id}/test`, 'POST', { approvePaid: true });
+      res.className = r.ok ? 'ok' : 'bad'; res.textContent = r.ok ? `连接正常 · ${r.ms} ms` : (r.hint || r.error);
+      await load(false);
+    } else if (act === 'toggle') {
+      const r = await api(`/api/models/${id}/${m.enabled ? 'disable' : 'enable'}`, 'POST', {});
+      if (r.impact && r.impact.teams.length) toast('已停用。注意：' + r.impact.teams.length + ' 个团队岗位引用了它，有备用模型的岗位会自动改用备用。', 6000);
+      await load(false);
+    } else if (act === 'default') { await api('/api/settings', 'POST', { defaultConnectionId: id }); await load(false); }
+    else if (act === 'edit') editModel(m);
+    else if (act === 'del') deleteModel(m);
+  } catch (err) { res.className = 'bad'; res.textContent = err.message; }
+});
+function editModel(m) {
+  modal(`<h2>编辑：${esc(m.displayName)} <small>${esc(m.providerName)}</small></h2>
+    <div class="grid2">
+      <label>显示名称<input id="eName" value="${esc(m.displayName)}"></label>
+      <label>费用类型<select id="ePricing">${Object.entries(PRICE).map(([k, v]) => `<option value="${k}" ${k === m.pricingMode ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label>单价：每百万字约多少（${m.price ? (m.price.source === 'catalog' ? '当前用内置价目表：' : '当前用你填写的：') + priceText(m.price) : '当前未知，简单模式不会调用'}）<details class="note"><summary>说明</summary>厂商按 Token 计费，中文大约 1 个字 ≈ 1 个 Token；这里填厂商价格页上的“输入 / 输出”单价。</details><span class="row"><select id="ePriceCur"><option value="CNY" ${m.price?.currency !== 'USD' ? 'selected' : ''}>元</option><option value="USD" ${m.price?.currency === 'USD' ? 'selected' : ''}>美元</option></select><input id="ePriceIn" type="number" min="0" step="0.01" placeholder="输入" value="${m.price && m.price.source === 'admin' ? m.price.inputPerMillion : ''}" style="width:90px"><input id="ePriceOut" type="number" min="0" step="0.01" placeholder="输出" value="${m.price && m.price.source === 'admin' ? m.price.outputPerMillion : ''}" style="width:90px"></span></label>
+      <label>模型<input id="eModel" value="${esc(m.modelId)}"></label>
+      <label>更换密钥<input id="eKey" type="password" autocomplete="off" placeholder="留空保持不变"></label>
+    </div>
+    <div class="row" style="margin-top:6px"><button class="sm" id="eDisc">获取模型列表</button><select id="eSel" class="hidden"></select><span class="note" id="eNote"></span></div>
+    <label style="margin-top:8px">能力（你的声明）</label>
+    <div class="capbox" id="eCaps">${Object.entries(CFG.catalog.capabilities).map(([k, v]) => `<label class="chk"><input type="checkbox" value="${k}" ${(m.capabilities || []).includes(k) ? 'checked' : ''}> ${esc(v)}</label>`).join('')}</div>
+    <p class="note">更换模型后团队与岗位不变，旧的测试结果会作废，请重新测试。</p>
+    <div class="row" style="margin-top:10px"><button class="pri" id="eSave">保存</button><button data-close>取消</button><span id="eRes" class="note"></span></div>`);
+  $('#eDisc').onclick = async () => {
+    const r = await api('/api/models/discover', 'POST', { connectionId: m.connectionId, apiKey: $('#eKey').value.trim() });
+    if (!r.ok) { $('#eNote').textContent = r.hint || r.error; return; }
+    $('#eSel').innerHTML = '<option value="">— 选择 —</option>' + r.models.map(x => `<option>${esc(x)}</option>`).join(''); $('#eSel').classList.remove('hidden');
+  };
+  $('#eSel').onchange = () => { if ($('#eSel').value) $('#eModel').value = $('#eSel').value; };
+  $('#eSave').onclick = async () => {
+    try {
+      const body = { displayName: $('#eName').value.trim(), pricingMode: $('#ePricing').value, modelId: $('#eModel').value.trim(), capabilities: $$('#eCaps input:checked').map(x => x.value) };
+      const pin = $('#ePriceIn').value.trim(), pout = $('#ePriceOut').value.trim();
+      body.price = pin === '' && pout === '' ? null : { currency: $('#ePriceCur').value, inputPerMillion: +pin || 0, outputPerMillion: +pout || 0 };
+      if ($('#eKey').value.trim()) body.apiKey = $('#eKey').value.trim();
+      await api('/api/models/' + m.connectionId, 'PUT', body); closeModal(); await load(false); toast('已保存');
+    } catch (err) { $('#eRes').className = 'bad'; $('#eRes').textContent = err.message; }
+  };
+}
+async function deleteModel(m) {
+  const imp = await api(`/api/models/${m.connectionId}/impact`);
+  const alts = imp.alternatives;
+  modal(`<h2>删除：${esc(m.displayName)}</h2>
+    ${imp.blockers.length ? `<p class="warn">删除前请注意：</p><ul class="issues">${imp.blockers.map(b => `<li class="warn">${esc(b)}</li>`).join('')}</ul>` : '<p class="ok">没有团队、默认设置或运行中的任务依赖它，可以直接删除。</p>'}
+    ${imp.teams.length ? `<p class="note">引用它的团队岗位：${esc(imp.teams.map(t => t.teamName + '/' + t.roleName + (t.slot === 'fallback' ? '（备用）' : '')).join('、'))}</p>` : ''}
+    ${(imp.teams.length || imp.isDefault) ? `<label>改用哪个模型替代<select id="dRep"><option value="">不替代（岗位改为待分配${imp.isDefault ? '，清空默认模型' : ''}）</option>${alts.map(a => `<option value="${esc(a.connectionId)}">${esc(plat(a))}</option>`).join('')}</select></label>` : ''}
+    ${imp.runningTasks.length ? `<label class="chk" style="margin-top:8px"><input type="checkbox" id="dForce"> 我知道有 ${imp.runningTasks.length} 个运行中的任务会在下一步停止</label>` : ''}
+    <p class="note">历史任务会保留执行时用的模型信息，不受影响。</p>
+    <div class="row" style="margin-top:10px"><button class="danger" id="dGo">确认删除</button><button data-close>取消</button><span id="dRes" class="note"></span></div>`);
+  $('#dGo').onclick = async () => {
+    const rep = $('#dRep') ? $('#dRep').value : '';
+    const q = new URLSearchParams();
+    if (rep) q.set('replacement', rep); else if (imp.teams.length) q.set('detach', '1');
+    if ($('#dForce') && $('#dForce').checked) q.set('force', '1');
+    try {
+      const r = await api(`/api/models/${m.connectionId}?${q}`, 'DELETE');
+      closeModal(); await load(false);
+      toast('已删除' + (r.teamRolesUpdated ? `，更新了 ${r.teamRolesUpdated} 个团队岗位` : ''));
+    } catch (err) { $('#dRes').className = 'bad'; $('#dRes').textContent = err.message; }
+  };
+}
+
+/* ======================= 团队 ======================= */
+const modelOpts = (sel, blank = '— 未分配 —') => `<option value="">${blank}</option>` + MODELS.map(m => `<option value="${esc(m.connectionId)}" ${m.connectionId === sel ? 'selected' : ''} ${m.enabled ? '' : 'disabled'}>${esc(plat(m))}${m.enabled ? '' : '（已停用）'} · ${esc(PRICE[m.pricingMode])}</option>`).join('');
+function renderTemplates() {
+  const ready = TPL.templates;
+  $('#tTpl').innerHTML = ready.map(t => `<option value="${esc(t.templateId)}">${esc(t.name)}</option>`).join('');
+  $('#tPlanned').textContent = '规划中的团队类型（' + TPL.categories.filter(c => c.status === 'planned').length + ' 类）：' + TPL.categories.filter(c => c.status === 'planned').map(c => c.name).join('、');
+  onTpl();
+}
+function onTpl() {
+  const t = TPL.templates.find(x => x.templateId === $('#tTpl').value);
+  if (!t) return;
+  $('#tName').placeholder = t.name;
+  $('#tTplNote').innerHTML = `${esc(t.description)}<br>建议：${esc(t.suggestedCombination)}<br>交付成果：${esc(t.deliverables.join('、'))}${t.humanReviewNodes.length ? '<br>人工确认节点（记录在配置中，审批界面后续提供）：' + esc(t.humanReviewNodes.join('、')) : ''}`;
+  $('#tRoles').innerHTML = t.roles.map(r => `<div class="role" data-role="${esc(r.roleId)}">
+    <div><span class="rn">${esc(r.name)}</span> <span class="note">— ${esc(r.duty)}</span></div>
+    <div class="note">需要能力：${esc(r.requiredCapabilities.map(c => CFG.catalog.capabilities[c] || c).join('、'))}</div>
+    <div class="row end">
+      <label>主模型<select data-f="primary">${modelOpts('')}</select></label>
+      <label>备用模型<select data-f="fallback">${modelOpts('', '— 无 —')}</select></label>
+      <button class="sm" data-rec="${esc(r.roleId)}">推荐</button>
+    </div></div>`).join('');
+}
+$('#tTpl').addEventListener('change', onTpl);
+$('#tRoles').addEventListener('click', async e => {
+  const roleId = e.target.dataset.rec; if (!roleId) return;
+  const r = await api('/api/recommend', 'POST', { templateId: $('#tTpl').value, roleId });
+  showRecs(r, id => { const sel = e.target.closest('.role').querySelector('[data-f=primary]'); sel.value = id; });
+});
+function showRecs(r, onPick) {
+  modal(`<h2>模型推荐 <small>需要：${esc(r.requiredCapabilities.map(c => CFG.catalog.capabilities[c] || c).join('、') || '无特定要求')}</small></h2>
+    <p class="note">${esc(r.note)}</p>
+    ${r.recommendations.length ? r.recommendations.map(x => `<div class="rec">
+      <div class="top"><b>${esc(x.displayName)}</b> <span class="badge ${x.payment === 'yes' ? 'paid_api' : x.payment === 'no' ? 'local' : 'unknown'}">${esc(x.paymentText)}</span></div>
+      为什么推荐：<ul>${x.why.map(w => `<li>${esc(w)}</li>`).join('')}</ul>
+      适合岗位：${esc(x.suitedRoles.join('、'))}<br>
+      不足：<ul>${x.shortcomings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>
+      ${x.pairWith ? `建议搭配：${esc(x.pairWith.displayName)}（${esc(x.pairWith.reason)}）<br>` : ''}
+      <button class="sm" data-pick="${esc(x.connectionId)}">用它</button></div>`).join('') : '<p class="warn">没有可推荐的模型：请先在“模型”页接入并启用模型。</p>'}
+    <div class="row" style="margin-top:10px"><button data-close>关闭</button></div>`);
+  $$('[data-pick]').forEach(b => b.onclick = () => { onPick(b.dataset.pick); closeModal(); });
+}
+$('#tCreate').addEventListener('click', async () => {
+  const assignments = {};
+  $$('#tRoles .role').forEach(el => {
+    const p = el.querySelector('[data-f=primary]').value, f = el.querySelector('[data-f=fallback]').value;
+    assignments[el.dataset.role] = { primaryConnectionId: p || null, fallbackConnectionIds: f && f !== p ? [f] : [] };
+  });
+  try {
+    const r = await api('/api/teams', 'POST', { templateId: $('#tTpl').value, name: $('#tName').value.trim(), assignments, budgetPolicy: { mode: $('#tMode').value, allowPaidApi: $('#tPaid').checked } });
+    $('#tRes').className = 'ok'; $('#tRes').textContent = '已建立：' + r.team.name;
+    $('#tName').value = ''; await load(false);
+  } catch (e) { $('#tRes').className = 'bad'; $('#tRes').textContent = e.message; }
+});
+function renderTeams() {
+  $('#teamList').innerHTML = TEAMS.length ? TEAMS.map(t => `<div class="card" data-team="${esc(t.teamId)}">
+    <div class="top"><span class="name">${esc(t.name)}</span><span class="note">${esc(t.budgetPolicy.mode === 'free_first' ? '免费优先' : '按主模型')} · ${t.budgetPolicy.allowPaidApi ? '允许付费' : '付费需确认'}</span></div>
+    ${t.roles.map(r => `<div class="role" data-role="${esc(r.roleId)}"><span class="rn">${esc(r.name)}</span>${t.workflow.leadRoleId === r.roleId ? ' <span class="badge">主责</span>' : ''}${t.workflow.reviewRoleId === r.roleId ? ' <span class="badge">审核</span>' : ''}
+      <div class="row end"><label>主模型<select data-f="primary">${modelOpts(r.primaryConnectionId)}</select></label>
+      <label>备用模型<select data-f="fallback">${modelOpts(r.fallbackConnectionIds[0] || '', '— 无 —')}</select></label>
+      <button class="sm" data-act="rec">推荐</button></div></div>`).join('')}
+    ${t.health && t.health.issues.length ? `<ul class="issues">${t.health.issues.map(i => `<li class="${esc(i.level)}">${esc(i.text)}</li>`).join('')}</ul>` : '<p class="ok" style="font-size:12px">配置完整</p>'}
+    <div class="row" style="margin-top:6px"><button class="sm" data-act="run">用这个团队运行</button><button class="sm danger" data-act="del">删除团队</button></div>
+  </div>`).join('') : '<p class="note">还没有团队。用左边从模板建立。</p>';
+}
+$('#teamList').addEventListener('change', async e => {
+  const f = e.target.dataset.f; if (!f) return;
+  const teamId = e.target.closest('[data-team]').dataset.team, role = e.target.closest('.role');
+  const p = role.querySelector('[data-f=primary]').value, fb = role.querySelector('[data-f=fallback]').value;
+  try { await api(`/api/teams/${teamId}/roles/${role.dataset.role}`, 'PUT', { primaryConnectionId: p || null, fallbackConnectionIds: fb && fb !== p ? [fb] : [] }); await load(false); toast('岗位模型已更换'); }
+  catch (err) { toast(err.message, 5000); }
+});
+$('#teamList').addEventListener('click', async e => {
+  const act = e.target.dataset.act; if (!act) return;
+  const teamId = e.target.closest('[data-team]').dataset.team;
+  if (act === 'del') { if (!confirm('删除这个团队？（模型不受影响）')) return; await api('/api/teams/' + teamId, 'DELETE'); await load(false); }
+  if (act === 'run') { $('#nav [data-pane=run]').click(); $('#runBy').value = 'team'; onRunBy(); $('#runTeam').value = teamId; $('#task').focus(); }
+  if (act === 'rec') {
+    const role = e.target.closest('.role').dataset.role;
+    const r = await api('/api/recommend', 'POST', { teamId, roleId: role });
+    showRecs(r, async id => { await api(`/api/teams/${teamId}/roles/${role}`, 'PUT', { primaryConnectionId: id }); await load(false); });
+  }
+});
+
+/* ======================= 运行任务 ======================= */
+function onRunBy() {
+  const team = $('#runBy').value === 'team';
+  $('#runTeamL').classList.toggle('hidden', !team); $('#runAL').classList.toggle('hidden', team); $('#runBL').classList.toggle('hidden', team);
+}
+$('#runBy').addEventListener('change', onRunBy);
+function renderRunSelectors() {
+  const live = MODELS.filter(m => m.enabled);
+  const opts = live.map(m => `<option value="${esc(m.connectionId)}">${esc(plat(m))}</option>`).join('');
+  const a = $('#selA').value, b = $('#selB').value, t = $('#runTeam').value;
+  $('#selA').innerHTML = opts; $('#selB').innerHTML = opts;
+  if (a) $('#selA').value = a; if (b) $('#selB').value = b; else if (live.length > 1) $('#selB').selectedIndex = 1;
+  $('#runTeam').innerHTML = TEAMS.map(x => `<option value="${esc(x.teamId)}">${esc(x.name)}</option>`).join('') || '<option value="">（还没有团队）</option>';
+  if (t) $('#runTeam').value = t;
+  if (!TEAMS.length && $('#runBy').value === 'team' && MODELS.length) { $('#runBy').value = 'models'; onRunBy(); }
+}
 let runTimer = null;
-$('#runBtn').addEventListener('click', async () => {
+async function submitRun(approvePaid = false) {
   const task = $('#task').value.trim();
   if (!task) return toast('请先输入任务');
+  const body = { task, mode: $('#mode').value, approvePaid };
+  if ($('#runBy').value === 'team') body.teamId = $('#runTeam').value; else { body.a = $('#selA').value; body.b = $('#selB').value; }
   $('#runBtn').disabled = true;
-  try {
-    const r = await api('/api/run', 'POST', { task, a: $('#selA').value, b: $('#selB').value, mode: $('#mode').value });
-    pollRun(r.runId);
-  } catch (err) { toast(err.message, 5000); $('#runBtn').disabled = false; }
-});
+  const r = await api('/api/run', 'POST', body, { raw: true });
+  if (r.status === 402) {
+    $('#runBtn').disabled = false;
+    if (confirm(r.json.error + '\n\n是否允许本次使用？（只对这一次任务有效）')) return submitRun(true);
+    return;
+  }
+  if (r.status !== 200) { $('#runBtn').disabled = false; return toast(r.json.error || '提交失败', 6000); }
+  pollRun(r.json.runId);
+}
+$('#runBtn').addEventListener('click', () => submitRun(false).catch(e => { $('#runBtn').disabled = false; toast(e.message); }));
 function pollRun(id) {
   clearInterval(runTimer);
   const tick = async () => {
     try {
       const r = await api('/api/runs/' + id);
-      $('#runOut').innerHTML = (r.steps || []).map(s => `
-        <div class="step"><div class="hd"><span>${esc(s.label)} · ${esc(s.provider)}</span>
-        <span class="${s.status === 'error' ? 'bad' : s.status === 'done' ? 'ok' : ''}">${s.status === 'running' ? '进行中…' : s.status === 'done' ? (s.ms / 1000).toFixed(1) + 's · ' + s.tokens + ' token' : '失败'}</span></div>
-        <div class="bd">${esc(s.error || s.text || '…')}</div></div>`).join('') + (r.status === 'error' ? `<p class="bad">任务中断：${esc(r.error)}</p>` : '');
-      if (r.status !== 'running') { clearInterval(runTimer); $('#runBtn').disabled = false; }
+      $('#runOut').innerHTML = (r.team ? `<p class="note">团队：${esc(r.team.teamName)} · ${esc(r.team.assignments.map(a => a.roleName + ' → ' + (MODELS.find(m => m.connectionId === a.connectionId)?.displayName || a.connectionId) + (a.usedFallback ? '（备用）' : '')).join('；'))}</p>` : '')
+        + (r.steps || []).map(s => `<div class="step"><div class="hd"><span>${esc(s.label)} · ${esc(s.provider)}${s.model ? ' · ' + esc(s.model) : ''}</span>
+          <span class="${s.status === 'error' ? 'bad' : s.status === 'done' ? 'ok' : ''}">${s.status === 'running' ? '进行中…' : s.status === 'done' ? (s.ms / 1000).toFixed(1) + 's · ' + s.tokens + ' token' + (s.estimated ? '（估算）' : '') : '失败'}</span></div>
+          <div class="bd">${esc(s.error || s.text || '…')}</div></div>`).join('')
+        + (r.status === 'error' ? `<p class="bad">任务中断：${esc(r.error)}</p>` : r.status === 'done' ? '<p class="ok">完成</p>' : '');
+      if (r.status !== 'running') { clearInterval(runTimer); $('#runBtn').disabled = false; loadRuns(); }
     } catch (err) { clearInterval(runTimer); $('#runBtn').disabled = false; toast(err.message); }
   };
   tick(); runTimer = setInterval(tick, 1200);
 }
+async function loadRuns() {
+  try {
+    const r = await api('/api/runs');
+    const ST = { running: '运行中', done: '完成', error: '失败', interrupted: '中断', reported: '外部上报' };
+    $('#runsBody').innerHTML = r.runs.length ? r.runs.map(t => `<tr data-run="${esc(t.id)}" style="cursor:pointer"><td>${new Date(t.createdAt).toLocaleString()}</td><td>${esc(t.title)}</td>
+      <td>${esc(t.team ? t.team.teamName : (t.agents || []).map(a => a.connectionLabel).join(' / ') || (t.kind === 'external' ? '外部' : ''))}</td>
+      <td class="${t.status === 'error' ? 'e' : t.status === 'running' ? 'w' : ''}">${esc(ST[t.status] || t.status)}</td></tr>`).join('') : '<tr><td colspan="4" class="note">暂无任务</td></tr>';
+  } catch (e) { /* 忽略 */ }
+}
+$('#runsBody').addEventListener('click', e => { const tr = e.target.closest('[data-run]'); if (tr) pollRun(tr.dataset.run); });
+$('#runsRefresh').addEventListener('click', loadRuns);
 
-/* ---------- 接入示例 ---------- */
+/* ======================= 外部接入 ======================= */
+let snipTab = 'node';
 function snippets() {
-  const origin = location.origin, root = CFG.server.root.replace(/\\/g, '/');
-  const sig = (agent, st) => `node "${root}/tools/signal.js" ${agent} ${st}`;
+  const origin = location.origin;
+  const sig = (agent, st) => `node tools/signal.js ${agent} ${st}`;
   const hooks = { hooks: {
     UserPromptSubmit: [{ hooks: [{ type: 'command', command: sig('claude-code', 'start') }] }],
     PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: sig('claude-code', 'stream') }] }],
     Stop: [{ hooks: [{ type: 'command', command: sig('claude-code', 'done') }] }],
   } };
   return {
-    node: { name: '命令行 / 任意脚本', text: `# 开工\n${sig('my-ai', 'start')} "写评审流程"\n# 工作中（可反复发送，每次让大屏跳一下）\n${sig('my-ai', 'stream')}\n# 完成\n${sig('my-ai', 'done')}\n\n# 在别的电脑上发送：加 --url http://本机局域网IP:8787 --token 管理令牌`, note: '需要 Node 18+。agent 名称随便起，每个名称在大屏左侧占一行。' },
-    hooks: { name: 'Claude Code hooks', text: JSON.stringify(hooks, null, 2), note: '放进 ~/.claude/settings.json 的 hooks 字段（或项目的 .claude/settings.json）。Claude Code 开始处理提示词、每次调用工具、结束时，大屏同步转动。只上传工具名，不上传你的提示词。' },
-    curl: { name: 'curl', text: `curl -s -X POST ${origin}/api/event -H "Content-Type: application/json" -d "{\\"agent\\":\\"my-ai\\",\\"status\\":\\"start\\",\\"task\\":\\"写评审流程\\"}"`, note: 'status 可取 start / stream / done / error / info。Windows 命令提示符与 Linux/macOS 的引号写法不同，Windows 建议用 Node 命令行或 Python。' },
-    py: { name: 'Python', text: `import requests\nURL = "${origin}/api/event"\n\ndef signal(agent, status, task=None, tokens=None):\n    try:\n        requests.post(URL, json={"agent": agent, "status": status, "task": task, "tokens": tokens}, timeout=1)\n    except Exception:\n        pass  # 大屏不可用时不影响业务\n\nsignal("gpt", "start", "整理数据字典")\n# ... 调用你的模型 ...\nsignal("gpt", "done", tokens=1234)`, note: '把 signal() 包在你自己的模型调用前后即可。' },
-    js: { name: 'JavaScript', text: `const URL = "${origin}/api/event";\nconst signal = (agent, status, task, tokens) =>\n  fetch(URL, { method: "POST", headers: { "Content-Type": "application/json" },\n    body: JSON.stringify({ agent, status, task, tokens }) }).catch(() => {});\n\nsignal("kimi", "start", "校对制度文本");\n// ... 调用模型 ...\nsignal("kimi", "done", null, 980);`, note: '浏览器页面需与服务同源；Node 脚本直接可用。' },
+    node: { name: '命令行 / 任意脚本', text: `# 在 AIJAVAIS 程序目录下执行（或把 tools/signal.js 换成它的完整路径）\n${sig('my-ai', 'start')} "写评审流程"\n${sig('my-ai', 'stream')}\n${sig('my-ai', 'done')}\n\n# 需要上报凭证：加 --token 上报凭证（在右侧“上报凭证”里创建）；别的电脑再加 --url ${origin}`, note: '需要 Node 18+。agent 名称自己起，每个名称在大屏上占一行；不能与模型连接 ID 重名，也不能以 demo- 开头。' },
+    hooks: { name: 'Claude Code hooks', text: JSON.stringify(hooks, null, 2), note: '放进 ~/.claude/settings.json 的 hooks 字段，命令里的 tools/signal.js 请换成完整路径。只上传工具名，不上传提示词。' },
+    curl: { name: 'curl', text: `curl -s -X POST ${origin}/api/event -H "Content-Type: application/json" -H "x-ingest-token: 上报凭证" -d "{\\"agent\\":\\"my-ai\\",\\"status\\":\\"start\\",\\"task\\":\\"写评审流程\\"}"`, note: 'status 可取 start / stream / done / error / info；也可用新协议字段 eventType。本机发送可省略凭证。' },
+    py: { name: 'Python', text: `import requests\nURL = "${origin}/api/event"\nHEADERS = {"x-ingest-token": "上报凭证"}\n\ndef signal(agent, status, task=None, tokens=None):\n    try:\n        requests.post(URL, json={"agent": agent, "status": status, "task": task, "tokens": tokens}, headers=HEADERS, timeout=1)\n    except Exception:\n        pass  # 大屏不可用时不影响业务\n\nsignal("my-gpt", "start", "整理数据字典")\nsignal("my-gpt", "done", tokens=1234)`, note: '外部上报的数据在大屏和统计里标记为“外部上报”，不计入平台真实调用统计。' },
   };
 }
 function renderSnippet() {
@@ -274,31 +722,64 @@ $('#copySnip').addEventListener('click', () => navigator.clipboard.writeText($('
 $('#secSignal').addEventListener('click', async e => {
   const st = e.target.dataset.sig;
   if (e.target.id === 'demoBtn') { try { await api('/api/demo', 'POST', { seconds: 15 }); toast('模拟开工中，请看大屏'); } catch (err) { toast(err.message); } }
-  if (st) { try { await api('/api/event', 'POST', { agent: 'test', label: 'TEST', status: st, task: '手动测试信号', error: st === 'error' ? '这是一条测试错误' : undefined }); } catch (err) { toast(err.message); } }
+  if (st) { try { await api('/api/event', 'POST', { agent: 'test-signal', label: 'TEST', status: st, task: '手动测试信号', error: st === 'error' ? '这是一条测试错误' : undefined }); } catch (err) { toast(err.message); } }
 });
+async function loadIngest() {
+  const r = await api('/api/ingest-tokens');
+  $('#igList').innerHTML = r.tokens.length ? '<table><thead><tr><th>名称</th><th>允许的 agent</th><th>尾号</th><th></th></tr></thead><tbody>' + r.tokens.map(t => `<tr><td>${esc(t.name)}</td><td>${esc((t.agents || []).join(', ') || '不限')}</td><td>${t.fromEnv ? '环境变量' : '…' + esc(t.hint || '')}</td><td>${t.fromEnv ? '' : `<button class="sm danger" data-revoke="${esc(t.name)}">吊销</button>`}</td></tr>`).join('') + '</tbody></table>' : '<p class="note">还没有上报凭证。</p>';
+}
+$('#igCreate').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/ingest-tokens', 'POST', { name: $('#igName').value.trim(), agents: $('#igAgents').value.split(',').map(s => s.trim()).filter(Boolean) });
+    $('#igNew').classList.remove('hidden'); $('#igNew').textContent = `凭证（只显示这一次，请立即保存）：\n${r.token}`;
+    $('#igName').value = ''; $('#igAgents').value = ''; loadIngest();
+  } catch (e) { toast(e.message, 5000); }
+});
+$('#igList').addEventListener('click', async e => { const n = e.target.dataset.revoke; if (n && confirm('吊销凭证 ' + n + '？使用它的程序将无法再上报。')) { await api('/api/ingest-tokens/' + n, 'DELETE'); loadIngest(); } });
 
-/* ---------- 设置 ---------- */
+/* ======================= 设置 ======================= */
 function renderSettings() {
   const s = CFG.settings;
-  $('#setText').checked = !!s.showText; $('#setIdle').value = s.idleTimeoutSec; $('#setMax').value = s.maxTokens; $('#setTimeout').value = s.timeoutSec;
-  const lan = CFG.server.lan.length ? ' · 局域网：' + CFG.server.lan.join('、') + '（远程调用管理接口需管理令牌）' : ' · 仅本机可访问（127.0.0.1）';
-  $('#srvInfo').textContent = '服务端口 ' + CFG.server.port + lan + ' · Node ' + CFG.server.node;
+  $('#setText').checked = !!s.showText; $('#setCap').value = s.simpleRunCapCny ?? 5; $('#setIdle').value = s.idleTimeoutSec; $('#setMax').value = s.maxTokens; $('#setTimeout').value = s.timeoutSec;
+  $('#setDefault').innerHTML = '<option value="">（不设置）</option>' + MODELS.map(m => `<option value="${esc(m.connectionId)}" ${m.connectionId === s.defaultConnectionId ? 'selected' : ''}>${esc(plat(m))}</option>`).join('');
+  const lan = CFG.server.lan.length ? ' · 局域网：' + CFG.server.lan.join('、') + '（远程管理需要管理令牌）' : ' · 仅本机可访问（127.0.0.1）';
+  $('#srvInfo').textContent = '服务端口 ' + CFG.server.port + lan + ' · Node ' + CFG.server.node + (CFG.server.localTargets.length ? ' · 本地模型地址：' + CFG.server.localTargets.join('、') : '');
 }
 $('#saveSettings').addEventListener('click', async () => {
   try {
-    await api('/api/settings', 'POST', { showText: $('#setText').checked, idleTimeoutSec: +$('#setIdle').value, maxTokens: +$('#setMax').value, timeoutSec: +$('#setTimeout').value });
-    $('#setRes').className = 'res ok'; $('#setRes').textContent = '已保存'; await load();
-  } catch (err) { $('#setRes').className = 'res bad'; $('#setRes').textContent = err.message; }
+    await api('/api/settings', 'POST', { showText: $('#setText').checked, idleTimeoutSec: +$('#setIdle').value, maxTokens: +$('#setMax').value, timeoutSec: +$('#setTimeout').value, defaultConnectionId: $('#setDefault').value, simpleRunCapCny: +$('#setCap').value });
+    $('#setRes').className = 'ok'; $('#setRes').textContent = '已保存'; await load(false);
+  } catch (err) { $('#setRes').className = 'bad'; $('#setRes').textContent = err.message; }
 });
 
-/* ---------- 实时状态（SSE） ---------- */
+/* ======================= 账户与安全 ======================= */
+async function loadSessions() {
+  const r = await api('/api/auth/sessions');
+  $('#sessBody').innerHTML = r.sessions.map(x => `<tr><td>${x.kind === 'admin' ? '管理员' : '大屏观看'}${x.label ? ' · ' + esc(x.label) : ''}${x.sid === r.current ? ' <span class="badge available">当前</span>' : ''}</td><td>${esc(x.ip || '')}</td><td>${new Date(x.lastSeen).toLocaleString()}</td><td>${new Date(x.expiresAt).toLocaleString()}</td><td>${x.sid === r.current ? '' : `<button class="sm danger" data-revoke-s="${esc(x.sid)}">撤销</button>`}</td></tr>`).join('');
+}
+$('#sessBody').addEventListener('click', async e => { const sid = e.target.dataset.revokeS; if (sid) { await api('/api/auth/sessions/' + sid, 'DELETE'); loadSessions(); } });
+$('#pwSave').addEventListener('click', async () => {
+  try { const r = await api('/api/auth/password', 'POST', { current: $('#pwCur').value, next: $('#pwNew').value }); $('#pwRes').className = 'ok'; $('#pwRes').textContent = '已修改，其它设备的登录已失效（' + r.revoked + ' 个）'; $('#pwCur').value = ''; $('#pwNew').value = ''; loadSessions(); }
+  catch (e) { $('#pwRes').className = 'bad'; $('#pwRes').textContent = e.message; }
+});
+$('#logoutAll').addEventListener('click', async () => { if (confirm('退出所有设备（包括本机和大屏）？')) { await api('/api/auth/logout-all', 'POST'); location.href = '/login.html'; } });
+$('#logoutBtn').addEventListener('click', async () => { await api('/api/auth/logout', 'POST').catch(() => {}); location.href = '/login.html'; });
+$('#dlCreate').addEventListener('click', async () => {
+  const r = await api('/api/auth/display-link', 'POST', { label: $('#dlLabel').value.trim() || '大屏', hours: +$('#dlHours').value || 24 });
+  $('#dlOut').classList.remove('hidden'); $('#dlOut').textContent = location.origin + r.path + '\n' + r.note;
+  loadSessions();
+});
+
+/* ======================= 实时状态（SSE） ======================= */
 const fmtN = n => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n || 0);
+const SRC = { server: '平台观察', external: '外部上报', demo: '演示' };
 function renderLive(s) {
   const w = s.agents.filter(a => a.status === 'working').length;
   $('#dot').className = 'dot ' + (w ? 'work' : 'on');
   $('#conn').textContent = w ? w + ' 个 AI 工作中' : '已连接 · 待机';
-  $('#liveSum').textContent = `调用 ${s.totals.calls} · token ${fmtN(s.totals.tokens)} · 错误 ${s.totals.errors}`;
-  $('#liveBody').innerHTML = s.agents.length ? s.agents.map(a => `<tr><td>${esc(a.label || a.id)}${a.role ? ' <span class="note">· ' + esc(a.role) + '</span>' : ''}</td><td class="${a.status === 'working' ? 'w' : a.status === 'error' ? 'e' : ''}">${a.status === 'working' ? '工作中' : a.status === 'error' ? '出错' : '待机'}</td><td>${esc(a.task || '')}</td><td>${a.calls}</td><td>${fmtN(a.tokens)}</td><td>${a.errors}</td></tr>`).join('') : '<tr><td colspan="6" class="note">暂无信号</td></tr>';
+  const t = s.totals;
+  $('#liveSum').textContent = `真实调用 ${t.calls} · token ${fmtN(t.tokens)}（另有估算 ${fmtN(t.estimatedTokens)}） · 错误 ${t.errors} · 外部上报 ${t.reportedEvents || 0} 条`;
+  $('#liveBody').innerHTML = s.agents.length ? s.agents.map(a => `<tr><td>${esc(a.label || a.id)}${a.role ? ' <span class="note">· ' + esc(a.role) + '</span>' : ''}</td><td>${esc(SRC[a.source] || '')}</td><td class="${a.status === 'working' ? 'w' : a.status === 'error' ? 'e' : ''}">${a.status === 'working' ? '工作中' : a.status === 'error' ? '出错' : '待机'}</td><td>${esc(a.task || '')}</td><td>${a.calls}</td><td>${fmtN(a.tokens)} / ${fmtN(a.estimatedTokens)}</td><td>${a.errors}</td></tr>`).join('') : '<tr><td colspan="7" class="note">暂无信号</td></tr>';
 }
 function connect() {
   const es = new EventSource('/api/events');
@@ -306,10 +787,19 @@ function connect() {
   es.onerror = () => { $('#dot').className = 'dot'; $('#conn').textContent = '服务未连接，重试中…'; };
 }
 
-async function load() {
-  CFG = await api('/api/config');
-  if (CFG.token && !TOKEN) { /* 本机访问无需令牌 */ }
-  renderPresets(); renderProviders(); renderSnippet(); renderSettings();
+async function load(first = true) {
+  const [c, t] = await Promise.all([api('/api/config'), api('/api/teams')]);
+  CFG = c; MODELS = c.models; TEAMS = t.teams;
+  if (first) { TPL = await api('/api/team-templates'); renderWizard(); renderTemplates(); renderSnippet(); }
+  else onTpl();
+  renderModels(); renderTeams(); renderRunSelectors(); renderSettings(); renderGuide(); syncRefresh();
+}
+/* B7d：首次使用（无模型或无项目）显示两步引导 */
+async function renderGuide() {
+  let projects = 0; try { projects = ((await api('/api/v2/projects')).projects || []).length; } catch { /* 引导只是提示，读取失败不影响页面 */ }
+  const hasModel = MODELS.length > 0;
+  $('#guide').classList.toggle('hidden', hasModel && projects > 0);
+  $('#g1').className = hasModel ? 'done' : 'cur'; $('#g2').className = hasModel ? 'cur' : '';
 }
 load().then(connect).catch(err => { $('#conn').textContent = '加载失败：' + err.message; });
 </script>

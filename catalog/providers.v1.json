@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-05",
+  "note": "服务商目录（数据文件，不写死在代码或页面里）。接口地址已在 2026-11-05 对照官方文档核实；价格与免费额度一律未核实，标记为 unknown / 待验证，请以服务商官网为准。模型名不预置，由“获取模型列表”从服务商接口实时读取，或由用户填写。",
+  "providers": [
+    { "providerId": "anthropic", "name": "Anthropic（Claude）", "protocol": "anthropic", "baseUrl": "https://api.anthropic.com", "envKey": "ANTHROPIC_API_KEY", "modelsEndpoint": true, "pricingMode": "paid_api", "pricingNote": "按量付费。网页版或手机应用的会员不包含可供第三方平台调用的额度。", "simple": true },
+    { "providerId": "openai", "name": "OpenAI（ChatGPT）", "protocol": "openai", "baseUrl": "https://api.openai.com/v1", "envKey": "OPENAI_API_KEY", "modelsEndpoint": true, "pricingMode": "paid_api", "pricingNote": "按量付费。网页版会员不包含可供第三方平台调用的额度。", "simple": true },
+    { "providerId": "gemini", "name": "Google Gemini", "protocol": "openai", "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai", "envKey": "", "modelsEndpoint": true, "pricingMode": "unknown", "pricingNote": "可能提供免费额度，额度与条件待验证。", "simple": true },
+    { "providerId": "deepseek", "name": "DeepSeek", "protocol": "openai", "baseUrl": "https://api.deepseek.com", "envKey": "DEEPSEEK_API_KEY", "modelsEndpoint": true, "pricingMode": "unknown", "pricingNote": "价格与免费额度待验证。", "simple": true },
+    { "providerId": "moonshot", "name": "Kimi（月之暗面）", "protocol": "openai", "baseUrl": "https://api.moonshot.cn/v1", "envKey": "MOONSHOT_API_KEY", "modelsEndpoint": true, "pricingMode": "unknown", "pricingNote": "价格与免费额度待验证。", "simple": true },
+    { "providerId": "zhipu", "name": "智谱 GLM", "protocol": "openai", "baseUrl": "https://open.bigmodel.cn/api/paas/v4", "envKey": "", "modelsEndpoint": false, "pricingMode": "unknown", "pricingNote": "价格与免费额度待验证；模型名请按智谱控制台填写。", "simple": true },
+    { "providerId": "dashscope", "name": "通义千问（阿里云百炼）", "protocol": "openai", "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1", "envKey": "", "modelsEndpoint": true, "pricingMode": "unknown", "pricingNote": "北京地域旧接口地址，官方仍可用，建议改用业务空间专属地址（可在“高级（一般不用填）”里修改）。价格与免费额度以官网为准。", "simple": true },
+    { "providerId": "siliconflow", "name": "SiliconFlow（国际站）", "protocol": "openai", "baseUrl": "https://api.siliconflow.com/v1", "envKey": "", "modelsEndpoint": true, "pricingMode": "unknown", "pricingNote": "国际站地址；中国站地址未核实，请在高级设置里填写。价格与免费额度待验证。", "simple": true },
+    { "providerId": "ollama", "name": "本地模型（Ollama 等）", "protocol": "openai", "baseUrl": "http://localhost:11434/v1", "envKey": "", "modelsEndpoint": true, "pricingMode": "local", "pricingNote": "运行在本机，不产生费用。需要管理员在服务器上开启本地模型地址（见部署文档）。", "simple": false, "noKey": true },
+    { "providerId": "custom", "name": "自定义（任意 OpenAI 兼容接口）", "protocol": "openai", "baseUrl": "", "envKey": "", "modelsEndpoint": true, "pricingMode": "unknown", "pricingNote": "由你填写的接口决定。", "simple": false }
+  ],
+  "capabilities": {
+    "reasoning": "推理分析", "coding": "编程", "writing": "写作", "chinese": "中文", "tool_calling": "工具调用",
+    "vision": "看图", "long_context": "长上下文", "fast": "速度快", "low_cost": "低成本", "research": "资料研究", "data_analysis": "数据分析"
+  }
+}

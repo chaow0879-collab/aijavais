@@ -1,0 +1,282 @@
+{
+ "industry": "跨领域研究",
+ "seed": 3303,
+ "description": "开展一项关于城市社区老年人数字服务可及性的跨领域研究：文献梳理、数据分析计划、伦理审查要点与结论报告。",
+ "draftReply": {
+  "goal": "形成有证据、可复核的跨领域研究报告框架",
+  "roles": [
+   {
+    "roleId": "lead",
+    "name": "研究负责人",
+    "duty": "界定研究问题与方法",
+    "boundary": "不得编造数据或文献",
+    "standard": "每条结论标注证据来源",
+    "requiredCapabilities": [
+     "reasoning",
+     "writing"
+    ]
+   },
+   {
+    "roleId": "data",
+    "name": "数据分析员",
+    "duty": "制定数据分析计划",
+    "boundary": "不得接触可识别个人数据",
+    "standard": "分析方法可复现",
+    "requiredCapabilities": [
+     "data_analysis",
+     "reasoning"
+    ]
+   },
+   {
+    "roleId": "ethics",
+    "name": "伦理审查顾问",
+    "duty": "列出伦理审查要点",
+    "boundary": "不得替伦理委员会作决定",
+    "standard": "覆盖知情同意与隐私",
+    "requiredCapabilities": [
+     "reasoning"
+    ]
+   }
+  ],
+  "steps": [
+   {
+    "stepId": "scope",
+    "roleId": "lead",
+    "title": "研究设计",
+    "prompt": "[[STEP:scope]] 界定问题、假设与方法",
+    "deliverable": "研究设计",
+    "quality": "问题可检验",
+    "handoff": "previous"
+   },
+   {
+    "stepId": "analysis",
+    "roleId": "data",
+    "title": "分析计划",
+    "prompt": "[[STEP:analysis]] 制定数据分析计划",
+    "deliverable": "分析计划",
+    "quality": "方法可复现",
+    "handoff": "previous"
+   },
+   {
+    "stepId": "ethics",
+    "roleId": "ethics",
+    "title": "伦理要点",
+    "prompt": "[[STEP:ethics]] 列出伦理审查要点",
+    "deliverable": "伦理清单",
+    "quality": "覆盖隐私",
+    "handoff": "previous"
+   },
+   {
+    "stepId": "report",
+    "roleId": "lead",
+    "title": "结论报告",
+    "prompt": "[[STEP:report]] 汇总全部成果形成报告框架",
+    "deliverable": "研究报告框架",
+    "quality": "结论有证据",
+    "handoff": "all"
+   }
+  ],
+  "deliverables": [
+   "研究设计",
+   "分析计划",
+   "伦理清单",
+   "研究报告框架"
+  ],
+  "acceptance": [
+   "无编造数据",
+   "伦理要点完整",
+   "用户确认研究范围"
+  ],
+  "tools": [
+   "file_read",
+   "calculation",
+   "web_search",
+   "image_generation"
+  ],
+  "skills": [
+   "literature-review"
+  ],
+  "humanDecisions": [
+   "伦理委员会审批",
+   "确认数据来源合法"
+  ]
+ },
+ "expect": {
+  "roleIds": [
+   "lead",
+   "data",
+   "ethics"
+  ],
+  "stepIds": [
+   "scope",
+   "analysis",
+   "ethics",
+   "report"
+  ],
+  "lastHandoffFrom": [
+   "scope",
+   "analysis",
+   "ethics"
+  ],
+  "toolVerification": {
+   "file_read": "*",
+   "calculation": "*",
+   "web_search": "unverified",
+   "image_generation": "unverified"
+  }
+ },
+ "humanEdits": {
+  "projectName": "社区老年人数字服务可及性研究（人工确认）",
+  "renameRole": {
+   "roleId": "ethics",
+   "name": "研究伦理顾问"
+  },
+  "addHumanDecision": "数据仅使用公开汇总统计",
+  "keepTools": []
+ },
+ "stepOutputs": {
+  "scope": "研究问题：社区老年人获取数字政务服务的障碍与支持因素。",
+  "analysis": "分析计划：描述统计+分组比较；变量：年龄段、设备、支持渠道。",
+  "ethics": "伦理要点：知情同意、匿名化、数据最小化、退出权。",
+  "report": {
+   "sections": [
+    {
+     "heading": "研究报告框架",
+     "text": "一、问题与方法\n二、分析计划\n三、伦理要点\n四、结论（待数据）"
+    },
+    {
+     "heading": "证据说明",
+     "text": "本框架未使用任何真实个人数据。"
+    }
+   ],
+   "rows": [
+    [
+     "章节",
+     "负责人",
+     "证据要求"
+    ],
+    [
+     "问题与方法",
+     "研究负责人",
+     "文献引用"
+    ],
+    [
+     "分析计划",
+     "数据分析员",
+     "可复现脚本"
+    ],
+    [
+     "伦理要点",
+     "研究伦理顾问",
+     "审查记录"
+    ]
+   ],
+   "slides": [
+    {
+     "title": "研究框架",
+     "bullets": [
+      "问题与方法",
+      "分析计划",
+      "伦理要点"
+     ]
+    }
+   ]
+  }
+ },
+ "exports": [
+  "docx",
+  "xlsx",
+  "pptx",
+  "md"
+ ],
+ "deliverableChecks": {
+  "docx": [
+   "研究报告框架",
+   "本框架未使用任何真实个人数据。"
+  ],
+  "xlsx": [
+   [
+    "分析计划",
+    "数据分析员"
+   ]
+  ],
+  "pptx": [
+   "研究框架",
+   "伦理要点"
+  ],
+  "md": [
+   "证据说明"
+  ]
+ },
+ "malicious": {
+  "extra": {
+   "approvePaid": true,
+   "maxCost": 99999,
+   "allowedTools": [
+    "*"
+   ],
+   "toolPermissions": {
+    "granted": [
+     "*"
+    ]
+   },
+   "status": "running",
+   "ownerId": "attacker",
+   "run": true,
+   "apiKey": "sk-MALICIOUS-1234567890"
+  },
+  "roleExtra": {
+   "connectionId": "attacker-model",
+   "fallbackConnectionIds": [
+    "attacker"
+   ],
+   "permissions": [
+    "admin"
+   ]
+  },
+  "stepExtra": {
+   "toolCalls": [
+    {
+     "toolId": "code_execution",
+     "args": {
+      "code": "process.exit(1)"
+     }
+    }
+   ],
+   "skillId": "attacker-skill",
+   "approveExternalTools": true
+  }
+ },
+ "abnormal": [
+  {
+   "label": "重复岗位ID",
+   "patch": {
+    "roles": [
+     {
+      "roleId": "lead",
+      "name": "A",
+      "duty": "d",
+      "boundary": "b",
+      "standard": "s",
+      "requiredCapabilities": []
+     },
+     {
+      "roleId": "lead",
+      "name": "B",
+      "duty": "d",
+      "boundary": "b",
+      "standard": "s",
+      "requiredCapabilities": []
+     }
+    ]
+   },
+   "status": 422
+  },
+  {
+   "label": "超长目标",
+   "status": 422,
+   "goalLength": 20001
+  }
+ ],
+ "id": "cross-domain-research"
+}

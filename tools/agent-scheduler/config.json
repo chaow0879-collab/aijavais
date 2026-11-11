@@ -1,0 +1,16 @@
+{
+  "enabled": false,
+  "poll_interval_minutes": 10,
+  "lease_ttl_ms": 600000,
+  "max_snapshot_age_ms": 900000,
+  "trustedActors": {},
+  "required_jobs": [
+    "tests",
+    "browser",
+    "container"
+  ],
+  "qa_required_jobs": [
+    "HTTP",
+    "Chromium"
+  ]
+}

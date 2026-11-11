@@ -1,0 +1,4242 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-05",
+  "description": "项目立项智能指导目录；仅建议角色、流程、工具与标准，不代表工具已经安装",
+  "templates": [
+    {
+      "id": "software-development",
+      "name": "软件开发",
+      "keywords": [
+        "开发",
+        "程序",
+        "软件",
+        "代码",
+        "网站",
+        "APP",
+        "bug",
+        "后端",
+        "前端"
+      ],
+      "summary": "设计、实现和检验真实软件成果",
+      "roles": [
+        {
+          "id": "architect",
+          "name": "系统架构师",
+          "duty": "设计架构、接口、模块与技术风险",
+          "capabilities": [
+            "reasoning",
+            "coding"
+          ],
+          "required": false,
+          "standard": "接口、数据契约、边界和失败模式明确"
+        },
+        {
+          "id": "developer",
+          "name": "程序开发工程师",
+          "duty": "编写和修改真实代码",
+          "capabilities": [
+            "coding",
+            "tool_calling"
+          ],
+          "required": true,
+          "standard": "提交可运行变更，明确范围和影响"
+        },
+        {
+          "id": "reviewer",
+          "name": "独立代码审核员",
+          "duty": "识别逻辑、安全、维护性问题",
+          "capabilities": [
+            "coding",
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "列出具体文件、行号与复现条件"
+        },
+        {
+          "id": "tester",
+          "name": "测试/质量工程师",
+          "duty": "运行可执行测试与回归检查",
+          "capabilities": [
+            "tool_calling",
+            "coding"
+          ],
+          "required": false,
+          "standard": "附测试命令、实际结果及失败记录"
+        }
+      ],
+      "steps": [
+        {
+          "id": "design",
+          "title": "架构与实施方案",
+          "roleId": "architect",
+          "deliverable": "架构、接口和开发计划",
+          "quality": "解释关键取舍和接口契约",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "build",
+          "title": "编码实现",
+          "roleId": "developer",
+          "deliverable": "代码与变更清单",
+          "quality": "有真实文件与可核对的修改记录",
+          "tools": [
+            "repository_access",
+            "code_execution"
+          ]
+        },
+        {
+          "id": "review",
+          "title": "独立审核",
+          "roleId": "reviewer",
+          "deliverable": "审核意见与缺陷清单",
+          "quality": "发现问题要给出证据、优先级和修复建议",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "test",
+          "title": "验证与交付",
+          "roleId": "tester",
+          "deliverable": "测试报告和实际交付物",
+          "quality": "测试须真实执行，不得编造通过结果",
+          "tools": [
+            "code_execution"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "maturity",
+          "label": "开发阶段",
+          "options": [
+            {
+              "value": "prototype",
+              "text": "概念原型"
+            },
+            {
+              "value": "mvp",
+              "text": "可用MVP"
+            },
+            {
+              "value": "production",
+              "text": "正式运行"
+            },
+            {
+              "value": "maintenance",
+              "text": "维护修复"
+            }
+          ],
+          "defaultValue": "prototype",
+          "help": ""
+        },
+        {
+          "id": "target",
+          "label": "运行环境",
+          "options": [
+            {
+              "value": "web",
+              "text": "网页/Web"
+            },
+            {
+              "value": "desktop",
+              "text": "桌面程序"
+            },
+            {
+              "value": "mobile",
+              "text": "手机端"
+            },
+            {
+              "value": "api",
+              "text": "后端/API"
+            },
+            {
+              "value": "unknown",
+              "text": "待建议"
+            }
+          ],
+          "defaultValue": "web",
+          "help": ""
+        },
+        {
+          "id": "testLevel",
+          "label": "测试等级",
+          "options": [
+            {
+              "value": "smoke",
+              "text": "基本运行检查"
+            },
+            {
+              "value": "unit",
+              "text": "单元+集成测试"
+            },
+            {
+              "value": "e2e",
+              "text": "加端到端验收"
+            },
+            {
+              "value": "security",
+              "text": "含安全压力检查"
+            }
+          ],
+          "defaultValue": "smoke",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": "部署/删除/远程发布需单独授权"
+    },
+    {
+      "id": "ai-application",
+      "name": "AI应用/智能体开发",
+      "keywords": [
+        "AI应用",
+        "智能体",
+        "agent",
+        "MCP",
+        "多模型",
+        "工作流",
+        "AI平台"
+      ],
+      "summary": "多模型系统、Agent与MCP应用开发",
+      "roles": [
+        {
+          "id": "ai-architect",
+          "name": "AI系统架构师",
+          "duty": "设计模型路由、上下文、工具和成本策略",
+          "capabilities": [
+            "reasoning",
+            "coding"
+          ],
+          "required": true,
+          "standard": "明确模型不具备的原生能力及工具依赖"
+        },
+        {
+          "id": "integrator",
+          "name": "工具集成工程师",
+          "duty": "实现模型与MCP/工具适配",
+          "capabilities": [
+            "coding",
+            "tool_calling"
+          ],
+          "required": true,
+          "standard": "工具调用要有参数、权限和实际返回证据"
+        },
+        {
+          "id": "reviewer",
+          "name": "安全与质量审核员",
+          "duty": "验证工具边界、提示词注入及结果质量",
+          "capabilities": [
+            "reasoning",
+            "coding"
+          ],
+          "required": false,
+          "standard": "失败/费用/越权路径覆盖"
+        }
+      ],
+      "steps": [
+        {
+          "id": "design",
+          "title": "系统与能力设计",
+          "roleId": "ai-architect",
+          "deliverable": "模型能力矩阵与工作流",
+          "quality": "可解释岗位和工具选择",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "integrate",
+          "title": "实现模型和工具接入",
+          "roleId": "integrator",
+          "deliverable": "可运行调用与工具适配代码",
+          "quality": "逐工具验证真实调用",
+          "tools": [
+            "code_execution",
+            "repository_access"
+          ]
+        },
+        {
+          "id": "verify",
+          "title": "安全和质量验证",
+          "roleId": "reviewer",
+          "deliverable": "调用日志和验收结论",
+          "quality": "不得以模拟替代真实联调",
+          "tools": [
+            "code_execution"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "maturity",
+          "label": "开发阶段",
+          "options": [
+            {
+              "value": "prototype",
+              "text": "概念原型"
+            },
+            {
+              "value": "mvp",
+              "text": "可用MVP"
+            },
+            {
+              "value": "production",
+              "text": "正式运行"
+            },
+            {
+              "value": "maintenance",
+              "text": "维护修复"
+            }
+          ],
+          "defaultValue": "prototype",
+          "help": ""
+        },
+        {
+          "id": "target",
+          "label": "运行环境",
+          "options": [
+            {
+              "value": "web",
+              "text": "网页/Web"
+            },
+            {
+              "value": "desktop",
+              "text": "桌面程序"
+            },
+            {
+              "value": "mobile",
+              "text": "手机端"
+            },
+            {
+              "value": "api",
+              "text": "后端/API"
+            },
+            {
+              "value": "unknown",
+              "text": "待建议"
+            }
+          ],
+          "defaultValue": "web",
+          "help": ""
+        },
+        {
+          "id": "testLevel",
+          "label": "测试等级",
+          "options": [
+            {
+              "value": "smoke",
+              "text": "基本运行检查"
+            },
+            {
+              "value": "unit",
+              "text": "单元+集成测试"
+            },
+            {
+              "value": "e2e",
+              "text": "加端到端验收"
+            },
+            {
+              "value": "security",
+              "text": "含安全压力检查"
+            }
+          ],
+          "defaultValue": "smoke",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "management-consulting",
+      "name": "企业管理咨询",
+      "keywords": [
+        "企业管理",
+        "管理咨询",
+        "咨询方案",
+        "战略",
+        "管理制度",
+        "人力资源"
+      ],
+      "summary": "组织、绩效、人才、制度等综合咨询",
+      "roles": [
+        {
+          "id": "consultant",
+          "name": "咨询项目负责人",
+          "duty": "厘清目标、诊断问题、分配咨询工作",
+          "capabilities": [
+            "reasoning",
+            "writing"
+          ],
+          "required": true,
+          "standard": "事实、推断和问题边界分开"
+        },
+        {
+          "id": "specialist",
+          "name": "专业方案设计师",
+          "duty": "建立专业框架、备选方案与实施路径",
+          "capabilities": [
+            "reasoning",
+            "writing"
+          ],
+          "required": true,
+          "standard": "指标、权责、方案必须可操作"
+        },
+        {
+          "id": "analyst",
+          "name": "经营/资料分析师",
+          "duty": "核对组织数据及假设",
+          "capabilities": [
+            "data_analysis",
+            "research"
+          ],
+          "required": false,
+          "standard": "数据有口径、来源和限制"
+        },
+        {
+          "id": "reviewer",
+          "name": "独立方案审核员",
+          "duty": "核查逻辑、适用性与跨模块一致性",
+          "capabilities": [
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "指出矛盾、风险和证据缺口"
+        }
+      ],
+      "steps": [
+        {
+          "id": "diagnose",
+          "title": "现状诊断",
+          "roleId": "consultant",
+          "deliverable": "问题树与材料缺口清单",
+          "quality": "区分事实与假设",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "analysis",
+          "title": "资料和指标分析",
+          "roleId": "analyst",
+          "deliverable": "证据与指标表",
+          "quality": "有来源和数据口径",
+          "tools": [
+            "spreadsheet"
+          ]
+        },
+        {
+          "id": "design",
+          "title": "管理方案设计",
+          "roleId": "specialist",
+          "deliverable": "方案、制度和路线图",
+          "quality": "角色/流程/衡量标准完整",
+          "tools": [
+            "docx_generation"
+          ]
+        },
+        {
+          "id": "review",
+          "title": "一致性审查",
+          "roleId": "reviewer",
+          "deliverable": "风险与修订清单",
+          "quality": "核对跨模块权责与落地成本",
+          "tools": [
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "consultTopic",
+          "label": "咨询主题",
+          "options": [
+            {
+              "value": "strategy",
+              "text": "战略经营"
+            },
+            {
+              "value": "organization",
+              "text": "组织架构"
+            },
+            {
+              "value": "hr",
+              "text": "人力资源"
+            },
+            {
+              "value": "process",
+              "text": "流程制度"
+            },
+            {
+              "value": "performance",
+              "text": "绩效管理"
+            },
+            {
+              "value": "mixed",
+              "text": "综合咨询"
+            }
+          ],
+          "defaultValue": "strategy",
+          "help": ""
+        },
+        {
+          "id": "diagnosis",
+          "label": "资料完整程度",
+          "options": [
+            {
+              "value": "none",
+              "text": "只有问题描述"
+            },
+            {
+              "value": "some",
+              "text": "有部分制度/数据"
+            },
+            {
+              "value": "full",
+              "text": "材料较充分"
+            }
+          ],
+          "defaultValue": "none",
+          "help": ""
+        },
+        {
+          "id": "reportMode",
+          "label": "主要成果",
+          "options": [
+            {
+              "value": "word",
+              "text": "正式方案Word"
+            },
+            {
+              "value": "deck",
+              "text": "汇报PPT"
+            },
+            {
+              "value": "package",
+              "text": "方案+表格+PPT"
+            }
+          ],
+          "defaultValue": "word",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "management-system",
+      "name": "管理体系建设",
+      "keywords": [
+        "管理体系",
+        "制度体系",
+        "流程体系",
+        "ISO体系",
+        "管控体系",
+        "管理标准"
+      ],
+      "summary": "管理制度、流程、内控及标准体系",
+      "roles": [
+        {
+          "id": "system-designer",
+          "name": "体系设计负责人",
+          "duty": "确定体系范围、框架和治理逻辑",
+          "capabilities": [
+            "reasoning",
+            "writing"
+          ],
+          "required": true,
+          "standard": "明确制度层级、覆盖范围和治理责任"
+        },
+        {
+          "id": "process-specialist",
+          "name": "流程与制度专家",
+          "duty": "设计SOP、权限与记录表",
+          "capabilities": [
+            "writing",
+            "reasoning"
+          ],
+          "required": true,
+          "standard": "各流程输入、输出、责任人可追溯"
+        },
+        {
+          "id": "compliance-reviewer",
+          "name": "标准适配审核员",
+          "duty": "核实适用标准与证据",
+          "capabilities": [
+            "reasoning",
+            "research"
+          ],
+          "required": false,
+          "standard": "标准条款必须来自用户或可信来源"
+        }
+      ],
+      "steps": [
+        {
+          "id": "scope",
+          "title": "界定体系边界",
+          "roleId": "system-designer",
+          "deliverable": "体系蓝图、边界与目录",
+          "quality": "识别关键业务过程",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "create",
+          "title": "建立制度与流程",
+          "roleId": "process-specialist",
+          "deliverable": "制度、SOP、表单",
+          "quality": "流程责任和接口明确",
+          "tools": [
+            "docx_generation",
+            "spreadsheet"
+          ]
+        },
+        {
+          "id": "audit",
+          "title": "标准符合性检查",
+          "roleId": "compliance-reviewer",
+          "deliverable": "差距清单与实施计划",
+          "quality": "不虚构认证或合规结论",
+          "tools": [
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "consultTopic",
+          "label": "咨询主题",
+          "options": [
+            {
+              "value": "strategy",
+              "text": "战略经营"
+            },
+            {
+              "value": "organization",
+              "text": "组织架构"
+            },
+            {
+              "value": "hr",
+              "text": "人力资源"
+            },
+            {
+              "value": "process",
+              "text": "流程制度"
+            },
+            {
+              "value": "performance",
+              "text": "绩效管理"
+            },
+            {
+              "value": "mixed",
+              "text": "综合咨询"
+            }
+          ],
+          "defaultValue": "strategy",
+          "help": ""
+        },
+        {
+          "id": "diagnosis",
+          "label": "资料完整程度",
+          "options": [
+            {
+              "value": "none",
+              "text": "只有问题描述"
+            },
+            {
+              "value": "some",
+              "text": "有部分制度/数据"
+            },
+            {
+              "value": "full",
+              "text": "材料较充分"
+            }
+          ],
+          "defaultValue": "none",
+          "help": ""
+        },
+        {
+          "id": "reportMode",
+          "label": "主要成果",
+          "options": [
+            {
+              "value": "word",
+              "text": "正式方案Word"
+            },
+            {
+              "value": "deck",
+              "text": "汇报PPT"
+            },
+            {
+              "value": "package",
+              "text": "方案+表格+PPT"
+            }
+          ],
+          "defaultValue": "word",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": "未经核验不得宣称符合某认证标准"
+    },
+    {
+      "id": "organization-design",
+      "name": "组织结构设计",
+      "keywords": [
+        "组织架构",
+        "组织结构",
+        "职能型",
+        "事业部",
+        "矩阵",
+        "部门职责",
+        "权责"
+      ],
+      "summary": "组织结构类型、部门职责和权责边界设计",
+      "roles": [
+        {
+          "id": "org-designer",
+          "name": "组织设计专家",
+          "duty": "设计组织结构、权责与岗位编制",
+          "capabilities": [
+            "reasoning",
+            "writing"
+          ],
+          "required": true,
+          "standard": "组织关系、指挥链、职责边界必须一致"
+        },
+        {
+          "id": "business-analyst",
+          "name": "业务流程分析师",
+          "duty": "分析关键决策、跨部门协作与瓶颈",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": false,
+          "standard": "业务场景必须具体"
+        },
+        {
+          "id": "challenger",
+          "name": "权责独立审查员",
+          "duty": "检查双重汇报、推诿及管理跨度",
+          "capabilities": [
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "指出具体冲突场景与调整方案"
+        }
+      ],
+      "steps": [
+        {
+          "id": "diagnose",
+          "title": "业务和组织现状诊断",
+          "roleId": "business-analyst",
+          "deliverable": "现状问题和关键决策点",
+          "quality": "描述谁决策、谁负责及审批链",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "structure",
+          "title": "设计组织架构",
+          "roleId": "org-designer",
+          "deliverable": "结构图、职责表和权责边界",
+          "quality": "不同组织形态图准确且权限一致",
+          "tools": [
+            "diagram_generation",
+            "docx_generation"
+          ]
+        },
+        {
+          "id": "challenge",
+          "title": "权责冲突审查",
+          "roleId": "challenger",
+          "deliverable": "冲突场景及改进建议",
+          "quality": "包含跨部门实际案例",
+          "tools": [
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "companySize",
+          "label": "组织规模",
+          "options": [
+            {
+              "value": "under50",
+              "text": "50人以下"
+            },
+            {
+              "value": "50to300",
+              "text": "50–300人"
+            },
+            {
+              "value": "300to1000",
+              "text": "300–1000人"
+            },
+            {
+              "value": "over1000",
+              "text": "1000人以上"
+            },
+            {
+              "value": "unknown",
+              "text": "尚不确定"
+            }
+          ],
+          "defaultValue": "under50",
+          "help": ""
+        },
+        {
+          "id": "structureType",
+          "label": "拟研究组织形态",
+          "options": [
+            {
+              "value": "compare",
+              "text": "多结构对比"
+            },
+            {
+              "value": "functional",
+              "text": "职能型"
+            },
+            {
+              "value": "line-functional",
+              "text": "直线职能型"
+            },
+            {
+              "value": "divisional",
+              "text": "事业部制"
+            },
+            {
+              "value": "matrix",
+              "text": "矩阵型"
+            },
+            {
+              "value": "custom",
+              "text": "自定义"
+            }
+          ],
+          "defaultValue": "compare",
+          "help": ""
+        },
+        {
+          "id": "deliverable",
+          "label": "主要交付",
+          "options": [
+            {
+              "value": "docx",
+              "text": "Word方案"
+            },
+            {
+              "value": "pptx",
+              "text": "PPT汇报"
+            },
+            {
+              "value": "xlsx",
+              "text": "Excel权责表"
+            },
+            {
+              "value": "bundle",
+              "text": "Word+PPT+表格"
+            }
+          ],
+          "defaultValue": "docx",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "qualification-system",
+      "name": "任职资格体系设计",
+      "keywords": [
+        "任职资格",
+        "行为成果",
+        "素质能力",
+        "知识技能",
+        "岗位等级",
+        "资格等级"
+      ],
+      "summary": "岗位通道等级与任职资格标准设计",
+      "roles": [
+        {
+          "id": "qualification-designer",
+          "name": "任职资格专家",
+          "duty": "设计通道等级、标准及证据框架",
+          "capabilities": [
+            "reasoning",
+            "writing"
+          ],
+          "required": true,
+          "standard": "行为成果、素质、知识技能清晰分开"
+        },
+        {
+          "id": "hr-analyst",
+          "name": "岗位与人才分析师",
+          "duty": "分析岗位价值、关键行为和成长路径",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": false,
+          "standard": "依据岗位资料、岗位族及等级"
+        },
+        {
+          "id": "qa-reviewer",
+          "name": "标准一致性审核员",
+          "duty": "检查跨岗位、跨等级可比性",
+          "capabilities": [
+            "reasoning",
+            "writing"
+          ],
+          "required": false,
+          "standard": "评分锚点一致、证据要求可验证"
+        }
+      ],
+      "steps": [
+        {
+          "id": "job",
+          "title": "岗位与等级拆解",
+          "roleId": "hr-analyst",
+          "deliverable": "岗位族、等级、能力要素",
+          "quality": "不同等级边界清晰",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "standards",
+          "title": "资格标准建设",
+          "roleId": "qualification-designer",
+          "deliverable": "行为成果/素质/知识技能标准与评分表",
+          "quality": "采用统一评分尺度，行为成果具备举证要求",
+          "tools": [
+            "docx_generation",
+            "spreadsheet"
+          ]
+        },
+        {
+          "id": "calibration",
+          "title": "评分一致性检验",
+          "roleId": "qa-reviewer",
+          "deliverable": "校准案例与风险清单",
+          "quality": "描述不能把素质泛化为成果",
+          "tools": [
+            "spreadsheet"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "levels",
+          "label": "通道等级数量",
+          "options": [
+            {
+              "value": "3",
+              "text": "3级"
+            },
+            {
+              "value": "5",
+              "text": "5级"
+            },
+            {
+              "value": "7",
+              "text": "7级"
+            },
+            {
+              "value": "custom",
+              "text": "自定义"
+            }
+          ],
+          "defaultValue": "3",
+          "help": ""
+        },
+        {
+          "id": "scoring",
+          "label": "评分方法",
+          "options": [
+            {
+              "value": "5point",
+              "text": "统一五档"
+            },
+            {
+              "value": "pass",
+              "text": "达标/未达标"
+            },
+            {
+              "value": "custom",
+              "text": "自定义标准"
+            }
+          ],
+          "defaultValue": "5point",
+          "help": ""
+        },
+        {
+          "id": "evidence",
+          "label": "行为成果举证",
+          "options": [
+            {
+              "value": "required",
+              "text": "逐级举证"
+            },
+            {
+              "value": "sample",
+              "text": "抽样举证"
+            },
+            {
+              "value": "design",
+              "text": "先设计举证规则"
+            }
+          ],
+          "defaultValue": "required",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "performance-management",
+      "name": "绩效管理体系",
+      "keywords": [
+        "绩效",
+        "KPI",
+        "OKR",
+        "考核",
+        "绩效指标",
+        "评价表"
+      ],
+      "summary": "绩效指标与考核机制",
+      "roles": [
+        {
+          "id": "performance-designer",
+          "name": "绩效体系设计师",
+          "duty": "设计目标、指标、周期、评价规则",
+          "capabilities": [
+            "reasoning",
+            "writing"
+          ],
+          "required": true,
+          "standard": "指标可衡量，口径和责任主体明确"
+        },
+        {
+          "id": "data-analyst",
+          "name": "绩效数据分析师",
+          "duty": "测算权重、阈值及指标可得性",
+          "capabilities": [
+            "data_analysis"
+          ],
+          "required": false,
+          "standard": "公式和数据源可追踪"
+        },
+        {
+          "id": "reviewer",
+          "name": "公平性审核员",
+          "duty": "审查激励扭曲、内外部一致性",
+          "capabilities": [
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "识别不可控指标与反向激励"
+        }
+      ],
+      "steps": [
+        {
+          "id": "kpi",
+          "title": "目标指标拆解",
+          "roleId": "performance-designer",
+          "deliverable": "指标树与责任表",
+          "quality": "明确指标公式、权重、目标值",
+          "tools": [
+            "spreadsheet"
+          ]
+        },
+        {
+          "id": "calc",
+          "title": "指标与考核表建模",
+          "roleId": "data-analyst",
+          "deliverable": "可编辑Excel评分表",
+          "quality": "数值公式可复算，缺失值处理清楚",
+          "tools": [
+            "xlsx_generation"
+          ]
+        },
+        {
+          "id": "fairness",
+          "title": "评价公平性检查",
+          "roleId": "reviewer",
+          "deliverable": "公平性与风险意见",
+          "quality": "关键风险有具体示例",
+          "tools": [
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "cycle",
+          "label": "考核周期",
+          "options": [
+            {
+              "value": "monthly",
+              "text": "月度"
+            },
+            {
+              "value": "quarterly",
+              "text": "季度"
+            },
+            {
+              "value": "semiannual",
+              "text": "半年度"
+            },
+            {
+              "value": "annual",
+              "text": "年度"
+            }
+          ],
+          "defaultValue": "monthly",
+          "help": ""
+        },
+        {
+          "id": "method",
+          "label": "指标框架",
+          "options": [
+            {
+              "value": "kpi",
+              "text": "KPI"
+            },
+            {
+              "value": "okr",
+              "text": "OKR"
+            },
+            {
+              "value": "mixed",
+              "text": "KPI+OKR"
+            }
+          ],
+          "defaultValue": "kpi",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "engineering-design",
+      "name": "工程设计",
+      "keywords": [
+        "工程设计",
+        "土木",
+        "机械",
+        "电气",
+        "施工",
+        "结构计算",
+        "工艺设计"
+      ],
+      "summary": "建筑、机械、电气和工艺等工程方案",
+      "roles": [
+        {
+          "id": "engineering-lead",
+          "name": "专业工程设计负责人",
+          "duty": "明确工程边界、规范、设计荷载及假设",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": true,
+          "standard": "参数来源、计算条件与版本可追溯"
+        },
+        {
+          "id": "technical-designer",
+          "name": "工程方案设计师",
+          "duty": "完成方案、计算与图纸说明",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": true,
+          "standard": "计算可复现，设计约束清楚"
+        },
+        {
+          "id": "independent-checker",
+          "name": "独立工程复核",
+          "duty": "核验关键计算、规范版本与安全裕度",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": false,
+          "standard": "危险工况由有资质人员最终审查"
+        }
+      ],
+      "steps": [
+        {
+          "id": "inputs",
+          "title": "工程输入与规范识别",
+          "roleId": "engineering-lead",
+          "deliverable": "输入参数清单、适用规范与缺失项",
+          "quality": "未知标准必须明确标记并请求确认",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "design",
+          "title": "计算与技术方案",
+          "roleId": "technical-designer",
+          "deliverable": "方案、计算书及图纸需求",
+          "quality": "计算步骤可复核，不虚构规范",
+          "tools": [
+            "spreadsheet",
+            "diagram_generation"
+          ]
+        },
+        {
+          "id": "verify",
+          "title": "独立复核及风险提示",
+          "roleId": "independent-checker",
+          "deliverable": "复核记录、风险清单",
+          "quality": "高风险成果提示专业人员签审",
+          "tools": [
+            "calculation",
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "discipline",
+          "label": "工程类别",
+          "options": [
+            {
+              "value": "civil",
+              "text": "建筑/土木"
+            },
+            {
+              "value": "mechanical",
+              "text": "机械/制造"
+            },
+            {
+              "value": "electrical",
+              "text": "电气/控制"
+            },
+            {
+              "value": "industrial",
+              "text": "工业/工艺"
+            },
+            {
+              "value": "other",
+              "text": "其他"
+            }
+          ],
+          "defaultValue": "civil",
+          "help": ""
+        },
+        {
+          "id": "stage",
+          "label": "工程阶段",
+          "options": [
+            {
+              "value": "concept",
+              "text": "概念设计"
+            },
+            {
+              "value": "preliminary",
+              "text": "初步设计"
+            },
+            {
+              "value": "detailed",
+              "text": "详细设计"
+            },
+            {
+              "value": "review",
+              "text": "设计复核"
+            }
+          ],
+          "defaultValue": "concept",
+          "help": ""
+        },
+        {
+          "id": "codes",
+          "label": "适用标准来源",
+          "options": [
+            {
+              "value": "user",
+              "text": "用户提供明确规范"
+            },
+            {
+              "value": "region",
+              "text": "待确定地域规范"
+            },
+            {
+              "value": "internal",
+              "text": "内部技术标准"
+            },
+            {
+              "value": "unknown",
+              "text": "尚未确定（需澄清）"
+            }
+          ],
+          "defaultValue": "user",
+          "help": ""
+        },
+        {
+          "id": "safety",
+          "label": "安全后果",
+          "options": [
+            {
+              "value": "low",
+              "text": "一般方案研究"
+            },
+            {
+              "value": "medium",
+              "text": "影响使用性能"
+            },
+            {
+              "value": "high",
+              "text": "涉及人身、结构或重大损失"
+            }
+          ],
+          "defaultValue": "low",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": "涉及人身安全的工程设计必须由相应有资质的专业人员验证，AI不能代替签审"
+    },
+    {
+      "id": "product-design",
+      "name": "产品研发设计",
+      "keywords": [
+        "产品设计",
+        "硬件研发",
+        "制造设计",
+        "结构设计",
+        "BOM",
+        "研发"
+      ],
+      "summary": "产品研发、制造方案与工艺设计",
+      "roles": [
+        {
+          "id": "product-owner",
+          "name": "产品负责人",
+          "duty": "确认用户需求与功能边界",
+          "capabilities": [
+            "reasoning"
+          ],
+          "required": true,
+          "standard": "需求验收标准明确"
+        },
+        {
+          "id": "designer",
+          "name": "产品/制造设计师",
+          "duty": "功能方案、结构和部件选型",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": true,
+          "standard": "方案与材料约束一致"
+        },
+        {
+          "id": "manufacturing-reviewer",
+          "name": "工艺可制造性审核员",
+          "duty": "分析可制造性、成本及测试计划",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": false,
+          "standard": "设计变更有版本记录"
+        }
+      ],
+      "steps": [
+        {
+          "id": "requirements",
+          "title": "需求规格",
+          "roleId": "product-owner",
+          "deliverable": "产品需求规格书",
+          "quality": "明确目标用户与可量化指标",
+          "tools": [
+            "docx_generation"
+          ]
+        },
+        {
+          "id": "prototype",
+          "title": "方案设计",
+          "roleId": "designer",
+          "deliverable": "方案/材料/BOM草案",
+          "quality": "可对照输入逐项验证",
+          "tools": [
+            "diagram_generation",
+            "spreadsheet"
+          ]
+        },
+        {
+          "id": "detailed-review",
+          "title": "工艺与验证评审",
+          "roleId": "manufacturing-reviewer",
+          "deliverable": "DFM风险与试验清单",
+          "quality": "量产前应真实测试",
+          "tools": [
+            "spreadsheet"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "discipline",
+          "label": "工程类别",
+          "options": [
+            {
+              "value": "civil",
+              "text": "建筑/土木"
+            },
+            {
+              "value": "mechanical",
+              "text": "机械/制造"
+            },
+            {
+              "value": "electrical",
+              "text": "电气/控制"
+            },
+            {
+              "value": "industrial",
+              "text": "工业/工艺"
+            },
+            {
+              "value": "other",
+              "text": "其他"
+            }
+          ],
+          "defaultValue": "civil",
+          "help": ""
+        },
+        {
+          "id": "stage",
+          "label": "工程阶段",
+          "options": [
+            {
+              "value": "concept",
+              "text": "概念设计"
+            },
+            {
+              "value": "preliminary",
+              "text": "初步设计"
+            },
+            {
+              "value": "detailed",
+              "text": "详细设计"
+            },
+            {
+              "value": "review",
+              "text": "设计复核"
+            }
+          ],
+          "defaultValue": "concept",
+          "help": ""
+        },
+        {
+          "id": "codes",
+          "label": "适用标准来源",
+          "options": [
+            {
+              "value": "user",
+              "text": "用户提供明确规范"
+            },
+            {
+              "value": "region",
+              "text": "待确定地域规范"
+            },
+            {
+              "value": "internal",
+              "text": "内部技术标准"
+            },
+            {
+              "value": "unknown",
+              "text": "尚未确定（需澄清）"
+            }
+          ],
+          "defaultValue": "user",
+          "help": ""
+        },
+        {
+          "id": "safety",
+          "label": "安全后果",
+          "options": [
+            {
+              "value": "low",
+              "text": "一般方案研究"
+            },
+            {
+              "value": "medium",
+              "text": "影响使用性能"
+            },
+            {
+              "value": "high",
+              "text": "涉及人身、结构或重大损失"
+            }
+          ],
+          "defaultValue": "low",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "ppt-production",
+      "name": "PPT制作",
+      "keywords": [
+        "PPT",
+        "幻灯片",
+        "演示稿",
+        "路演",
+        "汇报演示",
+        "课件"
+      ],
+      "summary": "策划、制作、渲染和检查可编辑演示文稿",
+      "roles": [
+        {
+          "id": "storyline",
+          "name": "内容策划师",
+          "duty": "把受众目标转成有逻辑的故事线",
+          "capabilities": [
+            "writing",
+            "reasoning"
+          ],
+          "required": true,
+          "standard": "一页一结论，逻辑递进"
+        },
+        {
+          "id": "slide-maker",
+          "name": "版式与文件制作师",
+          "duty": "生成可编辑PPTX并配置图表",
+          "capabilities": [
+            "writing",
+            "tool_calling"
+          ],
+          "required": true,
+          "standard": "真实可编辑PPTX，不用文本冒充"
+        },
+        {
+          "id": "visual-reviewer",
+          "name": "版式质量审核员",
+          "duty": "渲染检查溢出、对齐与图表准确性",
+          "capabilities": [
+            "vision",
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "以渲染结果和数据核查为证据"
+        }
+      ],
+      "steps": [
+        {
+          "id": "outline",
+          "title": "内容结构规划",
+          "roleId": "storyline",
+          "deliverable": "逐页提纲及主结论",
+          "quality": "符合受众和表达目的",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "build",
+          "title": "生成可编辑PPTX",
+          "roleId": "slide-maker",
+          "deliverable": "PPTX文件和图表资源",
+          "quality": "文本图形优先保持可编辑",
+          "tools": [
+            "pptx_generation",
+            "chart_generation"
+          ]
+        },
+        {
+          "id": "render",
+          "title": "渲染与版式质检",
+          "roleId": "visual-reviewer",
+          "deliverable": "渲染预览和修改清单",
+          "quality": "检查溢出、遮挡、字体、页数",
+          "tools": [
+            "slide_render",
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "slideCount",
+          "label": "页数范围",
+          "options": [
+            {
+              "value": "5-10",
+              "text": "5–10页"
+            },
+            {
+              "value": "11-20",
+              "text": "11–20页"
+            },
+            {
+              "value": "21-40",
+              "text": "21–40页"
+            },
+            {
+              "value": "40+",
+              "text": "40页以上"
+            }
+          ],
+          "defaultValue": "5-10",
+          "help": ""
+        },
+        {
+          "id": "audience",
+          "label": "汇报对象",
+          "options": [
+            {
+              "value": "leadership",
+              "text": "管理层"
+            },
+            {
+              "value": "client",
+              "text": "客户"
+            },
+            {
+              "value": "employees",
+              "text": "员工"
+            },
+            {
+              "value": "public",
+              "text": "公众"
+            }
+          ],
+          "defaultValue": "leadership",
+          "help": ""
+        },
+        {
+          "id": "style",
+          "label": "设计风格",
+          "options": [
+            {
+              "value": "business",
+              "text": "简洁商务"
+            },
+            {
+              "value": "scifi",
+              "text": "科技未来"
+            },
+            {
+              "value": "academic",
+              "text": "学术严谨"
+            },
+            {
+              "value": "training",
+              "text": "教学培训"
+            }
+          ],
+          "defaultValue": "business",
+          "help": ""
+        },
+        {
+          "id": "editable",
+          "label": "内容可编辑程度",
+          "options": [
+            {
+              "value": "all",
+              "text": "全量可编辑"
+            },
+            {
+              "value": "mostly",
+              "text": "尽量可编辑"
+            },
+            {
+              "value": "visual",
+              "text": "视觉优先，可接受部分图片化"
+            }
+          ],
+          "defaultValue": "all",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "document-production",
+      "name": "Word文档与制度制作",
+      "keywords": [
+        "Word",
+        "文档排版",
+        "合同模板",
+        "制度文件",
+        "通知",
+        "DOCX"
+      ],
+      "summary": "专业 Word 文档制作及排版",
+      "roles": [
+        {
+          "id": "document-designer",
+          "name": "文档撰写专家",
+          "duty": "设计结构和专业内容",
+          "capabilities": [
+            "writing",
+            "reasoning"
+          ],
+          "required": true,
+          "standard": "术语清楚、章节完整"
+        },
+        {
+          "id": "formatter",
+          "name": "排版制作师",
+          "duty": "生成可编辑DOCX并统一样式",
+          "capabilities": [
+            "writing",
+            "tool_calling"
+          ],
+          "required": true,
+          "standard": "分页、表格及字体符合要求"
+        },
+        {
+          "id": "proofreader",
+          "name": "审校员",
+          "duty": "核查事实、格式、遗漏",
+          "capabilities": [
+            "writing",
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "保留可追踪修订意见"
+        }
+      ],
+      "steps": [
+        {
+          "id": "draft",
+          "title": "内容结构和初稿",
+          "roleId": "document-designer",
+          "deliverable": "文档初稿",
+          "quality": "覆盖要求且层次合理",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "format",
+          "title": "DOCX制作",
+          "roleId": "formatter",
+          "deliverable": "可编辑DOCX",
+          "quality": "标题、字体、页边距、表格检查",
+          "tools": [
+            "docx_generation"
+          ]
+        },
+        {
+          "id": "proof",
+          "title": "内容和排版检查",
+          "roleId": "proofreader",
+          "deliverable": "审校记录",
+          "quality": "不得虚报生成成功",
+          "tools": [
+            "document_render"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "length",
+          "label": "输出篇幅",
+          "options": [
+            {
+              "value": "short",
+              "text": "简短"
+            },
+            {
+              "value": "medium",
+              "text": "中等"
+            },
+            {
+              "value": "long",
+              "text": "完整详尽"
+            }
+          ],
+          "defaultValue": "short",
+          "help": ""
+        },
+        {
+          "id": "formality",
+          "label": "正式程度",
+          "options": [
+            {
+              "value": "working",
+              "text": "内部讨论稿"
+            },
+            {
+              "value": "formal",
+              "text": "正式文件"
+            },
+            {
+              "value": "published",
+              "text": "对外发布材料"
+            }
+          ],
+          "defaultValue": "working",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "excel-analysis",
+      "name": "Excel和数据分析",
+      "keywords": [
+        "Excel",
+        "表格",
+        "xlsx",
+        "数据分析",
+        "数据清洗",
+        "公式"
+      ],
+      "summary": "数据清洗、可编辑报表与分析模型",
+      "roles": [
+        {
+          "id": "analyst",
+          "name": "数据分析师",
+          "duty": "定义指标、字段和分析假设",
+          "capabilities": [
+            "data_analysis"
+          ],
+          "required": true,
+          "standard": "来源和口径完整"
+        },
+        {
+          "id": "model-builder",
+          "name": "表格模型师",
+          "duty": "创建公式、图表与可编辑XLSX",
+          "capabilities": [
+            "data_analysis",
+            "tool_calling"
+          ],
+          "required": true,
+          "standard": "公式真实可计算，不用硬编码结果冒充"
+        },
+        {
+          "id": "validator",
+          "name": "数据质量核验员",
+          "duty": "核对公式和异常值",
+          "capabilities": [
+            "data_analysis"
+          ],
+          "required": false,
+          "standard": "抽样复算和跨表一致性"
+        }
+      ],
+      "steps": [
+        {
+          "id": "schema",
+          "title": "数据结构规划",
+          "roleId": "analyst",
+          "deliverable": "字段字典和指标说明",
+          "quality": "明确缺失/异常值处理",
+          "tools": [
+            "spreadsheet"
+          ]
+        },
+        {
+          "id": "workbook",
+          "title": "XLSX建模",
+          "roleId": "model-builder",
+          "deliverable": "可编辑工作簿",
+          "quality": "真实公式、样式和数据验证",
+          "tools": [
+            "xlsx_generation"
+          ]
+        },
+        {
+          "id": "check",
+          "title": "公式与结果复核",
+          "roleId": "validator",
+          "deliverable": "核验记录",
+          "quality": "核心计算可复现",
+          "tools": [
+            "calculation"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "dataVolume",
+          "label": "数据规模",
+          "options": [
+            {
+              "value": "small",
+              "text": "少量表格"
+            },
+            {
+              "value": "medium",
+              "text": "几千至几万行"
+            },
+            {
+              "value": "large",
+              "text": "大量数据或多文件"
+            }
+          ],
+          "defaultValue": "small",
+          "help": ""
+        },
+        {
+          "id": "verify",
+          "label": "核验要求",
+          "options": [
+            {
+              "value": "basic",
+              "text": "公式/格式检查"
+            },
+            {
+              "value": "reconcile",
+              "text": "跨表对账"
+            },
+            {
+              "value": "audit",
+              "text": "审计级溯源"
+            }
+          ],
+          "defaultValue": "basic",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "deep-research",
+      "name": "深度研究",
+      "keywords": [
+        "深度研究",
+        "行业研究",
+        "竞争对手",
+        "资料检索",
+        "趋势分析",
+        "调研"
+      ],
+      "summary": "研究报告、证据核查和趋势分析",
+      "roles": [
+        {
+          "id": "research-lead",
+          "name": "研究规划师",
+          "duty": "拆解问题与证据要求",
+          "capabilities": [
+            "research",
+            "reasoning"
+          ],
+          "required": true,
+          "standard": "研究范围及时间界定"
+        },
+        {
+          "id": "researcher",
+          "name": "检索与分析员",
+          "duty": "通过授权工具获取和整理资料",
+          "capabilities": [
+            "research",
+            "tool_calling"
+          ],
+          "required": true,
+          "standard": "保留真实来源"
+        },
+        {
+          "id": "fact-checker",
+          "name": "独立事实核查员",
+          "duty": "复核关键数据与结论",
+          "capabilities": [
+            "research",
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "事实与推断分离"
+        }
+      ],
+      "steps": [
+        {
+          "id": "plan",
+          "title": "研究问题拆解",
+          "roleId": "research-lead",
+          "deliverable": "研究问题树和检索计划",
+          "quality": "覆盖关键假设",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "source",
+          "title": "资料检索与分析",
+          "roleId": "researcher",
+          "deliverable": "证据表和报告草稿",
+          "quality": "所有关键事实有来源链接",
+          "tools": [
+            "web_search"
+          ]
+        },
+        {
+          "id": "verify",
+          "title": "交叉核实",
+          "roleId": "fact-checker",
+          "deliverable": "核查报告",
+          "quality": "注明时效、不确定性与反例",
+          "tools": [
+            "web_search"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "sourceLevel",
+          "label": "证据强度",
+          "options": [
+            {
+              "value": "overview",
+              "text": "概览了解"
+            },
+            {
+              "value": "sourced",
+              "text": "有来源的研究"
+            },
+            {
+              "value": "verified",
+              "text": "多来源交叉核实"
+            }
+          ],
+          "defaultValue": "overview",
+          "help": ""
+        },
+        {
+          "id": "freshness",
+          "label": "时效要求",
+          "options": [
+            {
+              "value": "evergreen",
+              "text": "常识和长期趋势"
+            },
+            {
+              "value": "recent",
+              "text": "近一年"
+            },
+            {
+              "value": "current",
+              "text": "需要最新实时资料"
+            }
+          ],
+          "defaultValue": "evergreen",
+          "help": ""
+        },
+        {
+          "id": "output",
+          "label": "成果形式",
+          "options": [
+            {
+              "value": "brief",
+              "text": "摘要"
+            },
+            {
+              "value": "report",
+              "text": "完整研究报告"
+            },
+            {
+              "value": "slides",
+              "text": "研究PPT"
+            },
+            {
+              "value": "data",
+              "text": "数据附表"
+            }
+          ],
+          "defaultValue": "brief",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "marketing",
+      "name": "营销与品牌策略",
+      "keywords": [
+        "营销",
+        "品牌",
+        "市场推广",
+        "投放",
+        "营销方案",
+        "社媒"
+      ],
+      "summary": "营销传播与品牌内容",
+      "roles": [
+        {
+          "id": "strategist",
+          "name": "营销策略师",
+          "duty": "目标人群、定位和渠道策略",
+          "capabilities": [
+            "reasoning",
+            "writing"
+          ],
+          "required": true,
+          "standard": "目标、用户和渠道一致"
+        },
+        {
+          "id": "creator",
+          "name": "内容创作师",
+          "duty": "设计文案与活动素材",
+          "capabilities": [
+            "writing"
+          ],
+          "required": true,
+          "standard": "符合品牌与受众要求"
+        },
+        {
+          "id": "reviewer",
+          "name": "品牌审核员",
+          "duty": "核查用语、事实与品牌一致性",
+          "capabilities": [
+            "writing",
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "避免无依据宣称"
+        }
+      ],
+      "steps": [
+        {
+          "id": "strategy",
+          "title": "营销策略设计",
+          "roleId": "strategist",
+          "deliverable": "受众画像与传播方案",
+          "quality": "目标量化、渠道适配",
+          "tools": [
+            "web_search"
+          ]
+        },
+        {
+          "id": "campaign",
+          "title": "内容制作",
+          "roleId": "creator",
+          "deliverable": "文案与素材需求",
+          "quality": "信息准确、可直接使用",
+          "tools": [
+            "docx_generation"
+          ]
+        },
+        {
+          "id": "brand-check",
+          "title": "品牌与合规复核",
+          "roleId": "reviewer",
+          "deliverable": "改进意见",
+          "quality": "宣传声明要有依据",
+          "tools": [
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "length",
+          "label": "输出篇幅",
+          "options": [
+            {
+              "value": "short",
+              "text": "简短"
+            },
+            {
+              "value": "medium",
+              "text": "中等"
+            },
+            {
+              "value": "long",
+              "text": "完整详尽"
+            }
+          ],
+          "defaultValue": "short",
+          "help": ""
+        },
+        {
+          "id": "formality",
+          "label": "正式程度",
+          "options": [
+            {
+              "value": "working",
+              "text": "内部讨论稿"
+            },
+            {
+              "value": "formal",
+              "text": "正式文件"
+            },
+            {
+              "value": "published",
+              "text": "对外发布材料"
+            }
+          ],
+          "defaultValue": "working",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "financial-budget",
+      "name": "财务预算与经营测算",
+      "keywords": [
+        "预算",
+        "财务",
+        "现金流",
+        "盈亏",
+        "利润",
+        "财务模型"
+      ],
+      "summary": "预算、现金流、经营测算和财务分析",
+      "roles": [
+        {
+          "id": "financial-planner",
+          "name": "财务规划师",
+          "duty": "定义模型口径、经营假设",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": true,
+          "standard": "假设与实际数据明确区分"
+        },
+        {
+          "id": "model-builder",
+          "name": "财务模型师",
+          "duty": "建立现金流和情景测算",
+          "capabilities": [
+            "data_analysis",
+            "tool_calling"
+          ],
+          "required": true,
+          "standard": "公式关联、可溯源"
+        },
+        {
+          "id": "reviewer",
+          "name": "财务审核员",
+          "duty": "复核公式及敏感性",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": false,
+          "standard": "重大投资判断需人工确认"
+        }
+      ],
+      "steps": [
+        {
+          "id": "inputs",
+          "title": "假设与数据整理",
+          "roleId": "financial-planner",
+          "deliverable": "假设清单",
+          "quality": "明确数据日期与口径",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "model",
+          "title": "预算模型创建",
+          "roleId": "model-builder",
+          "deliverable": "含公式的Excel预算模型",
+          "quality": "三表或所需财务表联动",
+          "tools": [
+            "xlsx_generation"
+          ]
+        },
+        {
+          "id": "audit",
+          "title": "模型复核",
+          "roleId": "reviewer",
+          "deliverable": "敏感性与公式审计",
+          "quality": "结论有对应计算证据",
+          "tools": [
+            "spreadsheet"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "dataVolume",
+          "label": "数据规模",
+          "options": [
+            {
+              "value": "small",
+              "text": "少量表格"
+            },
+            {
+              "value": "medium",
+              "text": "几千至几万行"
+            },
+            {
+              "value": "large",
+              "text": "大量数据或多文件"
+            }
+          ],
+          "defaultValue": "small",
+          "help": ""
+        },
+        {
+          "id": "verify",
+          "label": "核验要求",
+          "options": [
+            {
+              "value": "basic",
+              "text": "公式/格式检查"
+            },
+            {
+              "value": "reconcile",
+              "text": "跨表对账"
+            },
+            {
+              "value": "audit",
+              "text": "审计级溯源"
+            }
+          ],
+          "defaultValue": "basic",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "course-design",
+      "name": "培训课程设计",
+      "keywords": [
+        "培训",
+        "课程设计",
+        "教学",
+        "讲义",
+        "培训计划"
+      ],
+      "summary": "培训课程、教案和课件制作",
+      "roles": [
+        {
+          "id": "curriculum",
+          "name": "课程设计师",
+          "duty": "设计学习目标与内容结构",
+          "capabilities": [
+            "writing",
+            "reasoning"
+          ],
+          "required": true,
+          "standard": "目标可考核"
+        },
+        {
+          "id": "content-maker",
+          "name": "课件制作师",
+          "duty": "制作讲义/PPT/练习",
+          "capabilities": [
+            "writing",
+            "tool_calling"
+          ],
+          "required": true,
+          "standard": "教学内容与目标对应"
+        },
+        {
+          "id": "learning-reviewer",
+          "name": "教学效果审核员",
+          "duty": "验证练习和评价方法",
+          "capabilities": [
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "题目覆盖知识目标"
+        }
+      ],
+      "steps": [
+        {
+          "id": "plan",
+          "title": "学习目标与大纲",
+          "roleId": "curriculum",
+          "deliverable": "课程大纲",
+          "quality": "学习目标可衡量",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "materials",
+          "title": "课件/讲义生成",
+          "roleId": "content-maker",
+          "deliverable": "讲义、练习、PPTX",
+          "quality": "产出可编辑文件",
+          "tools": [
+            "pptx_generation",
+            "docx_generation"
+          ]
+        },
+        {
+          "id": "assessment",
+          "title": "教学质量检查",
+          "roleId": "learning-reviewer",
+          "deliverable": "考核与反馈设计",
+          "quality": "练习和目标匹配",
+          "tools": [
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "length",
+          "label": "输出篇幅",
+          "options": [
+            {
+              "value": "short",
+              "text": "简短"
+            },
+            {
+              "value": "medium",
+              "text": "中等"
+            },
+            {
+              "value": "long",
+              "text": "完整详尽"
+            }
+          ],
+          "defaultValue": "short",
+          "help": ""
+        },
+        {
+          "id": "formality",
+          "label": "正式程度",
+          "options": [
+            {
+              "value": "working",
+              "text": "内部讨论稿"
+            },
+            {
+              "value": "formal",
+              "text": "正式文件"
+            },
+            {
+              "value": "published",
+              "text": "对外发布材料"
+            }
+          ],
+          "defaultValue": "working",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "process-improvement",
+      "name": "业务流程优化",
+      "keywords": [
+        "流程优化",
+        "业务流程",
+        "SOP",
+        "审批流程",
+        "效率改善"
+      ],
+      "summary": "流程现状诊断、SOP与权责优化",
+      "roles": [
+        {
+          "id": "process-analyst",
+          "name": "流程分析师",
+          "duty": "识别现状路径与瓶颈",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": true,
+          "standard": "流程事实和指标可核验"
+        },
+        {
+          "id": "redesigner",
+          "name": "流程设计师",
+          "duty": "设计目标流程和RACI",
+          "capabilities": [
+            "reasoning",
+            "writing"
+          ],
+          "required": true,
+          "standard": "输入输出、责任人、例外处理明确"
+        },
+        {
+          "id": "reviewer",
+          "name": "风险控制审核员",
+          "duty": "检查审批与控制点",
+          "capabilities": [
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "关键控制不能遗漏"
+        }
+      ],
+      "steps": [
+        {
+          "id": "as-is",
+          "title": "现状流程梳理",
+          "roleId": "process-analyst",
+          "deliverable": "流程现状图与痛点",
+          "quality": "确认关键环节责任",
+          "tools": [
+            "diagram_generation"
+          ]
+        },
+        {
+          "id": "to-be",
+          "title": "优化流程设计",
+          "roleId": "redesigner",
+          "deliverable": "目标流程图和SOP",
+          "quality": "清楚列出决策权、责任和异常情况",
+          "tools": [
+            "docx_generation"
+          ]
+        },
+        {
+          "id": "validation",
+          "title": "控制点复核",
+          "roleId": "reviewer",
+          "deliverable": "风险和实施清单",
+          "quality": "改进可量化",
+          "tools": [
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "consultTopic",
+          "label": "咨询主题",
+          "options": [
+            {
+              "value": "strategy",
+              "text": "战略经营"
+            },
+            {
+              "value": "organization",
+              "text": "组织架构"
+            },
+            {
+              "value": "hr",
+              "text": "人力资源"
+            },
+            {
+              "value": "process",
+              "text": "流程制度"
+            },
+            {
+              "value": "performance",
+              "text": "绩效管理"
+            },
+            {
+              "value": "mixed",
+              "text": "综合咨询"
+            }
+          ],
+          "defaultValue": "strategy",
+          "help": ""
+        },
+        {
+          "id": "diagnosis",
+          "label": "资料完整程度",
+          "options": [
+            {
+              "value": "none",
+              "text": "只有问题描述"
+            },
+            {
+              "value": "some",
+              "text": "有部分制度/数据"
+            },
+            {
+              "value": "full",
+              "text": "材料较充分"
+            }
+          ],
+          "defaultValue": "none",
+          "help": ""
+        },
+        {
+          "id": "reportMode",
+          "label": "主要成果",
+          "options": [
+            {
+              "value": "word",
+              "text": "正式方案Word"
+            },
+            {
+              "value": "deck",
+              "text": "汇报PPT"
+            },
+            {
+              "value": "package",
+              "text": "方案+表格+PPT"
+            }
+          ],
+          "defaultValue": "word",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "contract-review",
+      "name": "合同与合规辅助",
+      "keywords": [
+        "合同审核",
+        "合同条款",
+        "合规",
+        "协议风险",
+        "法规"
+      ],
+      "summary": "合同条款审阅及风险提示",
+      "roles": [
+        {
+          "id": "contract-analyst",
+          "name": "合同分析师",
+          "duty": "识别关键条款、义务、违约责任",
+          "capabilities": [
+            "reasoning",
+            "writing"
+          ],
+          "required": true,
+          "standard": "引用原文条款"
+        },
+        {
+          "id": "risk-reviewer",
+          "name": "风险审核员",
+          "duty": "发现风险、模糊措辞和谈判点",
+          "capabilities": [
+            "reasoning",
+            "research"
+          ],
+          "required": false,
+          "standard": "法律适用范围需核实"
+        }
+      ],
+      "steps": [
+        {
+          "id": "extract",
+          "title": "条款结构化",
+          "roleId": "contract-analyst",
+          "deliverable": "合同义务表",
+          "quality": "引用对应页码/条款",
+          "tools": [
+            "pdf_read",
+            "docx_read"
+          ]
+        },
+        {
+          "id": "review",
+          "title": "风险审查",
+          "roleId": "risk-reviewer",
+          "deliverable": "风险与修改建议",
+          "quality": "重要问题提示专业法律复核",
+          "tools": [
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "length",
+          "label": "输出篇幅",
+          "options": [
+            {
+              "value": "short",
+              "text": "简短"
+            },
+            {
+              "value": "medium",
+              "text": "中等"
+            },
+            {
+              "value": "long",
+              "text": "完整详尽"
+            }
+          ],
+          "defaultValue": "short",
+          "help": ""
+        },
+        {
+          "id": "formality",
+          "label": "正式程度",
+          "options": [
+            {
+              "value": "working",
+              "text": "内部讨论稿"
+            },
+            {
+              "value": "formal",
+              "text": "正式文件"
+            },
+            {
+              "value": "published",
+              "text": "对外发布材料"
+            }
+          ],
+          "defaultValue": "working",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": "不能替代执业律师意见"
+    },
+    {
+      "id": "project-planning",
+      "name": "项目管理与计划",
+      "keywords": [
+        "项目计划",
+        "进度安排",
+        "WBS",
+        "里程碑",
+        "项目管理"
+      ],
+      "summary": "项目计划、WBS、甘特图和风险台账",
+      "roles": [
+        {
+          "id": "planner",
+          "name": "项目计划负责人",
+          "duty": "拆解WBS、依赖和资源约束",
+          "capabilities": [
+            "reasoning"
+          ],
+          "required": true,
+          "standard": "关键路径与责任清楚"
+        },
+        {
+          "id": "scheduler",
+          "name": "计划编制师",
+          "duty": "生成里程碑与风险台账",
+          "capabilities": [
+            "data_analysis",
+            "tool_calling"
+          ],
+          "required": true,
+          "standard": "时间和依赖关系一致"
+        },
+        {
+          "id": "risk-checker",
+          "name": "风险复核员",
+          "duty": "质疑进度估算和资源冲突",
+          "capabilities": [
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "有应对措施"
+        }
+      ],
+      "steps": [
+        {
+          "id": "wbs",
+          "title": "WBS分解",
+          "roleId": "planner",
+          "deliverable": "范围和工作包",
+          "quality": "输出明确可验收",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "schedule",
+          "title": "排期与甘特表",
+          "roleId": "scheduler",
+          "deliverable": "项目计划Excel",
+          "quality": "依赖清楚",
+          "tools": [
+            "xlsx_generation"
+          ]
+        },
+        {
+          "id": "risk",
+          "title": "风险检查",
+          "roleId": "risk-checker",
+          "deliverable": "风险台账",
+          "quality": "高风险有应对责任",
+          "tools": [
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "length",
+          "label": "输出篇幅",
+          "options": [
+            {
+              "value": "short",
+              "text": "简短"
+            },
+            {
+              "value": "medium",
+              "text": "中等"
+            },
+            {
+              "value": "long",
+              "text": "完整详尽"
+            }
+          ],
+          "defaultValue": "short",
+          "help": ""
+        },
+        {
+          "id": "formality",
+          "label": "正式程度",
+          "options": [
+            {
+              "value": "working",
+              "text": "内部讨论稿"
+            },
+            {
+              "value": "formal",
+              "text": "正式文件"
+            },
+            {
+              "value": "published",
+              "text": "对外发布材料"
+            }
+          ],
+          "defaultValue": "working",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "translation",
+      "name": "翻译与本地化",
+      "keywords": [
+        "翻译",
+        "本地化",
+        "中英",
+        "多语言",
+        "国际化"
+      ],
+      "summary": "翻译和本地化",
+      "roles": [
+        {
+          "id": "translator",
+          "name": "专业翻译员",
+          "duty": "翻译并保留专业术语",
+          "capabilities": [
+            "writing"
+          ],
+          "required": true,
+          "standard": "无遗漏、保留结构"
+        },
+        {
+          "id": "editor",
+          "name": "母语审校员",
+          "duty": "检查语义、术语及风格",
+          "capabilities": [
+            "writing",
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "与原文核对"
+        }
+      ],
+      "steps": [
+        {
+          "id": "translate",
+          "title": "术语与内容翻译",
+          "roleId": "translator",
+          "deliverable": "译文与术语表",
+          "quality": "完整表达且保留格式",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "edit",
+          "title": "译文校对",
+          "roleId": "editor",
+          "deliverable": "校对版和差异",
+          "quality": "专业术语前后一致",
+          "tools": [
+            "docx_generation"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "language",
+          "label": "目标语言",
+          "options": [
+            {
+              "value": "en",
+              "text": "英文"
+            },
+            {
+              "value": "zh",
+              "text": "中文"
+            },
+            {
+              "value": "ja",
+              "text": "日文"
+            },
+            {
+              "value": "ko",
+              "text": "韩文"
+            },
+            {
+              "value": "other",
+              "text": "其他"
+            }
+          ],
+          "defaultValue": "en",
+          "help": ""
+        },
+        {
+          "id": "tone",
+          "label": "译文风格",
+          "options": [
+            {
+              "value": "formal",
+              "text": "正式"
+            },
+            {
+              "value": "natural",
+              "text": "自然"
+            },
+            {
+              "value": "technical",
+              "text": "技术专业"
+            }
+          ],
+          "defaultValue": "formal",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "procurement",
+      "name": "采购与供应链",
+      "keywords": [
+        "采购",
+        "供应链",
+        "供应商",
+        "招标",
+        "采购分析"
+      ],
+      "summary": "供应商评价、采购方案与供应链分析",
+      "roles": [
+        {
+          "id": "sourcing",
+          "name": "采购分析师",
+          "duty": "整理需求和供应商信息",
+          "capabilities": [
+            "data_analysis",
+            "research"
+          ],
+          "required": true,
+          "standard": "数据来源清晰"
+        },
+        {
+          "id": "comparator",
+          "name": "供应商评估师",
+          "duty": "建立评价矩阵与风险评分",
+          "capabilities": [
+            "data_analysis",
+            "reasoning"
+          ],
+          "required": true,
+          "standard": "权重规则透明"
+        },
+        {
+          "id": "reviewer",
+          "name": "采购风险审核员",
+          "duty": "评估单一来源、交付风险",
+          "capabilities": [
+            "reasoning"
+          ],
+          "required": false,
+          "standard": "复核利益冲突风险"
+        }
+      ],
+      "steps": [
+        {
+          "id": "scope",
+          "title": "采购需求定义",
+          "roleId": "sourcing",
+          "deliverable": "需求和供应商候选",
+          "quality": "区分必须和可选",
+          "tools": [
+            "web_search"
+          ]
+        },
+        {
+          "id": "evaluate",
+          "title": "供应商比较",
+          "roleId": "comparator",
+          "deliverable": "可编辑评分矩阵",
+          "quality": "指标可量化和复核",
+          "tools": [
+            "xlsx_generation"
+          ]
+        },
+        {
+          "id": "risk",
+          "title": "采购风险分析",
+          "roleId": "reviewer",
+          "deliverable": "风险提示",
+          "quality": "缺失证据单列",
+          "tools": [
+            "file_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "dataVolume",
+          "label": "数据规模",
+          "options": [
+            {
+              "value": "small",
+              "text": "少量表格"
+            },
+            {
+              "value": "medium",
+              "text": "几千至几万行"
+            },
+            {
+              "value": "large",
+              "text": "大量数据或多文件"
+            }
+          ],
+          "defaultValue": "small",
+          "help": ""
+        },
+        {
+          "id": "verify",
+          "label": "核验要求",
+          "options": [
+            {
+              "value": "basic",
+              "text": "公式/格式检查"
+            },
+            {
+              "value": "reconcile",
+              "text": "跨表对账"
+            },
+            {
+              "value": "audit",
+              "text": "审计级溯源"
+            }
+          ],
+          "defaultValue": "basic",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "visual-design",
+      "name": "视觉设计与图片制作",
+      "keywords": [
+        "图片",
+        "海报",
+        "视觉设计",
+        "品牌设计",
+        "图像"
+      ],
+      "summary": "品牌和视觉内容创作",
+      "roles": [
+        {
+          "id": "creative",
+          "name": "创意策划师",
+          "duty": "确定传播目标和视觉方向",
+          "capabilities": [
+            "writing",
+            "reasoning"
+          ],
+          "required": true,
+          "standard": "受众、文字和画面一致"
+        },
+        {
+          "id": "image-maker",
+          "name": "视觉执行师",
+          "duty": "使用实际图像工具生成/编辑",
+          "capabilities": [
+            "tool_calling",
+            "vision"
+          ],
+          "required": true,
+          "standard": "输出真实文件与尺寸"
+        },
+        {
+          "id": "visual-reviewer",
+          "name": "视觉审核员",
+          "duty": "检查文字准确性与比例",
+          "capabilities": [
+            "vision"
+          ],
+          "required": false,
+          "standard": "视觉清晰且版权来源可说明"
+        }
+      ],
+      "steps": [
+        {
+          "id": "creative",
+          "title": "创意设计说明",
+          "roleId": "creative",
+          "deliverable": "视觉简报",
+          "quality": "风格、尺寸和目的明确",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "render",
+          "title": "图像生成",
+          "roleId": "image-maker",
+          "deliverable": "图像文件",
+          "quality": "实际图像生成工具证据",
+          "tools": [
+            "image_generation"
+          ]
+        },
+        {
+          "id": "check",
+          "title": "视觉复核",
+          "roleId": "visual-reviewer",
+          "deliverable": "修改意见",
+          "quality": "无明显错字和遮挡",
+          "tools": [
+            "image_read"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "asset",
+          "label": "视觉类型",
+          "options": [
+            {
+              "value": "poster",
+              "text": "海报"
+            },
+            {
+              "value": "infographic",
+              "text": "信息图"
+            },
+            {
+              "value": "brand",
+              "text": "品牌视觉"
+            },
+            {
+              "value": "social",
+              "text": "社媒图"
+            }
+          ],
+          "defaultValue": "poster",
+          "help": ""
+        },
+        {
+          "id": "ratio",
+          "label": "画面比例",
+          "options": [
+            {
+              "value": "16:9",
+              "text": "16:9"
+            },
+            {
+              "value": "1:1",
+              "text": "1:1"
+            },
+            {
+              "value": "4:5",
+              "text": "4:5"
+            },
+            {
+              "value": "9:16",
+              "text": "9:16"
+            }
+          ],
+          "defaultValue": "16:9",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": ""
+    },
+    {
+      "id": "academic-research",
+      "name": "学术课题与论文辅助",
+      "keywords": [
+        "论文",
+        "学术",
+        "科研",
+        "课题",
+        "文献"
+      ],
+      "summary": "文献综述、研究设计、论文辅助",
+      "roles": [
+        {
+          "id": "researcher",
+          "name": "研究设计师",
+          "duty": "确定研究问题、方法与局限",
+          "capabilities": [
+            "research",
+            "reasoning"
+          ],
+          "required": true,
+          "standard": "明确学术诚信与方法假设"
+        },
+        {
+          "id": "literature",
+          "name": "文献研究员",
+          "duty": "检索可核查文献",
+          "capabilities": [
+            "research",
+            "tool_calling"
+          ],
+          "required": true,
+          "standard": "保留真实DOI/出处"
+        },
+        {
+          "id": "method-reviewer",
+          "name": "方法审核员",
+          "duty": "审查研究设计与统计方法",
+          "capabilities": [
+            "reasoning",
+            "data_analysis"
+          ],
+          "required": false,
+          "standard": "不编造文献或实验结果"
+        }
+      ],
+      "steps": [
+        {
+          "id": "question",
+          "title": "研究问题与方法",
+          "roleId": "researcher",
+          "deliverable": "研究设计与方法说明",
+          "quality": "可检验问题",
+          "tools": [
+            "file_read"
+          ]
+        },
+        {
+          "id": "literature",
+          "title": "文献检索与综述",
+          "roleId": "literature",
+          "deliverable": "文献矩阵",
+          "quality": "文献真实且可核查",
+          "tools": [
+            "web_search"
+          ]
+        },
+        {
+          "id": "method",
+          "title": "方法与证据审查",
+          "roleId": "method-reviewer",
+          "deliverable": "审查意见",
+          "quality": "禁止虚构实验数据",
+          "tools": [
+            "spreadsheet"
+          ]
+        }
+      ],
+      "quantFields": [
+        {
+          "id": "rigor",
+          "label": "审核严谨程度",
+          "options": [
+            {
+              "value": "lean",
+              "text": "简洁：适合低风险短任务"
+            },
+            {
+              "value": "normal",
+              "text": "标准：有独立复核"
+            },
+            {
+              "value": "strict",
+              "text": "严格：多轮证据验收"
+            }
+          ],
+          "defaultValue": "lean",
+          "help": "系统根据任务风险建议，可自行调整"
+        },
+        {
+          "id": "risk",
+          "label": "任务风险等级",
+          "options": [
+            {
+              "value": "low",
+              "text": "低：内部草稿/探索"
+            },
+            {
+              "value": "medium",
+              "text": "中：重要内部使用"
+            },
+            {
+              "value": "high",
+              "text": "高：对外、工程或重大决策"
+            }
+          ],
+          "defaultValue": "low",
+          "help": "高风险任务建议增加专业复核与人工确认"
+        },
+        {
+          "id": "sourceLevel",
+          "label": "证据强度",
+          "options": [
+            {
+              "value": "overview",
+              "text": "概览了解"
+            },
+            {
+              "value": "sourced",
+              "text": "有来源的研究"
+            },
+            {
+              "value": "verified",
+              "text": "多来源交叉核实"
+            }
+          ],
+          "defaultValue": "overview",
+          "help": ""
+        },
+        {
+          "id": "freshness",
+          "label": "时效要求",
+          "options": [
+            {
+              "value": "evergreen",
+              "text": "常识和长期趋势"
+            },
+            {
+              "value": "recent",
+              "text": "近一年"
+            },
+            {
+              "value": "current",
+              "text": "需要最新实时资料"
+            }
+          ],
+          "defaultValue": "evergreen",
+          "help": ""
+        },
+        {
+          "id": "output",
+          "label": "成果形式",
+          "options": [
+            {
+              "value": "brief",
+              "text": "摘要"
+            },
+            {
+              "value": "report",
+              "text": "完整研究报告"
+            },
+            {
+              "value": "slides",
+              "text": "研究PPT"
+            },
+            {
+              "value": "data",
+              "text": "数据附表"
+            }
+          ],
+          "defaultValue": "brief",
+          "help": ""
+        }
+      ],
+      "defaultObjectives": [],
+      "disclaimer": "不制造虚假文献、数据或论文署名"
+    }
+  ]
+}

@@ -19,7 +19,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>龙创 · 任职资格管理系统 · AI 协同</title>
+<title>AIJAVAIS · 多 AI 协同工作台</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
@@ -134,44 +134,45 @@ header{display:grid;grid-template-columns:minmax(240px,1.7fr) repeat(5,minmax(0,
   header{padding:10px 16px 0}
   .panels{grid-template-columns:minmax(0,1fr);padding:8px 16px 16px}
 }
+.en{font-size:.62em;opacity:.55;margin-left:.45em;letter-spacing:.08em;font-weight:400}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <div class="brand"><h1>龙创 · 任职资格管理系统</h1><p>AI-ASSISTED DEVELOPMENT · LIVE SIGNAL</p></div>
-    <div class="kpi"><div class="k">AI SOURCES</div><div class="v" id="k0">0</div><div class="seg"><i></i></div></div>
-    <div class="kpi"><div class="k">WORKING</div><div class="v pink" id="k1">0</div><div class="seg"><i></i></div></div>
-    <div class="kpi"><div class="k">CALLS</div><div class="v" id="k2">0</div><div class="seg"><i></i></div></div>
-    <div class="kpi"><div class="k">TOKENS</div><div class="v" id="k3">0</div><div class="seg"><i></i></div></div>
-    <div class="kpi"><div class="k">ERRORS</div><div class="v" id="k4">0</div><div class="seg"><i></i></div></div>
+    <div class="brand"><h1>AIJAVAIS · 多 AI 协同工作台</h1><p>多模型协作 · 实时信号<small class="en">AI-ASSISTED DEVELOPMENT · LIVE SIGNAL</small></p></div>
+    <div class="kpi"><div class="k">接入模型<small class="en">AI SOURCES</small></div><div class="v" id="k0">0</div><div class="seg"><i></i></div></div>
+    <div class="kpi"><div class="k">工作中<small class="en">WORKING</small></div><div class="v pink" id="k1">0</div><div class="seg"><i></i></div></div>
+    <div class="kpi"><div class="k">调用次数<small class="en">CALLS</small></div><div class="v" id="k2">0</div><div class="seg"><i></i></div></div>
+    <div class="kpi"><div class="k">用量<small class="en">TOKENS</small></div><div class="v" id="k3">0</div><div class="seg"><i></i></div></div>
+    <div class="kpi"><div class="k">错误<small class="en">ERRORS</small></div><div class="v" id="k4">0</div><div class="seg"><i></i></div></div>
   </header>
 
   <div class="stage" id="stageWrap">
     <canvas id="stage"></canvas>
-    <div class="ov console">◱ CONSOLE</div>
-    <a class="ov adm" href="/admin.html" target="_blank" rel="noopener">⚙ AI ADMIN</a>
+    <div class="ov console">◱ 控制台<small class="en">CONSOLE</small></div>
+    <a class="ov adm" href="/admin.html" target="_blank" rel="noopener">⚙ 管理中心<small class="en">ADMIN</small></a>
     <div class="ov music" id="bgm">
       <span class="mbtn" id="bgmBtn" title="开/关背景音乐（M 键）"><i class="eq"><b></b><b></b><b></b></i><em id="bgmTxt">BGM OFF</em></span>
       <input type="range" id="bgmVol" min="0" max="100" step="1" value="60" title="音量">
       <span class="mval" id="bgmVal">60</span>
     </div>
     <audio id="bgmAudio" data-src="audio/sw421k.mp3" loop preload="auto" playsinline></audio>
-    <div class="ov chk" id="chk"><b id="chkK">STABILITY CHECK</b><span id="chkV">CFL = |u| Δt / Δx</span></div>
-    <div class="ov status"><div class="big" id="stBig">OFFLINE · NO SIGNAL</div><div class="sm" id="stSm">live signal bus</div></div>
+    <div class="ov chk" id="chk"><b id="chkK">稳定性检查</b><span id="chkV">等待模型信号</span></div>
+    <div class="ov status"><div class="big" id="stBig">离线 · 无信号</div><div class="sm" id="stSm">实时信号</div></div>
     <div class="ov credit">Based on HALOFLUX by Ryder191 (RYDER CODE / Ms MAIKEBAIs CAT) · github.com/Ryder191/haloflux · modified</div>
   </div>
 
   <section class="panels">
-    <div class="p"><h3>SIGNAL FEED · 事件流</h3><div class="feed" id="feed"></div></div>
-    <div class="p"><h3>FLOW FIELD · AMBIENT</h3><canvas id="cAdv"></canvas>
-      <div class="btns" id="advBtns"><span class="on">FLOW</span><span>PULSE</span><span>BURST</span></div></div>
-    <div class="p"><h3>MODEL ACTIVITY · 模型动作</h3><div class="code" id="code"></div></div>
-    <div class="p"><h3>ACTIVITY FIELD · AMBIENT</h3><canvas id="cDiff"></canvas><div class="cap">ambient · brightness follows workload</div></div>
-    <div class="p"><h3>MODEL ROUTES · 调用路由</h3><div class="routes" id="routes"></div><div class="cap">call → stream → done</div></div>
-    <div class="p"><h3>THROUGHPUT · AMBIENT</h3><canvas id="cVal"></canvas><div class="cap">illustrative · not measured data</div></div>
-    <div class="p"><h3>AI AGENTS · 智能体调度</h3><div class="agents" id="agents"></div><div class="cap">live status per AI source</div></div>
-    <div class="p"><h3>INDEX · AMBIENT</h3><canvas id="cIdx"></canvas><div class="cap">illustrative · not measured data</div></div>
+    <div class="p"><h3>事件流<small class="en">SIGNAL FEED</small></h3><div class="feed" id="feed"></div></div>
+    <div class="p"><h3>流场 · 氛围<small class="en">FLOW FIELD</small></h3><canvas id="cAdv"></canvas>
+      <div class="btns" id="advBtns"><span class="on">流动</span><span>脉冲</span><span>爆发</span></div></div>
+    <div class="p"><h3>模型动作<small class="en">MODEL ACTIVITY</small></h3><div class="code" id="code"></div></div>
+    <div class="p"><h3>活跃度 · 氛围<small class="en">ACTIVITY FIELD</small></h3><canvas id="cDiff"></canvas><div class="cap">氛围动画：亮度随工作量变化</div></div>
+    <div class="p"><h3>调用路由<small class="en">MODEL ROUTES</small></h3><div class="routes" id="routes"></div><div class="cap">调用 → 输出 → 完成</div></div>
+    <div class="p"><h3>吞吐 · 氛围<small class="en">THROUGHPUT</small></h3><canvas id="cVal"></canvas><div class="cap">示意动画，不是实测数据</div></div>
+    <div class="p"><h3>智能体调度<small class="en">AI AGENTS</small></h3><div class="agents" id="agents"></div><div class="cap">每个模型的实时状态</div></div>
+    <div class="p"><h3>指数 · 氛围<small class="en">INDEX</small></h3><canvas id="cIdx"></canvas><div class="cap">示意动画，不是实测数据</div></div>
   </section>
 </div>
 
@@ -1249,9 +1250,9 @@ setInterval(() => {
   chkEl.style.opacity = 0;
   setTimeout(() => {
     const w = AI.agents.filter(a => a.status === 'working');
-    let k = 'STANDBY', v = AI.live ? '等待外部 AI 信号' : '未连接 · 请先运行 server.js';
+    let k = '待命', v = AI.live ? '等待模型信号' : '未连接 · 请先启动服务';
     if (AI.demo) v = '演示模式（模拟信号）';
-    if (w.length) { const a = w[chkI++ % w.length]; k = 'NOW · ' + (a.label || a.id); v = a.task || a.role || 'working…'; }
+    if (w.length) { const a = w[chkI++ % w.length]; k = '当前 · ' + (a.label || a.id); v = a.task || a.role || '工作中…'; }
     document.getElementById('chkK').textContent = k.slice(0, 28);
     document.getElementById('chkV').textContent = v.slice(0, 40);
     chkEl.style.opacity = 1;
@@ -1274,9 +1275,9 @@ function kpiTick() {
     segs[i].style.width = (v / kmax[i] * 100) + '%';
   });
   const sb = document.getElementById('stBig'), ss = document.getElementById('stSm');
-  if (AI.demo) { sb.textContent = `DEMO · ${w} WORKING`; ss.textContent = 'simulated signals · not real AI activity'; }
-  else if (!AI.live) { sb.textContent = 'OFFLINE · NO SIGNAL'; ss.textContent = 'run server.js, then open http://localhost:8787'; }
-  else { sb.textContent = `${w} WORKING · ${t.calls || 0} CALLS`; ss.textContent = 'live signal bus · /api/events'; }
+  if (AI.demo) { sb.textContent = `演示 · ${w} 个工作中`; ss.textContent = '模拟信号，不是真实模型活动'; }
+  else if (!AI.live) { sb.textContent = '离线 · 无信号'; ss.textContent = '请先启动服务，再打开本页'; }
+  else { sb.textContent = `${w} 个工作中 · 已调用 ${t.calls || 0} 次`; ss.textContent = '实时信号已连接'; }
 }
 kpiTick(); setInterval(kpiTick, 800);
 
@@ -1295,10 +1296,10 @@ function feedLine(verb, cls, text) {
   feed.appendChild(d);
   while (feed.children.length > 14) feed.removeChild(feed.firstChild);
 }
-feedLine('info', 'check', 'panel ready · waiting for AI signals');
+feedLine('提示', 'check', '大屏已就绪 · 等待模型信号');
 
 // --- method workspace (typing) ---
-const codeQueue = [['', 'await_signal', '()']];
+const codeQueue = [['', '等待信号', '…']];
 const codeEl = document.getElementById('code');
 let cChar = 0, cNum = 1, typed = [];
 const codeStr = l => (l[0] ? l[0] + ' = ' : '') + l[1] + l[2];
@@ -1326,10 +1327,10 @@ function codeTick() {
 setInterval(codeTick, 70);
 
 // --- routes ---
-const COLSR = ['call', 'stream', 'done'];
+const COLSR = ['调用', '输出', '完成']; // display text only; the chip state comes from the index
 const routesEl = document.getElementById('routes');
 function renderRoutes() {
-  let h = '<span class="h">MODEL</span><span class="h">CALL</span><span class="h">STREAM</span><span class="h">DONE</span>';
+  let h = '<span class="h">模型</span><span class="h">调用</span><span class="h">输出</span><span class="h">完成</span>';
   const list = AI.agents.slice(0, 6);
   if (!list.length) h += '<span class="nm">—</span><span></span><span></span><span></span>';
   list.forEach(a => {
@@ -1375,13 +1376,13 @@ function agentsTick(dt) {
   SLOT.forEach((s, i) => {
     const a = s.id && byId.get(s.id);
     const row = agRows[i], rl = row.children[1], cells = row.children[2].children, se = row.children[3];
-    let label = '—', st = 'standby', stCls = 'st', col = '#5a5e66', n = 0, tip = false;
+    let label = '—', st = '待命', stCls = 'st', col = '#5a5e66', n = 0, tip = false;
     if (a) {
       label = (a.label || a.id).slice(0, 12); col = modelCol(a);
-      if (a.status === 'working') { const el = AI.elapsed(a); n = 1 + Math.floor(el * 1.6) % 6; tip = true; st = 'working ' + el.toFixed(1) + 's'; stCls = 'st w'; }
-      else if (a.status === 'error') { n = 6; col = '#ff7b7b'; st = 'error'; }
-      else if (a.calls > 0) { n = 6; st = 'idle · ' + (a.ms / 1000).toFixed(1) + 's'; col = '#4a4e57'; }
-      else st = 'idle';
+      if (a.status === 'working') { const el = AI.elapsed(a); n = 1 + Math.floor(el * 1.6) % 6; tip = true; st = '工作中 ' + el.toFixed(1) + '秒'; stCls = 'st w'; }
+      else if (a.status === 'error') { n = 6; col = '#ff7b7b'; st = '出错'; }
+      else if (a.calls > 0) { n = 6; st = '空闲 · ' + (a.ms / 1000).toFixed(1) + '秒'; col = '#4a4e57'; }
+      else st = '空闲';
     }
     if (rl.textContent !== label) rl.textContent = label;
     for (let k = 0; k < 6; k++) cells[k].style.background = k < n ? col : (tip && k === n) ? '#5a5e66' : '#1d1f24';
@@ -1721,7 +1722,7 @@ document.addEventListener('keydown', e => {
   function ui(wait) {
     box.classList.toggle('on', st.on && playing());
     box.classList.toggle('wait', !!wait);
-    txt.textContent = wait ? (TOUCH ? 'TAP TO PLAY' : 'CLICK TO PLAY') : st.on && playing() ? 'BGM ON' : 'BGM OFF';
+    txt.textContent = wait ? (TOUCH ? '轻点播放音乐' : '点击播放音乐') : st.on && playing() ? '音乐 开' : '音乐 关';
     vol.value = st.vol; val.textContent = st.vol;
   }
 
@@ -1814,24 +1815,24 @@ document.addEventListener('keydown', e => {
     if (typeof ev.working === 'number') recalc(ev.working);
     switch (ev.status) {
       case 'start':
-        feedLine('start', 'build', bits);
+        feedLine('开始', 'build', bits);
         codePush([name, 'start_task', '("' + (ev.task || ev.role || '…') + '")']);
         kick('start'); break;
       case 'stream':
         kick('stream'); break;
       case 'done':
-        feedLine('done', 'read', bits + (ev.tokens ? ' · ' + ev.tokens + ' tok' : '') + (ev.ms ? ' · ' + (ev.ms / 1000).toFixed(1) + 's' : ''));
+        feedLine('完成', 'read', bits + (ev.tokens ? ' · 用量 ' + ev.tokens : '') + (ev.ms ? ' · ' + (ev.ms / 1000).toFixed(1) + 's' : ''));
         codePush(['', 'complete', '(' + (ev.tokens || 0) + ' tok)']);
         kick('done'); break;
       case 'error':
-        feedLine('error', 'err', bits + (ev.error ? ' · ' + ev.error : ''));
+        feedLine('出错', 'err', bits + (ev.error ? ' · ' + ev.error : ''));
         codePush([name, 'report_error', '()']); break;
       case 'handoff':
-        feedLine('hand', 'qa', name + ' → ' + (ev.to || '…'));
+        feedLine('交接', 'qa', name + ' → ' + (ev.to || '…'));
         codePush(['', 'handoff', '("' + (ev.to || '…') + '")']);
         kick('handoff'); break;
       default:
-        feedLine('info', 'check', bits);
+        feedLine('提示', 'check', bits);
     }
     if (ev.text) codePush(['', 'emit', '("' + String(ev.text).replace(/\s+/g, ' ').slice(0, 40) + '")']);
     if (ev.status !== 'stream') kpiTick();

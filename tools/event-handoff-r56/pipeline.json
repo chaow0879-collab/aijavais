@@ -1,0 +1,15 @@
+{
+  "schema": "aijavais.event-handoff.pipeline/v1",
+  "enabled": false,
+  "live_read_enabled": false,
+  "live_report_enabled": false,
+  "repo": "chaow0879-collab/aijavais",
+  "repository_id": 1446621245,
+  "review_issues": { "audit": 2, "qa": 4 },
+  "actors": { "developer": [], "integrator": [], "audit": [], "qa": [], "owner": [], "bridge": [] },
+  "reviewer_keys": { "audit": {}, "qa": {} },
+  "ci": { "workflows": [], "required_jobs": [], "events": ["push", "workflow_dispatch"] },
+  "review_ttl_ms": 86400000,
+  "max_snapshot_age_ms": 900000,
+  "work_items": []
+}

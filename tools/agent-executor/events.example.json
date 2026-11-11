@@ -1,0 +1,9 @@
+{
+  "registered": false,
+  "enabled": false,
+  "sources": ["workflow_run.completed", "issues.edited", "pull_request.synchronize"],
+  "fallback": {"cron": "*/10 * * * *", "enabled": false},
+  "receiver": null,
+  "runner": null,
+  "note": "Design-only data; not an Actions workflow, webhook, timer or deployment."
+}

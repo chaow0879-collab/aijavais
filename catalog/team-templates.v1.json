@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-05",
+  "note": "团队模板（版本化数据）。模板只描述岗位、职责、所需能力与流程，不绑定任何具体模型或品牌；建立团队时由用户为每个岗位分配模型连接。tools 为规划中的工具需求标签，目前平台尚未提供工具执行能力。humanReview 节点目前只记录在配置中，人工审批界面在后续阶段实现。",
+  "categories": [
+    {"templateId": "software-development", "name": "软件开发", "status": "ready"},
+    {"templateId": "word-document", "name": "Word 文档制作", "status": "ready"},
+    {"templateId": "business-report", "name": "商业报告", "status": "ready"},
+    {"templateId": "deep-research", "name": "深度研究", "status": "ready"},
+    {"templateId": "data-analysis", "name": "数据分析", "status": "ready"},
+    {"templateId": "ppt-production", "name": "PPT 制作", "status": "ready"},
+    {"templateId": "marketing", "name": "市场营销", "status": "ready"},
+    {"templateId": "project-management", "name": "项目管理", "status": "ready"},
+    {"templateId": "customer-service", "name": "客户服务", "status": "ready"},
+    {"templateId": "hr-management", "name": "人力资源管理", "status": "ready"},
+    {"templateId": "talent-development", "name": "招聘与人才发展", "status": "ready"},
+    {"templateId": "strategy-consulting", "name": "企业战略咨询", "status": "planned"},
+    {"templateId": "org-consulting", "name": "组织管理咨询", "status": "planned"},
+    {"templateId": "business-analysis", "name": "经营分析", "status": "planned"},
+    {"templateId": "finance", "name": "财务管理", "status": "planned"},
+    {"templateId": "legal-compliance", "name": "法务合规", "status": "planned"},
+    {"templateId": "website-development", "name": "网站开发", "status": "planned"},
+    {"templateId": "ai-app-development", "name": "AI 应用开发", "status": "planned"},
+    {"templateId": "information-security", "name": "信息安全", "status": "planned"},
+    {"templateId": "software-testing", "name": "软件测试", "status": "planned"},
+    {"templateId": "excel-reporting", "name": "Excel 报表", "status": "planned"},
+    {"templateId": "meeting-secretary", "name": "会议秘书", "status": "planned"},
+    {"templateId": "knowledge-management", "name": "知识管理", "status": "planned"},
+    {"templateId": "brand-content", "name": "品牌内容", "status": "planned"},
+    {"templateId": "sales-management", "name": "销售管理", "status": "planned"},
+    {"templateId": "product-management", "name": "产品管理", "status": "planned"},
+    {"templateId": "training-course", "name": "培训课程开发", "status": "planned"},
+    {"templateId": "procurement-supply", "name": "采购供应链", "status": "planned"},
+    {"templateId": "operations-improvement", "name": "生产运营改善", "status": "planned"},
+    {"templateId": "international-business", "name": "多语言国际业务", "status": "planned"}
+  ],
+  "templates": [
+    {
+      "templateId": "software-development", "version": 1, "name": "软件开发团队",
+      "description": "从需求到可运行代码：架构设计、编码实现、代码审核、按审核意见修订。",
+      "roles": [
+        {"roleId": "architect", "name": "系统架构师", "duty": "拆解需求，给出模块划分、接口与数据结构、风险点", "requiredCapabilities": ["reasoning", "coding"], "humanReview": false},
+        {"roleId": "developer", "name": "程序开发工程师", "duty": "按设计实现代码，说明改动与运行方式", "requiredCapabilities": ["coding"], "humanReview": false},
+        {"roleId": "reviewer", "name": "代码审核员", "duty": "检查正确性、安全性、可维护性，给出可执行的修改意见", "requiredCapabilities": ["reasoning", "coding"], "humanReview": false}
+      ],
+      "suggestedCombination": "开发与审核建议使用不同服务商的模型，交叉审核更容易发现问题；架构师可与开发共用一个强推理模型。",
+      "tools": ["code_execution", "repository_access"],
+      "workflow": {"leadRoleId": "developer", "reviewRoleId": "reviewer", "steps": ["architect:draft", "developer:build", "reviewer:review", "developer:revise", "human:approve"]},
+      "humanReviewNodes": ["合并代码前由人工确认"],
+      "deliverables": ["设计说明", "代码", "审核记录", "修订说明"]
+    },
+    {
+      "templateId": "word-document", "version": 1, "name": "Word 文档制作团队",
+      "description": "制度、方案、通知等正式文档：起草、审校、定稿。",
+      "roles": [
+        {"roleId": "writer", "name": "文档撰写", "duty": "按要求起草结构完整、用语规范的文档", "requiredCapabilities": ["writing", "chinese"], "humanReview": false},
+        {"roleId": "editor", "name": "审校编辑", "duty": "检查逻辑、用词、格式与前后一致性，逐条给出修改意见", "requiredCapabilities": ["writing", "chinese", "reasoning"], "humanReview": false}
+      ],
+      "suggestedCombination": "撰写选中文写作强的模型；审校可选推理强的模型。",
+      "tools": ["docx_export"],
+      "workflow": {"leadRoleId": "writer", "reviewRoleId": "editor", "steps": ["writer:draft", "editor:review", "writer:revise", "human:approve"]},
+      "humanReviewNodes": ["正式发布前由文档负责人确认"],
+      "deliverables": ["文档初稿", "审校意见", "定稿"]
+    },
+    {
+      "templateId": "business-report", "version": 1, "name": "商业报告团队",
+      "description": "经营、行业或专题报告：分析撰写与质询审核。",
+      "roles": [
+        {"roleId": "analyst", "name": "分析师", "duty": "梳理数据与事实，形成结论与建议", "requiredCapabilities": ["reasoning", "writing", "data_analysis"], "humanReview": false},
+        {"roleId": "challenger", "name": "质询审核", "duty": "质疑结论依据、找出漏洞与遗漏，提出补充要求", "requiredCapabilities": ["reasoning"], "humanReview": false}
+      ],
+      "suggestedCombination": "两个岗位使用不同服务商的模型，避免同一模型自我认同。",
+      "tools": ["web_search", "spreadsheet"],
+      "workflow": {"leadRoleId": "analyst", "reviewRoleId": "challenger", "steps": ["analyst:draft", "challenger:review", "analyst:revise", "human:approve"]},
+      "humanReviewNodes": ["数据口径由业务负责人确认"],
+      "deliverables": ["报告正文", "质询记录", "修订稿"]
+    },
+    {
+      "templateId": "deep-research", "version": 1, "name": "深度研究团队",
+      "description": "围绕一个问题收集资料、形成研究报告，并由核查员检查依据。",
+      "roles": [
+        {"roleId": "researcher", "name": "研究员", "duty": "收集与归纳资料，写出有出处的研究结论", "requiredCapabilities": ["research", "reasoning", "long_context"], "humanReview": false},
+        {"roleId": "fact-checker", "name": "事实核查", "duty": "逐条核对结论与出处，标出无依据或过时的说法", "requiredCapabilities": ["reasoning"], "humanReview": false}
+      ],
+      "suggestedCombination": "核查员使用与研究员不同的模型。",
+      "tools": ["web_search"],
+      "workflow": {"leadRoleId": "researcher", "reviewRoleId": "fact-checker", "steps": ["researcher:draft", "fact-checker:review", "researcher:revise"]},
+      "humanReviewNodes": [],
+      "deliverables": ["研究报告", "核查记录"]
+    },
+    {
+      "templateId": "data-analysis", "version": 1, "name": "数据分析团队",
+      "description": "清洗与分析数据、形成结论和可复核的表格，由复核员检查口径与计算。",
+      "roles": [
+        {"roleId": "analyst", "name": "数据分析师", "duty": "说明数据来源与口径，完成清洗、统计和结论，列出计算过程", "requiredCapabilities": ["data_analysis", "reasoning"], "humanReview": false},
+        {"roleId": "checker", "name": "分析复核", "duty": "复核口径、样本、计算与结论是否一致，指出无法从数据得出的结论", "requiredCapabilities": ["reasoning"], "humanReview": false}
+      ],
+      "suggestedCombination": "分析与复核建议使用不同服务商的模型。",
+      "tools": ["xlsx_export"],
+      "workflow": {"leadRoleId": "analyst", "reviewRoleId": "checker", "steps": ["analyst:draft", "checker:review", "analyst:revise"]},
+      "humanReviewNodes": ["结论对外使用前由人工确认数据来源"],
+      "deliverables": ["分析报告", "数据表", "复核记录"]
+    },
+    {
+      "templateId": "ppt-production", "version": 1, "name": "PPT 制作团队",
+      "description": "从内容大纲到逐页文字与版式要求，再由审校检查逻辑与页面信息量。",
+      "roles": [
+        {"roleId": "planner", "name": "内容策划", "duty": "梳理受众、目的和故事线，给出逐页标题与要点", "requiredCapabilities": ["writing", "reasoning"], "humanReview": false},
+        {"roleId": "slide-writer", "name": "页面撰写", "duty": "按大纲写出每页精炼文字、图表建议与备注", "requiredCapabilities": ["writing"], "humanReview": false},
+        {"roleId": "reviewer", "name": "演示审校", "duty": "检查逻辑连贯、每页信息量与用词，逐页给出修改意见", "requiredCapabilities": ["reasoning", "writing"], "humanReview": false}
+      ],
+      "suggestedCombination": "撰写与审校建议使用不同模型。",
+      "tools": ["pptx_export"],
+      "workflow": {"leadRoleId": "slide-writer", "reviewRoleId": "reviewer", "steps": ["planner:draft", "slide-writer:build", "reviewer:review", "slide-writer:revise"]},
+      "humanReviewNodes": ["正式演示前人工通读"],
+      "deliverables": ["演示大纲", "PPT 文件", "审校记录"]
+    },
+    {
+      "templateId": "marketing", "version": 1, "name": "市场营销团队",
+      "description": "目标人群、渠道与内容方案，由审核员检查可执行性与合规表述。",
+      "roles": [
+        {"roleId": "strategist", "name": "营销策划", "duty": "明确目标人群、卖点、渠道与预算假设，形成可执行方案", "requiredCapabilities": ["writing", "reasoning"], "humanReview": false},
+        {"roleId": "copywriter", "name": "内容文案", "duty": "按方案写出各渠道文案与素材说明", "requiredCapabilities": ["writing", "chinese"], "humanReview": false},
+        {"roleId": "reviewer", "name": "方案审核", "duty": "检查目标与指标是否可衡量、表述是否夸大或违规，给出修改意见", "requiredCapabilities": ["reasoning"], "humanReview": false}
+      ],
+      "suggestedCombination": "文案选写作强的模型，审核选推理强的模型。",
+      "tools": [],
+      "workflow": {"leadRoleId": "strategist", "reviewRoleId": "reviewer", "steps": ["strategist:draft", "copywriter:build", "reviewer:review", "strategist:revise"]},
+      "humanReviewNodes": ["对外发布前人工确认"],
+      "deliverables": ["营销方案", "渠道文案", "审核记录"]
+    },
+    {
+      "templateId": "project-management", "version": 1, "name": "项目管理团队",
+      "description": "拆解目标、里程碑、责任与风险，形成可跟踪的项目计划。",
+      "roles": [
+        {"roleId": "planner", "name": "项目计划", "duty": "拆解工作分解结构、里程碑、依赖关系与责任人", "requiredCapabilities": ["reasoning", "writing"], "humanReview": false},
+        {"roleId": "risk-reviewer", "name": "风险评审", "duty": "检查工期、资源与依赖的合理性，列出风险与应对", "requiredCapabilities": ["reasoning"], "humanReview": false}
+      ],
+      "suggestedCombination": "计划与评审建议使用不同服务商的模型。",
+      "tools": ["xlsx_export"],
+      "workflow": {"leadRoleId": "planner", "reviewRoleId": "risk-reviewer", "steps": ["planner:draft", "risk-reviewer:review", "planner:revise"]},
+      "humanReviewNodes": ["计划发布前由项目负责人确认"],
+      "deliverables": ["项目计划", "风险清单", "评审记录"]
+    },
+    {
+      "templateId": "customer-service", "version": 1, "name": "客户服务团队",
+      "description": "整理常见问题、标准答复与升级规则，由审核员检查准确性与语气。",
+      "roles": [
+        {"roleId": "writer", "name": "知识整理", "duty": "根据资料整理常见问题、标准答复和需要升级处理的情形", "requiredCapabilities": ["writing", "chinese"], "humanReview": false},
+        {"roleId": "reviewer", "name": "答复审核", "duty": "核对答复是否有资料依据、语气是否得当，标出不能承诺的内容", "requiredCapabilities": ["reasoning"], "humanReview": false}
+      ],
+      "suggestedCombination": "审核员使用与撰写不同的模型。",
+      "tools": ["docx_export"],
+      "workflow": {"leadRoleId": "writer", "reviewRoleId": "reviewer", "steps": ["writer:draft", "reviewer:review", "writer:revise"]},
+      "humanReviewNodes": ["上线前由业务负责人确认"],
+      "deliverables": ["问答库", "升级规则", "审核记录"]
+    },
+    {
+      "templateId": "hr-management", "version": 1, "name": "人力资源管理团队",
+      "description": "制度、流程、岗位说明、任职资格等人力资源文件的起草与合规审核。",
+      "roles": [
+        {"roleId": "hr-specialist", "name": "人力资源专员", "duty": "起草制度、流程、岗位说明等文件", "requiredCapabilities": ["writing", "chinese"], "humanReview": false},
+        {"roleId": "compliance-reviewer", "name": "合规审核", "duty": "检查与公司现行制度、劳动法规的一致性与风险点", "requiredCapabilities": ["reasoning", "chinese"], "humanReview": true}
+      ],
+      "suggestedCombination": "审核岗位建议选推理强的模型，并保留人工复核。",
+      "tools": ["docx_export"],
+      "workflow": {"leadRoleId": "hr-specialist", "reviewRoleId": "compliance-reviewer", "steps": ["hr-specialist:draft", "compliance-reviewer:review", "hr-specialist:revise", "human:approve"]},
+      "humanReviewNodes": ["涉及员工权益的条款由人力资源负责人确认"],
+      "deliverables": ["文件草案", "合规意见", "修订稿"]
+    },
+    {
+      "templateId": "talent-development", "version": 1, "name": "招聘与人才发展团队",
+      "description": "招聘方案、面试题、培养计划、评估标准的设计与审核。",
+      "roles": [
+        {"roleId": "designer", "name": "方案设计", "duty": "设计招聘 / 培养 / 评估方案与工具", "requiredCapabilities": ["writing", "reasoning", "chinese"], "humanReview": false},
+        {"roleId": "assessor", "name": "评估审核", "duty": "检查方案的可操作性、公平性与衡量标准", "requiredCapabilities": ["reasoning", "chinese"], "humanReview": false}
+      ],
+      "suggestedCombination": "两个岗位使用不同模型交叉审核。",
+      "tools": [],
+      "workflow": {"leadRoleId": "designer", "reviewRoleId": "assessor", "steps": ["designer:draft", "assessor:review", "designer:revise", "human:approve"]},
+      "humanReviewNodes": ["方案实施前由人才发展负责人确认"],
+      "deliverables": ["方案", "审核意见", "修订方案"]
+    }
+  ]
+}

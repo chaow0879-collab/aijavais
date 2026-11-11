@@ -1,0 +1,45 @@
+name: Agent scheduler V1 gate fix (#25)
+# Dedicated validation for fix/claude-v1-gate-p1-26 only (AUD-26-SCH-01..05).
+# Read-only: contents:read, no secrets, no schedule, no --live, no Agent dispatch.
+on:
+  push:
+    branches: [fix/claude-v1-gate-p1-26]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: scheduler-fix-26-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  scheduler:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Record exact SHA
+        run: echo "tested_sha=$GITHUB_SHA tree=$(git rev-parse HEAD^{tree})"
+      - name: Original 37 + audit regression (AUD-26-SCH-01..05)
+        run: node --test tests/agent-scheduler/*.test.js
+      - name: Default entry stays off without GitHub calls
+        run: node tools/agent-scheduler/cli.js
+      - name: Round-24 offline fixture stays blocked (no would_dispatch, no actual dispatch)
+        run: |
+          node tools/agent-scheduler/cli.js --once --fixture tests/agent-scheduler/round24.json > out.json || true
+          node -e "const r=require('./out.json');console.log(r.state,r.missing_gates);if(r.state==='READY_FOR_HUMAN_GATE'||r.actual_dispatch!==false||r.would_dispatch.length)process.exit(1)"
+  full-suite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install poppler and LibreOffice (existing suite needs them)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Existing business suite is unaffected (npm test)
+        run: npm test

@@ -1,9 +1,27 @@
 {
-  "name": "longchuang-ai-ring",
-  "version": "1.0.0",
+  "name": "aijavais",
+  "version": "2.0.0",
   "private": true,
-  "description": "AI 星环：外部 AI 开始工作时，大屏同步转动（基于 HALOFLUX 修改，见 NOTICE.md）",
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=18" },
+  "description": "AIJAVAIS：多 AI 协作与可视化平台——模型自由接入、AI 团队、实时大屏（大屏基于 HALOFLUX 修改，见 NOTICE.md）",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/all.test.js",
+    "test:ui": "node tests/ui/admin.e2e.js",
+    "test:workspace": "node tests/ui/workspace.e2e.js",
+    "test:intake": "node tests/ui/intake-draft.e2e.js",
+    "test:b7": "node tests/ui/b7-usability.e2e.js",
+    "test:industry": "node tests/ui/industry.e2e.js",
+    "db:backup": "node tools/database.js backup",
+    "db:info": "node tools/database.js info",
+    "db:backup-inventory": "node tools/backup-inventory.js",
+    "test:p2": "node --test tests/p2/*.test.js",
+    "test:release-industry": "AIJ_RELEASE_VALIDATION=1 node --test tests/industry-mock-e2e.test.js",
+    "test:delivery": "node --test tests/claude-delivery-checks.test.js tests/claude-delivery-http.test.js",
+    "test:release-delivery": "AIJ_RELEASE_VALIDATION=1 node --test tests/claude-delivery-checks.test.js tests/claude-delivery-http.test.js",
+    "test:delivery-ui": "node tests/ui/claude-delivery.e2e.js"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "license": "SEE LICENSE IN LICENSE"
 }

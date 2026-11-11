@@ -1,0 +1,47 @@
+'use strict';
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{execFileSync}=require('node:child_process');
+const {reject}=require('./policy');
+const Seal=require('../first-pilot-r51/workspace-seal');
+const instances=new WeakSet();
+const baselines=new WeakMap();
+const Isolation=require('./workspace-isolation');
+function git(args,cwd,raw=false,input){const out=execFileSync('git',['-c','core.hooksPath=/dev/null','-c','core.fsmonitor=false',...args],{cwd,input,encoding:'utf8',timeout:15000,maxBuffer:1048576,stdio:['pipe','pipe','pipe'],env:{PATH:process.env.PATH,LANG:'C.UTF-8',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_TERMINAL_PROMPT:'0',GIT_OPTIONAL_LOCKS:'0'}});return raw?out:out.trim();}
+function prepare(source,branch,sha,options={}){
+ if(process.platform!=='linux'||!/^(?:feat|fix|test|integrate)\/[A-Za-z0-9_./-]+$/.test(branch)||branch.includes('..')||!/^[a-f0-9]{40}$/.test(sha))reject('INVALID_WORKSPACE');
+ source=path.resolve(source);const st=fs.lstatSync(source);if(!st.isDirectory()||st.isSymbolicLink())reject('INVALID_WORKSPACE');
+ if(git(['rev-parse','HEAD'],source)!==sha||git(['status','--porcelain=v1'],source))reject('SOURCE_NOT_PINNED_CLEAN');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'agent-isolated-')),dir=path.join(root,'repo');
+ try{git(['clone','--no-hardlinks','--no-checkout','--',source,dir],root);git(['switch','--detach',sha],dir);git(['switch','-c',branch],dir);if(git(['rev-parse','HEAD'],dir)!==sha)reject('WORKSPACE_SHA_MISMATCH');
+  if(options.role==='audit')Seal.readonly(dir);
+  Isolation.inspect(dir);const snapshot=Seal.scan(dir),out=Object.freeze({root,dir,branch,sha});instances.add(out);baselines.set(out,snapshot);return out;
+ }catch{Isolation.restoreDirectories(root);fs.rmSync(root,{recursive:true,force:true});reject('WORKSPACE_PREPARATION_FAILED');}
+}
+function health(instance){if(!instances.has(instance))reject('UNKNOWN_WORKSPACE');return {sha:git(['rev-parse','HEAD'],instance.dir),clean:git(['status','--porcelain=v1'],instance.dir)==='',isolated:true};}
+function cleanup(instance){if(!instances.has(instance))reject('UNKNOWN_WORKSPACE');Isolation.restoreDirectories(instance.root);fs.rmSync(instance.root,{recursive:true,force:true});instances.delete(instance);baselines.delete(instance);}
+function verifyChanges(instance,role,allowedPaths=[]){
+ if(!instances.has(instance)||!Array.isArray(allowedPaths)||allowedPaths.some(p=>typeof p!=='string'||p.startsWith('/')||p.includes('..')||p.startsWith('.git')))reject('INVALID_FILE_SCOPE');
+ // Check untrusted Git metadata BEFORE running Git against that configuration.
+ let filesystem,after;try{Isolation.inspect(instance.dir);after=Seal.scan(instance.dir);filesystem=Seal.changes(baselines.get(instance),after);}catch{reject('WORKSPACE_SCOPE_VIOLATION');}
+ const gitDirs=new Set(['.git','.git/objects','.git/refs','.git/refs/heads','.git/logs','.git/logs/refs','.git/logs/refs/heads']);
+ for(const ref of ['.git/refs/heads/','.git/logs/refs/heads/'])for(let p=path.posix.dirname(ref+instance.branch);p!=='.git'&&p!=='.';p=path.posix.dirname(p))gitDirs.add(p);
+ const directoryOnly=p=>{const a=baselines.get(instance).get(p),b=after.get(p);return a?.type==='dir'&&b?.type==='dir'&&a.mode===b.mode;};
+ const mutable=p=>Seal.mutableGit(p,instance.branch)||(gitDirs.has(p)&&directoryOnly(p));
+ if(filesystem.includes('')||(role==='audit'&&filesystem.length)||filesystem.some(p=>(p==='.git'||p.startsWith('.git/'))&&(!mutable(p)||after.get(p)?.type==='link')))reject('WORKSPACE_SCOPE_VIOLATION');
+ const fsPaths=filesystem.filter(p=>!(role!=='audit'&&mutable(p)));
+ try{git(['merge-base','--is-ancestor',instance.sha,'HEAD'],instance.dir);}catch{reject('WORKSPACE_SCOPE_VIOLATION');}
+ // NUL-delimited path bytes must never be trimmed: a literal leading newline
+ // is part of a filename, not a log separator or permission to enter tests/.
+ const commits=git(['rev-list','--max-count=257',instance.sha+'..HEAD'],instance.dir).split('\n').filter(Boolean);
+ if(commits.length>256||commits.some(s=>!/^[a-f0-9]{40}$/.test(s)))reject('WORKSPACE_SCOPE_VIOLATION');
+ const history=commits.length?git(['diff-tree','--stdin','--root','--no-commit-id','--no-renames','--name-only','-z','-r','-m'],instance.dir,true,commits.join('\n')+'\n'):'';
+ const paths=[...git(['diff','--no-renames','--name-only','-z',instance.sha],instance.dir,true).split('\0'),...history.split('\0'),...git(['ls-files','--others','-z'],instance.dir,true).split('\0'),...fsPaths].filter(Boolean);
+ if(paths.some(p=>role==='audit'||(role==='qa'&&p!=='tests'&&!p.startsWith('tests/'))||!allowedPaths.some(prefix=>p===prefix||p.startsWith(prefix.endsWith('/')?prefix:prefix+'/'))))reject('WORKSPACE_SCOPE_VIOLATION');
+ return true;
+}
+function isolation(instance,role,allowedPaths=[]){if(!instances.has(instance))reject('UNKNOWN_WORKSPACE');verifyChanges(instance,role,allowedPaths);return Isolation.create(instance.dir,role,allowedPaths);}
+function commitChanges(instance,role,allowedPaths,message='Scoped QA output'){
+ verifyChanges(instance,role,allowedPaths);if(role==='audit')reject('WORKSPACE_SCOPE_VIOLATION');
+ if(typeof message!=='string'||message.length>200||!message.trim())reject('INVALID_COMMIT_MESSAGE');
+ git(['add','--all','--',...allowedPaths],instance.dir);git(['-c','user.name=AIJAVAIS Scoped Controller','-c','user.email=fixture@example.invalid','commit','-m',message],instance.dir);verifyChanges(instance,role,allowedPaths);return health(instance).sha;
+}
+module.exports={prepare,health,cleanup,verifyChanges,isolation,commitChanges,isolationStatus:Isolation.status};

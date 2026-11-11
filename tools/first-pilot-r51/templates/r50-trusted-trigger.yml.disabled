@@ -1,0 +1,39 @@
+# Sole R51 deployment candidate. NOT_REGISTERED; never load the older R50
+# example as a second dispatcher. This is not an active GitHub workflow.
+name: Owner-approved first pilot (NOT_ENABLED)
+on:
+  issue_comment:
+    types: [created]
+  workflow_run:
+    workflows: [Unified R51 pilot readiness]
+    types: [completed]
+  schedule:
+    - cron: '*/10 * * * *'
+permissions:
+  contents: read
+  issues: read
+  actions: read
+  id-token: write
+concurrency:
+  group: owner-approved-single-pilot
+  cancel-in-progress: false
+jobs:
+  pilot:
+    if: ${{ false }}
+    environment: aijavais-first-pilot-window
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # An independently approved frozen runtime SHA goes here in a
+          # SEPARATE owner-approved default-branch activation commit.
+          ref: OWNER_APPROVED_FROZEN_RUNTIME_SHA_REQUIRED
+          persist-credentials: false
+      - run: node tools/first-pilot-r51/cli.js
+# Until provider amount/token enforcement, official auth, trusted IdP/KMS,
+# protected App/ref CAS and independent same-SHA gates are proven, this exits
+# BLOCKED. No environment variable can enable the compiled ports.
+# No model secret is referenced or read here. A future approved broker must
+# acquire a short-lived scoped official context on the protected runner.
+# State writer uses a dedicated App/broker, NOT an unrestricted GITHUB_TOKEN.

@@ -1,0 +1,336 @@
+name: R57 unattended candidate and preserved product
+# Reused #23 workflow: R43 unifies frozen product and automation in one exact SHA.
+# No new execution workflow or scheduler is activated. It runs every
+# existing gate of both packages on one exact SHA: the full suite, #15 semantic
+# guards and strict release Office parsing, #17 delivery checks (also under the
+# release gate), all Chromium suites and the container health check.
+# Local MOCK models only; no secrets, no paid APIs, no deploy, no schedule.
+on:
+  push:
+    branches: [integrate/codex-r57-unattended-go-gate, "claude/beautiful-pascal-xj5qd0", "claude/dev/**"]
+  # AUD-0EA9-02: PRs into main from any branch (e.g. cloud-assigned claude/<name>) also get these gates.
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: integrated-r57-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Assert exact unified candidate
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install poppler and LibreOffice (existing suite needs them)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends bubblewrap poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
+      - name: Install independent Office parsers
+        run: python3 -m pip install --user python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2
+      - name: Record exact SHA and sandbox isolation support (smoke tests are NOT_RUN where unsupported)
+        run: |
+          echo "integrated_sha=$GITHUB_SHA"
+          pdftotext -v; soffice --version
+          node -e "console.log(JSON.stringify(require('./lib/code-exec').codeExecStatus()))"
+      - name: Full existing suite (npm test)
+        env:
+          INDUSTRY_E2E_OUT: ${{ runner.temp }}/industry-e2e
+        run: npm test
+      - name: R53 universal workflow (real local HTTP SQLite Mock and independent Office parsing)
+        if: success() || failure()
+        env:
+          R53_EVIDENCE_DIR: ${{ runner.temp }}/r53-evidence
+          R55_EVIDENCE_DIR: ${{ runner.temp }}/r55-evidence
+        run: node --test tests/universal-workflow-r53/*.test.js tests/claude-universal-intake.test.js
+      - name: R55 real namespace write isolation and audited escape regressions (unsupported OS is explicitly BLOCKED)
+        if: success() || failure()
+        env:
+          R55_EVIDENCE_DIR: ${{ runner.temp }}/r55-evidence
+        run: |
+          mkdir -p "$R55_EVIDENCE_DIR"
+          node -e "console.log(JSON.stringify(require('./tools/agent-executor/workspace').isolationStatus()))" > "$R55_EVIDENCE_DIR/os-isolation.json"
+          node tools/universal-workflow-r53/reproduce-r51-audit.cjs
+          node tools/unattended-go-r57/ci-tests.cjs r55
+      - name: Unchanged R54 Node assertions against this exact R55 backend (not historical R53)
+        if: success() || failure()
+        env:
+          R54_OUT: ${{ runner.temp }}/r55-evidence/r54-node
+        run: node tools/universal-workflow-r53/run-r54-integrated.cjs --node
+      - name: R57 existing-chain unattended E3 and exception tests (Fake only)
+        if: success() || failure()
+        env:
+          R57_EVIDENCE_DIR: ${{ runner.temp }}/r55-evidence/r57
+        run: |
+          mkdir -p "$R57_EVIDENCE_DIR"
+          node tools/unattended-go-r57/ci-tests.cjs r57
+          node tools/unattended-go-r57/cli.js --matrix "$GITHUB_SHA" > "$R57_EVIDENCE_DIR/OWNER_GO_MATRIX.json"
+          node tools/unattended-go-r57/cli.js > "$R57_EVIDENCE_DIR/no-go.json"
+      - name: Frozen R56 source conformance including original authorship assertion
+        if: success() || failure()
+        env:
+          R56_OUT: ${{ runner.temp }}/r55-evidence/r57/r56-frozen
+        run: node tools/unattended-go-r57/run-r56.cjs
+      - name: Unchanged R56 behavior on the unified runtime (scope asserted at frozen source above)
+        if: success() || failure()
+        env:
+          R56_OUT: ${{ runner.temp }}/r55-evidence/r57/r56-integrated
+        run: |
+          mkdir -p "$R56_OUT"
+          node --test --test-skip-pattern='^scope:' tests/event-handoff-r56/*.test.js
+      - name: Audit fix regressions (AUD-R57-01, AUD-R57-02, AUD-R55-01)
+        if: success() || failure()
+        run: node --test --test-concurrency=1 tests/audit-fixes/*.test.js
+      - name: Frozen R52 original suite including authorship and historical shutdown observation
+        if: success() || failure()
+        env:
+          R52_OUT: ${{ runner.temp }}/r53-evidence/r52-frozen
+        run: node tools/universal-workflow-r53/run-r52.js
+      - name: "R52 workbench against integrated tree (incl. E3_FAKE real server; only author-branch scope: assertion skipped)"
+        if: success() || failure()
+        run: node --test --test-skip-pattern='scope:' tests/haloflux-workbench-r52/workbench.test.js
+      - name: "#15 semantic P2 guards (test:p2)"
+        if: success() || failure()
+        run: npm run test:p2
+      - name: "#15 strict release industry parsing (test:release-industry)"
+        if: success() || failure()
+        env:
+          INDUSTRY_E2E_OUT: ${{ runner.temp }}/industry-e2e-release
+        run: npm run test:release-industry
+      - name: "#17 delivery checks under the release parsing gate (test:release-delivery)"
+        if: success() || failure()
+        env:
+          CLAUDE_DELIVERY_OUT: ${{ runner.temp }}/claude-delivery
+        run: npm run test:release-delivery
+      - name: Hash evidence
+        if: always()
+        run: |
+          for d in industry-e2e industry-e2e-release claude-delivery; do
+            if [ -d "$RUNNER_TEMP/$d" ]; then echo "== $d"; (cd "$RUNNER_TEMP/$d" && find . -type f -print0 | sort -z | xargs -0 sha256sum); fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integrated-26-evidence
+          path: |
+            ${{ runner.temp }}/industry-e2e
+            ${{ runner.temp }}/industry-e2e-release
+            ${{ runner.temp }}/claude-delivery
+            ${{ runner.temp }}/r53-evidence
+            ${{ runner.temp }}/r55-evidence
+          if-no-files-found: ignore
+  browser:
+    runs-on: ubuntu-24.04  # pinned: Playwright 1.56.1 does not support ubuntu-latest (26.04) images
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Assert exact unified candidate
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install isolated, pinned browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/aij-ui-deps" --no-package-lock --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/aij-ui-deps/node_modules/.bin/playwright" install --with-deps chromium
+          mkdir -p "$RUNNER_TEMP/aij-ui-shots"
+      - name: Admin walkthrough (test:ui)
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:ui
+      - name: Workspace walkthrough (test:workspace)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:workspace
+      - name: Editable AI team draft (test:intake)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:intake
+      - name: Three-industry MOCK walkthrough (test:industry)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:industry
+      - name: B7 usability walkthrough (test:b7, MOCK provider)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:b7
+      - name: "#19 cost attribution + #17 workspace delivery checks (test:delivery-ui)"
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: npm run test:delivery-ui
+      - name: Preserved R44 universal intake browser flow
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: node tests/ui/claude-universal-intake.e2e.js
+      - name: Unchanged R52 legacy V2 assertions (explicit discovery 404; default R54 tested below)
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: node tools/universal-workflow-r53/run-r52-legacy.cjs
+      - name: Unchanged R54 Chromium journey against this exact R55 backend
+        if: success() || failure()
+        env:
+          NODE_PATH: ${{ runner.temp }}/aij-ui-deps/node_modules
+          UI_SHOTS: ${{ runner.temp }}/aij-ui-shots
+        run: node tools/universal-workflow-r53/run-r54-integrated.cjs --browser
+      - name: Hash screenshots
+        if: always()
+        run: cd "$RUNNER_TEMP/aij-ui-shots" && sha256sum * 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integrated-26-browser
+          path: ${{ runner.temp }}/aij-ui-shots
+          if-no-files-found: ignore
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Assert exact unified candidate
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
+      - name: Build independent production image
+        run: docker build --tag aijavais:ci .
+      - name: Verify pdftotext is present in the image
+        run: docker run --rm --entrypoint pdftotext aijavais:ci -v
+      - name: Start isolated backend and verify health (no public host port)
+        run: |
+          docker run --detach --name aij-ci aijavais:ci
+          for attempt in $(seq 1 30); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' aij-ci)" = healthy ]; then exit 0; fi
+            if [ "$(docker inspect --format '{{.State.Status}}' aij-ci)" = exited ]; then exit 1; fi
+            sleep 2
+          done
+          exit 1
+      - name: Remove isolated container
+        if: always()
+        run: docker rm --force --volumes aij-ci || true
+
+  automation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Confirm exact candidate source
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git show -s --format='%H %P %T' HEAD
+      - name: Verify both frozen runtime and test sources are preserved
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node tools/unattended-go-r57/sources.js > "$RUNNER_TEMP/agent-executor-evidence/source-provenance.json"
+          cat "$RUNNER_TEMP/agent-executor-evidence/source-provenance.json"
+      - name: Integrated V1 regression including real process races (serial test files)
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node --test --test-concurrency=1 --test-reporter=tap tests/agent-scheduler/*.test.js | tee "$RUNNER_TEMP/agent-executor-evidence/v1.tap"
+      - name: Fake executor plus integrated V1 regression
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-executor-evidence"
+          node --test --test-reporter=tap tests/agent-executor/*.test.js tests/agent-scheduler/*.test.js | tee "$RUNNER_TEMP/agent-executor-evidence/tests.tap"
+      - name: Public CLI version metadata only (no model request or authentication read)
+        run: node tools/agent-executor/runner-entry.js --probe > "$RUNNER_TEMP/agent-executor-evidence/environment.json"
+      - name: Default OFF and explicit offline demo only
+        run: |
+          node tools/agent-executor/cli.js
+          node tools/agent-executor/cli.js --fake-demo
+          node tools/agent-executor/runner-entry.js --stub
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agent-executor-offline-evidence
+          path: ${{ runner.temp }}/agent-executor-evidence
+          if-no-files-found: error
+
+  handoff:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Exact candidate and selected source provenance
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$RUNNER_TEMP/r49"
+          node tools/unattended-go-r57/sources.js > "$RUNNER_TEMP/r49/sources.json"
+      - name: All R45 R46 and R49 E2 E3 tests (Fake CLI only)
+        env:
+          R49_EVIDENCE_DIR: ${{ runner.temp }}/r49
+          R51_EVIDENCE_DIR: ${{ runner.temp }}/r49/r51
+        run: node --test tests/agent-pilot-r45/*.test.js tests/auto-handoff-r46/*.test.js tests/first-handoff-r49/*.test.js tests/trusted-trigger-r50/*.test.js tests/first-pilot-r51/*.test.js
+      - name: R48 original 49 tests at exact source SHA (historical gaps remain observations)
+        env:
+          R48_OUT: ${{ runner.temp }}/r49/r48-historical
+          R57_EVIDENCE_DIR: ${{ runner.temp }}/r49/r48-ci-diagnostics
+        run: node tools/unattended-go-r57/ci-tests.cjs r48
+      - name: Pinned official native CLI metadata (empty HOME, zero auth/model calls)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/public-cli" --no-package-lock --ignore-scripts @anthropic-ai/claude-code-linux-x64@2.1.318
+          node tools/first-pilot-r51/metadata.js "$RUNNER_TEMP/public-cli/node_modules/@anthropic-ai/claude-code-linux-x64/claude" > "$RUNNER_TEMP/r49/official-cli.json"
+          node -e "const p=require(process.env.RUNNER_TEMP+'/r49/official-cli.json');console.log(JSON.stringify(p));if(p.state!=='METADATA_VERIFIED'||p.model_calls!==0||p.official_auth!=='NOT_RUN'||p.provider_hard_cap!=='NOT_VERIFIED')process.exit(1)"
+      - name: All live entrypoints remain closed
+        run: |
+          node tools/first-pilot-r51/cli.js | tee "$RUNNER_TEMP/r49/no-go.json"
+          node -e "const r=require(process.env.RUNNER_TEMP+'/r49/no-go.json');if(r.state!=='BLOCKED'||r.actual_agent_launches!==0||!r.blockers.includes('LIVE_BUILD_DISABLED'))process.exit(1)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r51-source-and-no-go
+          path: ${{ runner.temp }}/r49

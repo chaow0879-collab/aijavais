@@ -1,0 +1,327 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const H = require('./helpers');
+const http = require('http');
+const net = require('net');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
+const SEC = require('../lib/security');
+const { ModelRegistry, diagnose } = require('../lib/models');
+const CATALOG = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'catalog', 'providers.v1.json'), 'utf8'));
+
+const reg = (env = {}) => new ModelRegistry({ catalog: CATALOG, policy: SEC.policyFromEnv(env), env });
+
+/* ---------------- 单元 ---------------- */
+test('简易添加：选服务商 + 粘贴 Key + 模型名，其余按目录补齐；凭证与注册信息分离', () => {
+  const r = reg();
+  const a = r.add({ providerId: 'anthropic', modelId: 'some-model', apiKey: 'sk-ant-abcdefgh1234' });
+  assert.ok(a.ok, a.error);
+  const c = a.connection;
+  assert.match(c.connectionId, /^mc_[a-f0-9]{6}$/);
+  assert.deepEqual([c.protocol, c.baseUrl, c.pricingMode, c.hasKey, c.keyHint, c.status], ['anthropic', 'https://api.anthropic.com', 'paid_api', true, '••••1234', 'untested']);
+  assert.ok(!JSON.stringify(r.list()).includes('sk-ant-abcdefgh1234'), '列表不含密钥');
+  const ser = r.serialize();
+  assert.ok(!JSON.stringify(ser.models).includes('sk-ant'), 'models.json 不含密钥');
+  assert.equal(ser.credentials[c.connectionId].apiKey, 'sk-ant-abcdefgh1234');
+  assert.equal(r.runtime(c.connectionId).apiKey, 'sk-ant-abcdefgh1234', '运行时对象含凭证（仅服务端内部使用）');
+  assert.equal(r.getCapabilities(c.connectionId).verified.length, 0, '未测试前没有已验证能力');
+});
+
+test('校验：未知服务商 / 能力 / 计费方式；官方环境变量只能用于官方主机；换主机必须重填 Key', () => {
+  const r = reg();
+  assert.match(r.add({ providerId: 'nope', modelId: 'm' }).error, /未知的服务商/);
+  assert.match(r.add({ providerId: 'openai', modelId: 'm', capabilities: ['telepathy'] }).error, /未知的能力标签/);
+  assert.match(r.add({ providerId: 'openai', modelId: 'm', pricingMode: 'cheap' }).error, /pricingMode/);
+  assert.match(r.add({ providerId: 'custom', modelId: 'm', baseUrl: 'https://gw.example.com/v1', envKey: 'OPENAI_API_KEY' }).error, /只能用于/);
+  assert.match(r.add({ providerId: 'custom', modelId: 'm', baseUrl: 'http://10.0.0.1/v1', apiKey: 'k' }).error, /https|LOCAL_MODEL_TARGETS/);
+  const a = r.add({ providerId: 'custom', modelId: 'm', baseUrl: 'https://gw.example.com/v1', apiKey: 'sk-gw-12345678', displayName: '网关' }).connection;
+  assert.match(r.update(a.connectionId, { baseUrl: 'https://other.example.com/v1' }).error, /重新填写 API Key/);
+  r.recordTest(a.connectionId, { ok: true, ms: 5 });
+  assert.equal(r.view(r.get(a.connectionId)).status, 'available');
+  assert.ok(r.update(a.connectionId, { modelId: 'm2' }).ok);
+  assert.equal(r.view(r.get(a.connectionId)).status, 'untested', '换模型后旧测试结果作废');
+  assert.equal(r.update('nope', {}).code, 404);
+});
+
+test('迁移旧版 providers：保留原 id（大屏 agentId 不变）、按地址识别服务商、凭证单独存放', () => {
+  const r = reg();
+  const n = r.migrateLegacy([
+    { id: 'claude', label: 'Claude', type: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'x', apiKey: 'sk-old-1234567', envKey: '', enabled: true },
+    { id: 'gw', label: 'GW', type: 'openai', baseUrl: 'https://gw.example.com/v1', model: 'y', apiKey: '', envKey: 'PATH', enabled: false },
+  ]);
+  assert.equal(n, 2);
+  assert.deepEqual(r.list().map(c => [c.connectionId, c.providerId, c.enabled]), [['claude', 'anthropic', true], ['gw', 'custom', false]]);
+  assert.equal(r.serialize().credentials.gw.envKey, '', '不合规 envKey 被清空');
+  assert.equal(r.migrateLegacy([{ id: 'claude', model: 'z' }]), 0, '重复迁移不覆盖');
+});
+
+test('本地模型无需 Key；诊断提示面向普通用户', () => {
+  const r = reg({ LOCAL_MODEL_TARGETS: 'localhost:11434' });
+  const a = r.add({ providerId: 'ollama', modelId: 'local-model' });
+  assert.ok(a.ok, a.error); assert.equal(a.connection.ready, true); assert.equal(a.connection.pricingMode, 'local');
+  assert.match(reg().add({ providerId: 'ollama', modelId: 'x' }).error, /LOCAL_MODEL_TARGETS/, '未声明本地目标时拒绝');
+  assert.match(diagnose('HTTP 401：invalid x-api-key'), /API Key 无效/);
+  assert.match(diagnose('HTTP 404：model not found'), /模型名/);
+  assert.match(diagnose('HTTP 429：quota'), /额度/);
+  assert.match(diagnose('请求超时'), /超时/);
+  assert.match(diagnose('Base URL 被拒绝：主机 x 解析到不允许的地址'), /安全策略/);
+});
+
+test('目录数据：服务商定义完整，价格未核实的不得标为免费', () => {
+  for (const p of CATALOG.providers) {
+    assert.ok(p.providerId && p.name && ['anthropic', 'openai'].includes(p.protocol), p.providerId);
+    assert.ok(['paid_api', 'free_tier', 'local', 'unknown'].includes(p.pricingMode));
+    assert.ok(p.pricingMode !== 'free_tier', '目录里不预设“免费”，免费额度需验证后由用户标记');
+    if (p.baseUrl && p.providerId !== 'ollama') assert.match(p.baseUrl, /^https:\/\//);
+    if (p.envKey) assert.ok(SEC.envKeyHostOk(p.envKey, new URL(p.baseUrl).hostname), p.providerId + ' 的 envKey 与主机绑定');
+  }
+});
+
+/* ---------------- 集成 ---------------- */
+const freePort = () => new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const call = H.call;
+/* 模拟 OpenAI 兼容服务商：/models 返回模型列表；Bearer bad-key 返回 401；prompt 含“慢”则延迟 */
+function mockProvider() {
+  const srv = http.createServer((req, res) => {
+    let b = ''; req.setEncoding('utf8'); req.on('data', c => b += c); req.on('end', () => {
+      if (req.headers.authorization === 'Bearer bad-key') { res.writeHead(401); return res.end('{"error":{"message":"invalid api key"}}'); }
+      if (req.method === 'GET' && req.url.endsWith('/models')) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ data: [{ id: 'model-b' }, { id: 'model-a' }, { id: '../bad id' }] })); }
+      const j = JSON.parse(b || '{}');
+      const prompt = j.messages[j.messages.length - 1].content;
+      setTimeout(() => {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: '好' } }] })}\n\ndata: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 1, completion_tokens: 1 } })}\n\ndata: [DONE]\n\n`);
+        res.end();
+      }, prompt.includes('慢') ? 700 : 0);
+    });
+  });
+  return new Promise(r => srv.listen(0, '127.0.0.1', () => r({ srv, port: srv.address().port })));
+}
+async function boot(mockPort, dir, preConfig) {
+  return H.boot({ dir, preConfig, env: { LOCAL_MODEL_TARGETS: mockPort ? '127.0.0.1:' + mockPort : '' } });
+}
+async function waitRun(S, id, ms = 6000) {
+  for (let t = 0; t < ms; t += 100) { const r = (await call(S.port, 'GET', '/api/runs/' + id)).json; if (r.status !== 'running') return r; await sleep(100); }
+  throw new Error('任务未结束');
+}
+
+test('零模型启动；简易接入（获取模型列表 → 测试 → 保存）；第一个模型自动成为默认；诊断', async t => {
+  const m = await mockProvider();
+  const S = await boot(m.port);
+  t.after(async () => { await S.kill(); m.srv.close(); fs.rmSync(S.dir, { recursive: true, force: true }); });
+  // 零模型：平台正常，任务给出明确提示
+  assert.deepEqual((await call(S.port, 'GET', '/api/models')).json.models, []);
+  const none = await call(S.port, 'POST', '/api/run', { task: 'x', mode: 'single' });
+  assert.equal(none.status, 400); assert.equal(none.json.code, 'connection_missing');
+  // 获取模型列表（本次粘贴的 Key 不保存），非法模型名被过滤
+  const base = `http://127.0.0.1:${m.port}/v1`;
+  const d = await call(S.port, 'POST', '/api/models/discover', { providerId: 'custom', baseUrl: base, apiKey: 'good-key' });
+  assert.deepEqual(d.json.models, ['model-a', 'model-b']);
+  const bad = await call(S.port, 'POST', '/api/models/discover', { providerId: 'custom', baseUrl: base, apiKey: 'bad-key' });
+  assert.equal(bad.json.ok, false); assert.match(bad.json.hint, /API Key 无效/);
+  // 保存
+  const add = await call(S.port, 'POST', '/api/models', { providerId: 'custom', baseUrl: base, apiKey: 'good-key', modelId: 'model-a', displayName: '主力模型', capabilities: ['coding', 'chinese'] });
+  assert.equal(add.status, 200, add.text);
+  const id = add.json.connection.connectionId;
+  assert.equal((await call(S.port, 'GET', '/api/models')).json.defaultConnectionId, id, '第一个模型自动成为默认');
+  // 测试：记录结果
+  const tr = await call(S.port, 'POST', `/api/models/${id}/test`);
+  assert.equal(tr.json.ok, true); assert.equal(tr.json.connection.status, 'available');
+  assert.deepEqual((await call(S.port, 'GET', `/api/models/${id}/capabilities`)).json.verified, ['chat']);
+  // 不指定模型也能运行（用默认模型）
+  const run = await waitRun(S, (await call(S.port, 'POST', '/api/run', { task: '用默认模型', mode: 'single' })).json.runId);
+  assert.equal(run.status, 'done'); assert.equal(run.agents[0].connectionId, id);
+  // Key 失效 → 测试失败并给出提示
+  await call(S.port, 'PUT', `/api/models/${id}`, { apiKey: 'bad-key' });
+  const tf = await call(S.port, 'POST', `/api/models/${id}/test`);
+  assert.equal(tf.json.ok, false); assert.match(tf.json.hint, /API Key 无效/); assert.equal(tf.json.connection.status, 'error');
+  // 任何接口都不返回密钥明文
+  for (const u of ['/api/models', '/api/config', `/api/models/${id}`]) assert.ok(!(await call(S.port, 'GET', u)).text.includes('bad-key'), u);
+  assert.equal(fs.statSync(path.join(S.dir, 'credentials.json')).mode & 0o777, 0o600);
+  assert.ok(!fs.readFileSync(path.join(S.dir, 'models.json'), 'utf8').includes('bad-key'));
+});
+
+test('停用 / 启用 / 删除：影响预览；删除默认模型改用替代；删除活跃模型需确认且不影响其它模型；系统可重启', async t => {
+  const m = await mockProvider();
+  let S = await boot(m.port);
+  t.after(async () => { try { await S.kill(); } catch { /* 已退出 */ } m.srv.close(); fs.rmSync(S.dir, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${m.port}/v1`;
+  const add = async name => (await call(S.port, 'POST', '/api/models', { providerId: 'custom', baseUrl: base, apiKey: 'good-key', modelId: 'model-a', displayName: name })).json.connection.connectionId;
+  const A = await add('模型甲'), B = await add('模型乙'), C = await add('模型丙');
+  // 停用：不接任务；启用后恢复
+  await call(S.port, 'POST', `/api/models/${B}/disable`);
+  assert.equal((await call(S.port, 'POST', '/api/run', { task: 'x', a: B, mode: 'single' })).json.code, 'connection_disabled');
+  await call(S.port, 'POST', `/api/models/${B}/enable`);
+  assert.equal((await waitRun(S, (await call(S.port, 'POST', '/api/run', { task: 'x', a: B, mode: 'single' })).json.runId)).status, 'done');
+  // 删除默认模型：影响预览列出“是默认模型”，用替代模型删除后默认切换
+  const imp = (await call(S.port, 'GET', `/api/models/${A}/impact`)).json;
+  assert.equal(imp.isDefault, true); assert.ok(imp.blockers.some(x => /默认/.test(x))); assert.ok(imp.alternatives.some(x => x.connectionId === C));
+  const del = await call(S.port, 'DELETE', `/api/models/${A}?replacement=${C}`);
+  assert.equal(del.status, 200, del.text); assert.equal(del.json.defaultConnectionId, C);
+  assert.equal((await call(S.port, 'DELETE', `/api/models/${B}?replacement=${B}`)).status, 400);
+  // 删除活跃模型：运行中需要 force；删除后其它模型照常工作
+  const rid = (await call(S.port, 'POST', '/api/run', { task: '慢任务', a: C, b: B, mode: 'review' })).json.runId;
+  await sleep(200);
+  const blocked = await call(S.port, 'DELETE', `/api/models/${B}`);
+  assert.equal(blocked.status, 409); assert.equal(blocked.json.impact.runningTasks[0].id, rid);
+  assert.equal((await call(S.port, 'DELETE', `/api/models/${B}?force=1`)).status, 200);
+  const r = await waitRun(S, rid);
+  assert.equal(r.status, 'error'); assert.equal(r.errorCode, 'connection_missing');
+  assert.equal(r.agents[1].connectionLabel, '模型乙', '历史任务保留被删模型的信息');
+  assert.equal((await waitRun(S, (await call(S.port, 'POST', '/api/run', { task: 'y', mode: 'single' })).json.runId)).status, 'done', '其它模型照常工作');
+  // 重启后状态一致
+  await S.kill();
+  S = await boot(m.port, S.dir);
+  const after = (await call(S.port, 'GET', '/api/models')).json;
+  assert.deepEqual(after.models.map(x => x.displayName), ['模型丙']); assert.equal(after.defaultConnectionId, C);
+  assert.equal((await call(S.port, 'GET', '/api/runs/' + rid)).json.agents[1].connectionLabel, '模型乙');
+  // 删除最后一个模型：系统仍可启动，任务给出明确提示
+  assert.equal((await call(S.port, 'DELETE', `/api/models/${C}`)).status, 200);
+  await S.kill();
+  S = await boot(m.port, S.dir);
+  assert.equal((await call(S.port, 'GET', '/api/state')).status, 200);
+  assert.equal((await call(S.port, 'POST', '/api/run', { task: 'z', mode: 'single' })).json.code, 'connection_missing');
+});
+
+test('旧配置迁移：config.json 里的 providers 自动迁移为模型连接，密钥移入 credentials.json', async t => {
+  const S = await boot(0, null, { token: 'tok-abcdef123456', settings: {}, providers: [{ id: 'claude', label: 'Claude', type: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'm', apiKey: 'sk-legacy-12345678', envKey: '', enabled: true }] });
+  t.after(async () => { await S.kill(); fs.rmSync(S.dir, { recursive: true, force: true }); });
+  const list = (await call(S.port, 'GET', '/api/models')).json.models;
+  assert.deepEqual(list.map(c => [c.connectionId, c.providerId, c.hasKey]), [['claude', 'anthropic', true]]);
+  const conf = JSON.parse(fs.readFileSync(path.join(S.dir, 'config.json'), 'utf8'));
+  assert.ok(!('providers' in conf), '旧字段已移除'); assert.ok(!('token' in conf), '旧版管理令牌已停用并从配置中移除（统一密码登录）');
+  assert.ok(!fs.readFileSync(path.join(S.dir, 'config.json'), 'utf8').includes('sk-legacy'));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(S.dir, 'credentials.json'), 'utf8')).claude.apiKey, 'sk-legacy-12345678');
+});
+
+test('Anthropic-protocol model discovery sends /v1/models?limit=100 with x-api-key (local protocol fixture, no paid API)', async t => {
+  const seen = [];
+  const srv = http.createServer((req, res) => {
+    seen.push({ url: req.url, key: req.headers['x-api-key'], version: req.headers['anthropic-version'] });
+    if (req.method === 'GET' && req.url === '/v1/models?limit=100' && req.headers['x-api-key'] === 'fixture-key') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ data: [{ id: 'fixture-model-b', type: 'model' }, { id: 'fixture-model-a', type: 'model' }, { id: 'bad name!' }], has_more: false }));
+    }
+    res.writeHead(401, { 'content-type': 'application/json' }); res.end('{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}');
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const S = await boot(srv.address().port);
+  t.after(async () => { await S.kill(); srv.close(); fs.rmSync(S.dir, { recursive: true, force: true }); });
+  const baseUrl = 'http://127.0.0.1:' + srv.address().port;
+  const ok = await call(S.port, 'POST', '/api/models/discover', { providerId: 'anthropic', baseUrl, apiKey: 'fixture-key' });
+  assert.equal(ok.json.ok, true, ok.text);
+  assert.deepEqual(ok.json.models, ['fixture-model-a', 'fixture-model-b']);
+  assert.deepEqual(seen[0], { url: '/v1/models?limit=100', key: 'fixture-key', version: '2023-06-01' });
+  const withV1 = await call(S.port, 'POST', '/api/models/discover', { providerId: 'anthropic', baseUrl: baseUrl + '/v1', apiKey: 'fixture-key' });
+  assert.equal(withV1.json.ok, true, 'Base URL ending in /v1 is not doubled');
+  const bad = await call(S.port, 'POST', '/api/models/discover', { providerId: 'anthropic', baseUrl, apiKey: 'wrong-key' });
+  assert.equal(bad.json.ok, false); assert.match(bad.json.error, /HTTP 401/); assert.doesNotMatch(bad.text, /wrong-key/);
+  const query = await call(S.port, 'POST', '/api/models/discover', { providerId: 'anthropic', baseUrl: baseUrl + '?x=1', apiKey: 'fixture-key' });
+  assert.equal(query.json.ok, false, 'a saved/base URL with its own query is still rejected');
+  assert.match(query.json.error, /查询参数/);
+  assert.equal(seen.filter(s => s.url.includes('x=1')).length, 0, 'rejected before any request was sent');
+});
+
+test('connection tests are recorded in the system usage ledger; remote cost without a price table is null, never 0 (local fixtures)', async t => {
+  const mk = host => new Promise(r => { const srv = http.createServer((req, res) => { let b = ''; req.on('data', c => b += c); req.on('end', () => {
+    if (JSON.parse(b).model === 'broken') { res.writeHead(500); return res.end('boom'); }
+    res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: '好' } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 7, completion_tokens: 1 } }) + '\n\ndata: [DONE]\n\n'); }); });
+    srv.listen(0, host, () => r(srv)); });
+  const local = await mk('127.0.0.1'), other = await mk('127.0.0.2');
+  const S = await H.boot({ env: { LOCAL_MODEL_TARGETS: `127.0.0.1:${local.address().port},127.0.0.2:${other.address().port}` } });
+  t.after(async () => { await S.stop(); local.close(); other.close(); });
+  const add = async (host, port, modelId) => (await call(S.port, 'POST', '/api/models', { providerId: 'custom', baseUrl: `http://${host}:${port}/v1`, apiKey: 'k', modelId, displayName: modelId })).json.connection.connectionId;
+  const a = await add('127.0.0.1', local.address().port, 'loop'), b = await add('127.0.0.2', other.address().port, 'remote-like'), c = await add('127.0.0.2', other.address().port, 'broken');
+  const first = (await call(S.port, 'POST', `/api/models/${a}/test`)).json;
+  assert.equal(first.ok, true); assert.equal(first.usageRecorded, true);
+  assert.equal((await call(S.port, 'POST', `/api/models/${b}/test`, {})).status, 402, 'non-loopback probe still needs explicit consent');
+  assert.equal((await call(S.port, 'POST', `/api/models/${b}/test`, { approvePaid: true })).json.ok, true);
+  assert.equal((await call(S.port, 'POST', `/api/models/${c}/test`, { approvePaid: true })).json.ok, false);
+  const ledger = (await call(S.port, 'GET', '/api/v2/usage/system')).json.usage;
+  const by = id => ledger.find(u => u.connectionId === id);
+  assert.deepEqual([by(a).cost, by(a).costSource, by(a).tokens, by(a).tokenSource], [0, 'declared_local_target_no_api_cost', 8, 'provider']);
+  assert.deepEqual([by(b).cost, by(b).costSource, by(b).tokens, by(b).maxOutputTokens], [null, 'unknown_no_price_table', 8, 32]);
+  assert.equal(by(c).ok, false); assert.equal(by(c).cost, null); assert.equal(by(c).tokenSource, 'unknown'); assert.match(by(c).error, /HTTP 500/);
+  assert.doesNotMatch(JSON.stringify(ledger), /"k"/, 'no key material in the ledger');
+});
+
+test('ledger write failure is never silent: audited without secrets and reported as not recorded', () => {
+  const { recordSystemCall } = require('../lib/usage-ledger');
+  const audits = [];
+  const entry = { kind: 'connection_test', connectionId: 'c1', modelId: 'm', ok: true, tokens: 8, cost: null, error: undefined };
+  const failing = { recordSystemUsage() { throw Object.assign(new Error('disk full sk-secret-123456'), { code: 'SQLITE_FULL' }); } };
+  const r = recordSystemCall({ store: failing, audit: (e, d) => { audits.push([e, d]); return true; } }, entry);
+  assert.equal(recordSystemCall({ store: failing, audit: () => undefined }, entry).audited, false, 'only an explicit true counts as audited');
+  assert.equal(r.recorded, false); assert.match(r.warning, /未能写入账本（已记录审计事件）/); assert.match(r.warning, /不要当作零费用/); assert.equal(r.audited, true);
+  assert.deepEqual(audits, [['usage_ledger_write_failed', { kind: 'connection_test', connectionId: 'c1', modelId: 'm', ok: true, tokens: 8, cost: null, reason: 'SQLITE_FULL' }]]);
+  assert.doesNotMatch(JSON.stringify(audits), /sk-secret/, 'error text (which may echo secrets) is not logged');
+  const both = recordSystemCall({ store: null, audit: () => { throw new Error('audit down'); } }, entry);
+  assert.equal(both.recorded, false, 'still flagged when audit also fails'); assert.equal(both.audited, false);
+  assert.match(both.warning, /审计事件也未能写入/); assert.doesNotMatch(both.warning, /已记录审计事件/, 'never claims an audit that failed');
+  const ok = recordSystemCall({ store: { recordSystemUsage: d => ({ ...d, ledgerId: 'sys_1' }) } }, entry);
+  assert.deepEqual(ok, { recorded: true, ledgerId: 'sys_1' });
+});
+
+test('API: a connection test whose usage cannot be recorded is reported and not cached as a full pass (local fixture)', async t => {
+  const { DatabaseSync } = require('node:sqlite');
+  const srv = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: '好' } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 7, completion_tokens: 1 } }) + '\n\ndata: [DONE]\n\n'); }); });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const S = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + srv.address().port } });
+  t.after(async () => { await S.stop(); srv.close(); });
+  const base = `http://127.0.0.1:${srv.address().port}/v1`;
+  const id = (await call(S.port, 'POST', '/api/models', { providerId: 'custom', baseUrl: base, apiKey: 'k', modelId: 'm', displayName: 'm' })).json.connection.connectionId;
+  // Make the system ledger unwritable from outside the server process.
+  const db = new DatabaseSync(path.join(S.dir, 'projects.sqlite')); db.exec('DROP TABLE system_usage'); db.close();
+  const r = (await call(S.port, 'POST', `/api/models/${id}/test`)).json;
+  assert.equal(r.ok, true, 'the model connection itself worked');
+  assert.equal(r.usageRecorded, false); assert.match(r.usageWarning, /已记录审计事件/);
+  assert.equal(r.connection.status, 'untested', 'not cached as a complete verification');
+  const v2run = await call(S.port, 'POST', '/api/v2/projects', { name: 'x', description: 'needs a fully verified model', roles: [{ roleId: 'a', name: 'A', duty: 'd', connectionId: id }], steps: [{ stepId: 's', roleId: 'a', title: 't' }] });
+  assert.equal((await call(S.port, 'POST', `/api/v2/projects/${v2run.json.project.projectId}/validate`, {})).json.ok, false, 'execution gate still requires a fully recorded test');
+  const audit = fs.readFileSync(path.join(S.dir, 'audit.log'), 'utf8');
+  assert.match(audit, /usage_ledger_write_failed/); assert.doesNotMatch(audit, /"k"/);
+  const probe = (await call(S.port, 'POST', '/api/models/probe', { providerId: 'custom', baseUrl: base, apiKey: 'k2', modelId: 'm2' })).json;
+  assert.equal(probe.ok, true); assert.equal(probe.usageRecorded, false);
+  const saved = (await call(S.port, 'POST', '/api/models', { providerId: 'custom', baseUrl: base, apiKey: 'k2', modelId: 'm2', displayName: 'm2' })).json.connection;
+  assert.notEqual(saved.status, 'available', 'an unrecorded pre-save probe is not reused as a passing test');
+});
+
+test('real AuthStore: audit() reports write failure; ledger+audit failure is never reported as audited', () => {
+  const { AuthStore } = require('../lib/auth');
+  const { recordSystemCall } = require('../lib/usage-ledger');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aij-audit-'));
+  try {
+    const authStore = new AuthStore({ dir });
+    assert.equal(authStore.audit('probe_ok', { a: 1 }), true);
+    assert.match(fs.readFileSync(path.join(dir, 'audit.log'), 'utf8'), /probe_ok/);
+    // Make the audit file unwritable in a way that also fails for root (CI): replace it with a directory.
+    fs.rmSync(path.join(dir, 'audit.log')); fs.mkdirSync(path.join(dir, 'audit.log'));
+    assert.equal(authStore.audit('probe_fail', {}), false, 'failure is reported, not thrown');
+    const entry = { kind: 'connection_test', connectionId: 'c1', modelId: 'm', ok: true, tokens: 8, cost: null };
+    const failingStore = { recordSystemUsage() { throw new Error('ledger down'); } };
+    const r = recordSystemCall({ store: failingStore, audit: (e, d) => authStore.audit(e, d) }, entry);
+    assert.deepEqual([r.recorded, r.audited], [false, false]);
+    assert.match(r.warning, /审计事件也未能写入/); assert.doesNotMatch(r.warning, /已记录审计事件/);
+    fs.rmSync(path.join(dir, 'audit.log'), { recursive: true }); // writable again
+    const ok = recordSystemCall({ store: failingStore, audit: (e, d) => authStore.audit(e, d) }, entry);
+    assert.deepEqual([ok.recorded, ok.audited], [false, true]); assert.match(ok.warning, /已记录审计事件/);
+    assert.match(fs.readFileSync(path.join(dir, 'audit.log'), 'utf8'), /usage_ledger_write_failed/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('getCapabilities agrees with status(): an unrecorded probe does not verify chat; normal probes still do', () => {
+  const r = reg({ LOCAL_MODEL_TARGETS: '127.0.0.1:11434' });
+  const a = r.add({ providerId: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', modelId: 'm1', pricingMode: 'local' }).connection.connectionId;
+  r.recordTest(a, { ok: true, ms: 5 });
+  assert.equal(r.status(a), 'available'); assert.deepEqual(r.getCapabilities(a).verified, ['chat']);
+  r.recordTest(a, { ok: true, ms: 5, usageRecorded: false });
+  assert.equal(r.status(a), 'untested'); assert.deepEqual(r.getCapabilities(a).verified, [], 'not verified while accounting is incomplete');
+  r.recordTest(a, { ok: true, ms: 5, usageRecorded: true });
+  assert.equal(r.status(a), 'available'); assert.deepEqual(r.getCapabilities(a).verified, ['chat']);
+  r.recordTest(a, { ok: false, ms: 5, error: 'HTTP 500' });
+  assert.deepEqual(r.getCapabilities(a).verified, []);
+});

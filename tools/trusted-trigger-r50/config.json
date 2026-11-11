@@ -1,0 +1,20 @@
+{
+  "_comment": "R50 default: everything OFF. No trusted caller, no approver key, no production signer. A real deployment needs an audited change that adds the GitHub App installation id, the default-branch workflow ref, the owner approver public key and a KMS/HSM-backed signer.",
+  "enabled": false,
+  "repo": "chaow0879-collab/aijavais",
+  "repository_id": 1446621245,
+  "default_branch": "main",
+  "installation_id": null,
+  "oidc_audience": "aijavais-r50-trigger",
+  "trusted_workflow_ref": "chaow0879-collab/aijavais/.github/workflows/r50-trusted-trigger.yml@refs/heads/main",
+  "trusted_callers": [],
+  "approver_keys": {},
+  "allow_test_signer": false,
+  "max_cost_usd": 0.5,
+  "max_runtime_ms": 30000,
+  "max_approval_ttl_ms": 86400000,
+  "max_event_age_ms": 900000,
+  "clock_skew_ms": 30000,
+  "max_body_bytes": 65536,
+  "tick_ms": 600000
+}

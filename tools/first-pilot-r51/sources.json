@@ -1,0 +1,53 @@
+{
+  "base_sha": "fcf52ed855dfccacb16cef632d0e3eb202510718",
+  "r50": {
+    "base": "fcf52ed855dfccacb16cef632d0e3eb202510718",
+    "head": "4ea740ee5638882e44f697a6a47cee60c8a8457d",
+    "parent": "1b5a837c303b96aa8e2b8c841d41ca527c7f2ff9",
+    "ci_run": 42328460103,
+    "report": "https://github.com/chaow0879-collab/aijavais/issues/33#issuecomment-6700976155",
+    "prefixes": [
+      "tools/trusted-trigger-r50/",
+      "tests/trusted-trigger-r50/",
+      "docs/TRUSTED-TRIGGER-R50.md",
+      ".github/workflows/claude-r50-trusted-trigger.yml"
+    ]
+  },
+  "exceptions": {
+    "tools/agent-pilot-r45/runner.js": {
+      "from": "100644 blob 5f9a9a93f6a4be443d634ee26e4d75c9f1e4d153",
+      "to": "100644 blob 396cd08585ec8d16d75f1692001692c7ec7eb7f3",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "tools/auto-handoff-r46/r45-adapter.js": {
+      "from": "100644 blob 197fed00370239d357b767f09bfd7267069ce0e4",
+      "to": "100644 blob e68bbd3949db14ef431adb68268423cf1e86787d",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "tools/agent-executor/cli-runner.js": {
+      "from": "100644 blob bfa32c815df26735f50fc192d9c7fb2909febf5e",
+      "to": "100644 blob 8df21c7f052d16d4b993ab2e92a203d4ed41d675",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "tools/agent-executor/workspace.js": {
+      "from": "100644 blob 23b09ab505ed1fbb64d44617b52660089f9f4412",
+      "to": "100644 blob 4b49029d7d408ecec0b15f21ce9fb6bb12f2ee09",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "tools/agent-pilot-r45/workspace.js": {
+      "from": "100644 blob e2423c51c6b3380d4750cc6a8189d6ee9fa684ed",
+      "to": "100644 blob 60a2e620f2ae38b4a0751011467348dc96720463",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "tools/auto-handoff-r46/reconcile.js": {
+      "from": "100644 blob 894f12f224e02332d3a211f269727351fdffd00a",
+      "to": "100644 blob 699eccc6ace19f8efe37a0e94ea7fb3e4ad9eb91",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    },
+    "tools/integration/verify-r43-sources.js": {
+      "from": "100644 blob 110d8dcbb4e3bc70dc8b92ac77e443e0de3b64e9",
+      "to": "100644 blob a5942bbb394271dcd85165fee8b13c3b07d321d6",
+      "status": "AUTHOR_PROPOSED_PENDING_FINAL_INDEPENDENT_REVIEW"
+    }
+  }
+}

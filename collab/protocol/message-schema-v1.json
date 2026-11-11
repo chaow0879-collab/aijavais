@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aijavais/message-v1",
+  "title": "AIJAVAIS Message Envelope v1",
+  "type": "object",
+  "required": ["v", "messageId", "threadId", "taskId", "runId", "from", "to", "type", "round", "createdAt", "content", "status"],
+  "additionalProperties": true,
+  "properties": {
+    "v": { "const": 1 },
+    "messageId": { "type": "string", "pattern": "^[\\w.-]{1,64}$" },
+    "threadId": { "type": "string", "pattern": "^[\\w.-]{1,64}$" },
+    "taskId": { "type": "string", "pattern": "^[\\w.-]{1,64}$" },
+    "runId": { "type": "string", "pattern": "^[\\w.-]{1,64}$" },
+    "spanId": { "type": "string", "pattern": "^[\\w.-]{1,64}$" },
+    "from": { "type": "string", "pattern": "^[\\w.-]{1,40}$" },
+    "to": { "type": "string", "pattern": "^[\\w.-]{1,40}$" },
+    "type": { "enum": ["request", "question", "answer", "proposal", "review", "revision", "decision", "artifact", "system_notice"] },
+    "replyTo": { "type": ["string", "null"], "pattern": "^[\\w.-]{1,64}$" },
+    "round": { "type": "integer", "minimum": 1, "maximum": 10 },
+    "createdAt": { "type": "integer", "minimum": 1, "description": "毫秒时间戳，服务端生成" },
+    "content": {
+      "type": "object",
+      "required": ["format", "text"],
+      "properties": {
+        "format": { "enum": ["text", "markdown", "json"] },
+        "text": { "type": "string", "maxLength": 20000 }
+      }
+    },
+    "artifactRefs": {
+      "type": "array", "maxItems": 10,
+      "items": { "type": "object", "required": ["artifactId"], "properties": { "artifactId": { "type": "string", "pattern": "^[\\w.-]{1,64}$" } } }
+    },
+    "metadata": { "type": "object", "description": "序列化后 ≤ 2KB" },
+    "status": { "enum": ["created", "queued", "delivered", "consumed", "failed", "cancelled"] }
+  },
+  "example": {
+    "v": 1, "messageId": "m_1_a1b2c3", "threadId": "th_1_d4e5f6", "taskId": "t0123456789ab", "runId": "r0123456789ab",
+    "from": "claude", "to": "openai", "type": "proposal", "replyTo": null, "round": 1, "createdAt": 1767225600000,
+    "content": { "format": "text", "text": "方案草稿 v1：A→B→A 流水线" }, "artifactRefs": [], "status": "delivered"
+  }
+}
