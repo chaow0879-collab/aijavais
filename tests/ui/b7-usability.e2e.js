@@ -71,7 +71,7 @@ function englishLeft(text) {
     await lp.fill('#pw', H.TEST_PASSWORD); await lp.click('#loginBtn');
     await lp.waitForURL(/\/workspace\.html/);
     await lp.waitForSelector('#s-go');
-    assert.ok(await lp.isVisible('#s-newtask'), '＋ 新建任务 is visible after login');
+    await lp.waitForSelector('#aij-new'); assert.ok(await lp.isVisible('#aij-new'), '＋ 新建任务 is visible after login (shared top bar)');
     await lp.waitForSelector('#ws-guide:not([hidden])');
     checks.push(['B7d login lands on workspace; ＋ 新建任务 + two-step guide when no model', null]);
     // B7g fallback: no model yet -> guidance, not an error dump
@@ -123,7 +123,7 @@ function englishLeft(text) {
     assert.equal((await app.call('PUT', '/api/models/' + byModel['deepseek-flash'], { price: { currency: 'EUR', inputPerMillion: 1, outputPerMillion: 3 } })).status, 400, 'invalid price rejected');
 
     /* ---- B7e/B7g: three answers -> one RMB-only confirmation -> progress view, plain Chinese only ---- */
-    await page.goto(base + '/workspace.html');
+    await page.goto(base + '/workspace.html?new=1');
     await page.waitForSelector('#s-go');
     assert.ok(await page.isHidden('#ws-guide'), 'guide hides once a model exists');
     assert.equal(await page.$('input[name=s-budget]'), null, 'simple mode has no budget, token or model options');
@@ -134,7 +134,7 @@ function englishLeft(text) {
     await page.waitForSelector('#s-plan:not([hidden])');
     const team1 = await page.innerText('#s-plan-team');
     assert.match(team1, /起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.7-flash（便宜快速）/);
-    assert.match(await page.innerText('#s-plan-note'), /价格未知，按规定不调用，已换成其它模型：自定义 · deepseek-v4-pro/);
+    assert.match(await page.innerText('#s-plan-note'), /没有登记价格，按规定不调用，已换成其它模型：自定义 · deepseek-v4-pro/);
     await page.click('#s-swap button >> nth=0');
     assert.notEqual(await page.innerText('#s-plan-team'), team1, '换一个 changes the assignment');
     await page.click('#s-swap button >> nth=0');
@@ -196,7 +196,7 @@ function englishLeft(text) {
     await shot(page, '4-progress');
     /* QA-B7-03: HALOFLUX keeps its look; every label has a Chinese primary text (English only as small .en sub-labels) */
     const panel = await ctx.newPage();
-    await panel.goto(base + '/');
+    await panel.goto(base + '/panel.html'); // B5-1: an administrator's / is now my tasks
     // O12: wait for concrete state instead of a fixed sleep — the run's calls are counted and a route row names a model
     await panel.waitForFunction(() => Number(document.querySelector('#k2').textContent) > 0 && [...document.querySelectorAll('#routes .nm')].some(n => n.textContent.trim() && n.textContent.trim() !== '—'), null, { timeout: 15000 });
     await panel.addStyleTag({ content: '.en{display:none!important}' });
@@ -254,7 +254,7 @@ function englishLeft(text) {
 
     /* ---- B7f: advanced form, cost 0 (owner's screenshot) -> reason next to the button + fixes ---- */
     const tested = (await app.call('GET', '/api/models')).json.models.find(m => m.status === 'available');
-    await page.goto(base + '/workspace.html');
+    await page.goto(base + '/workspace.html?new=1');
     await page.waitForSelector('#s-advanced');
     await page.click('#s-advanced');
     await page.fill('#project-name', '高级模式复现'); await page.fill('#project-description', '费用上限为 0 时点击开始执行');

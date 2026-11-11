@@ -6,6 +6,7 @@ const { spawn } = require('child_process');
 const OUT = process.env.UI_SHOTS || require('os').tmpdir();
 const REPO = require('path').join(__dirname, '..', '..');
 const freePort = () => new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
+const assert = require('node:assert/strict');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const mock = http.createServer((req, res) => {
@@ -84,12 +85,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await page.waitForFunction(() => document.querySelector('#teamList').textContent.includes('公文小组'));
   await page.screenshot({ path: path.join(OUT, '4-teams.png'), fullPage: true });
 
-  // 运行（付费岗位 → 确认对话框自动接受）
-  await page.click('#teamList [data-act=run]');
-  await page.fill('#task', '起草一份新员工入职引导通知');
-  await page.click('#runBtn');
-  await page.waitForFunction(() => /完成|任务中断/.test(document.querySelector('#runOut').textContent), null, { timeout: 15000 });
-  await page.screenshot({ path: path.join(OUT, '5-run.png'), fullPage: true });
+  // B5-1：管理页不再有第二个运行入口（旧 /api/run 前端已移除），只有通往“我的任务 / 新建任务”的入口
+  await page.click('#nav [data-pane=run]');
+  await page.waitForSelector('#runMoved');
+  assert.equal(await page.$('#runBtn'), null, 'no legacy run button');
+  assert.equal(await page.$('#task'), null, 'no legacy task box');
+  assert.equal(await page.$('#teamList [data-act=run]'), null, 'no "run with this team" button');
+  assert.equal(await page.locator('button', { hasText: /^运行$/ }).count(), 0, 'no button labelled 运行 anywhere on the admin page');
+  assert.equal(await page.getAttribute('#runMovedNew', 'href'), '/workspace.html?new=1');
+  assert.equal(await page.getAttribute('#runMovedHome', 'href'), '/workspace.html');
+  await page.waitForSelector('#aij-new'); assert.equal(await page.getAttribute('#aij-new', 'href'), '/workspace.html?new=1', 'shared top bar on the admin page');
+  await page.screenshot({ path: path.join(OUT, '5-run-moved.png'), fullPage: true });
 
   // 删除被引用的模型：影响预览
   await page.click('#nav [data-pane=models]');

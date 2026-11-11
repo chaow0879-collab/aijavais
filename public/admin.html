@@ -103,6 +103,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
 .guide ol{margin:6px 0 0;padding-left:20px}.guide li{margin:4px 0}.guide li.done{color:var(--dim);text-decoration:line-through}.guide li.cur{font-weight:700}
 .brow.nonchat{opacity:.65}.sugg{font-size:11px;color:#ffcf85;border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:6px}
 </style>
+<script src="/topbar.js" defer></script>
 </head>
 <body>
 <div style="padding:8px 22px;border-bottom:1px solid #25282e"><a href="/workspace.html">AIJAVAIS V2 工作台：立项、协作、审核与文件交付 →</a> · <a href="/project-intake.html">项目立项向导</a> · <a href="/capabilities.html">能力中心与就绪检查（首次使用请先看这里）</a></div>
@@ -115,14 +116,14 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
     <span class="chip"><i class="dot" id="dot"></i><span id="conn">连接中…</span></span>
     <a class="newtask" id="newTaskBtn" href="/workspace.html?new=1">＋ 新建任务</a>
     <a class="chip" href="/workspace.html">项目工作台 →</a>
-    <a class="chip" href="/" target="_blank" rel="noopener">打开大屏 ↗</a>
+    <a class="chip" href="/panel.html" target="_blank" rel="noopener">打开大屏 ↗</a>
     <button class="sm" id="logoutBtn">退出登录</button>
   </div>
 </header>
 <nav id="nav">
   <button data-pane="models" class="on">模型</button>
   <button data-pane="teams">AI 团队</button>
-  <button data-pane="run">运行任务</button>
+  <button data-pane="run">我的任务</button>
   <button data-pane="live">实时状态</button>
   <button data-pane="ingest">外部接入</button>
   <button data-pane="settings">设置</button>
@@ -215,25 +216,10 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
   <!-- ======================= 运行 ======================= -->
   <div class="pane" id="pane-run">
     <div class="col">
-      <section>
-        <h2>运行任务 <small>全程驱动大屏</small></h2>
-        <textarea id="task" placeholder="输入任务，例如：比较三种方案的成本与风险，给出推荐和依据。"></textarea>
-        <div class="row end" style="margin-top:8px">
-          <label>由谁来做<select id="runBy"><option value="team">AI 团队</option><option value="models">直接选模型</option></select></label>
-          <label id="runTeamL">团队<select id="runTeam"></select></label>
-          <label id="runAL" class="hidden">模型 A（起草 / 修订）<select id="selA"></select></label>
-          <label id="runBL" class="hidden">模型 B（审核）<select id="selB"></select></label>
-          <label>流程<select id="mode"><option value="full">起草 → 审核 → 修订</option><option value="review">起草 → 审核</option><option value="single">只起草</option></select></label>
-          <button class="pri" id="runBtn">运行</button>
-        </div>
-        <p class="note warn">任务内容会发送给所选模型的服务商。个人信息、财务、客户或商业机密等敏感内容请先脱敏，或只使用本地模型。</p>
-        <div id="runOut"></div>
-      </section>
-    </div>
-    <div class="col">
-      <section>
-        <h2>最近任务 <small><button class="sm" id="runsRefresh">刷新</button></small></h2>
-        <div style="overflow:auto"><table><thead><tr><th>时间</th><th>任务</th><th>团队 / 模型</th><th>状态</th></tr></thead><tbody id="runsBody"></tbody></table></div>
+      <section id="runMoved">
+        <h2>新建和运行任务请到“我的任务”</h2>
+        <p class="note">管理中心只负责模型、团队和设置。新建任务、查看进度、下载成果都在“我的任务”里完成，每次开始前都会先请你确认人民币费用。</p>
+        <div class="row" style="margin-top:10px"><a class="newtask" id="runMovedNew" href="/workspace.html?new=1">＋ 新建任务</a><a class="chip" id="runMovedHome" href="/workspace.html">查看我的任务（进行中、等你审核、已完成）→</a></div>
       </section>
     </div>
   </div>
@@ -353,7 +339,6 @@ $('#nav').addEventListener('click', e => {
   const p = e.target.dataset.pane; if (!p) return;
   $$('#nav button').forEach(b => b.classList.toggle('on', b === e.target));
   $$('.pane').forEach(x => x.classList.toggle('on', x.id === 'pane-' + p));
-  if (p === 'run') loadRuns();
   if (p === 'ingest') loadIngest();
   if (p === 'settings') loadSessions();
 });
@@ -613,7 +598,7 @@ function renderTeams() {
       <label>备用模型<select data-f="fallback">${modelOpts(r.fallbackConnectionIds[0] || '', '— 无 —')}</select></label>
       <button class="sm" data-act="rec">推荐</button></div></div>`).join('')}
     ${t.health && t.health.issues.length ? `<ul class="issues">${t.health.issues.map(i => `<li class="${esc(i.level)}">${esc(i.text)}</li>`).join('')}</ul>` : '<p class="ok" style="font-size:12px">配置完整</p>'}
-    <div class="row" style="margin-top:6px"><button class="sm" data-act="run">用这个团队运行</button><button class="sm danger" data-act="del">删除团队</button></div>
+    <div class="row" style="margin-top:6px"><button class="sm danger" data-act="del">删除团队</button></div>
   </div>`).join('') : '<p class="note">还没有团队。用左边从模板建立。</p>';
 }
 $('#teamList').addEventListener('change', async e => {
@@ -627,73 +612,12 @@ $('#teamList').addEventListener('click', async e => {
   const act = e.target.dataset.act; if (!act) return;
   const teamId = e.target.closest('[data-team]').dataset.team;
   if (act === 'del') { if (!confirm('删除这个团队？（模型不受影响）')) return; await api('/api/teams/' + teamId, 'DELETE'); await load(false); }
-  if (act === 'run') { $('#nav [data-pane=run]').click(); $('#runBy').value = 'team'; onRunBy(); $('#runTeam').value = teamId; $('#task').focus(); }
   if (act === 'rec') {
     const role = e.target.closest('.role').dataset.role;
     const r = await api('/api/recommend', 'POST', { teamId, roleId: role });
     showRecs(r, async id => { await api(`/api/teams/${teamId}/roles/${role}`, 'PUT', { primaryConnectionId: id }); await load(false); });
   }
 });
-
-/* ======================= 运行任务 ======================= */
-function onRunBy() {
-  const team = $('#runBy').value === 'team';
-  $('#runTeamL').classList.toggle('hidden', !team); $('#runAL').classList.toggle('hidden', team); $('#runBL').classList.toggle('hidden', team);
-}
-$('#runBy').addEventListener('change', onRunBy);
-function renderRunSelectors() {
-  const live = MODELS.filter(m => m.enabled);
-  const opts = live.map(m => `<option value="${esc(m.connectionId)}">${esc(plat(m))}</option>`).join('');
-  const a = $('#selA').value, b = $('#selB').value, t = $('#runTeam').value;
-  $('#selA').innerHTML = opts; $('#selB').innerHTML = opts;
-  if (a) $('#selA').value = a; if (b) $('#selB').value = b; else if (live.length > 1) $('#selB').selectedIndex = 1;
-  $('#runTeam').innerHTML = TEAMS.map(x => `<option value="${esc(x.teamId)}">${esc(x.name)}</option>`).join('') || '<option value="">（还没有团队）</option>';
-  if (t) $('#runTeam').value = t;
-  if (!TEAMS.length && $('#runBy').value === 'team' && MODELS.length) { $('#runBy').value = 'models'; onRunBy(); }
-}
-let runTimer = null;
-async function submitRun(approvePaid = false) {
-  const task = $('#task').value.trim();
-  if (!task) return toast('请先输入任务');
-  const body = { task, mode: $('#mode').value, approvePaid };
-  if ($('#runBy').value === 'team') body.teamId = $('#runTeam').value; else { body.a = $('#selA').value; body.b = $('#selB').value; }
-  $('#runBtn').disabled = true;
-  const r = await api('/api/run', 'POST', body, { raw: true });
-  if (r.status === 402) {
-    $('#runBtn').disabled = false;
-    if (confirm(r.json.error + '\n\n是否允许本次使用？（只对这一次任务有效）')) return submitRun(true);
-    return;
-  }
-  if (r.status !== 200) { $('#runBtn').disabled = false; return toast(r.json.error || '提交失败', 6000); }
-  pollRun(r.json.runId);
-}
-$('#runBtn').addEventListener('click', () => submitRun(false).catch(e => { $('#runBtn').disabled = false; toast(e.message); }));
-function pollRun(id) {
-  clearInterval(runTimer);
-  const tick = async () => {
-    try {
-      const r = await api('/api/runs/' + id);
-      $('#runOut').innerHTML = (r.team ? `<p class="note">团队：${esc(r.team.teamName)} · ${esc(r.team.assignments.map(a => a.roleName + ' → ' + (MODELS.find(m => m.connectionId === a.connectionId)?.displayName || a.connectionId) + (a.usedFallback ? '（备用）' : '')).join('；'))}</p>` : '')
-        + (r.steps || []).map(s => `<div class="step"><div class="hd"><span>${esc(s.label)} · ${esc(s.provider)}${s.model ? ' · ' + esc(s.model) : ''}</span>
-          <span class="${s.status === 'error' ? 'bad' : s.status === 'done' ? 'ok' : ''}">${s.status === 'running' ? '进行中…' : s.status === 'done' ? (s.ms / 1000).toFixed(1) + 's · ' + s.tokens + ' token' + (s.estimated ? '（估算）' : '') : '失败'}</span></div>
-          <div class="bd">${esc(s.error || s.text || '…')}</div></div>`).join('')
-        + (r.status === 'error' ? `<p class="bad">任务中断：${esc(r.error)}</p>` : r.status === 'done' ? '<p class="ok">完成</p>' : '');
-      if (r.status !== 'running') { clearInterval(runTimer); $('#runBtn').disabled = false; loadRuns(); }
-    } catch (err) { clearInterval(runTimer); $('#runBtn').disabled = false; toast(err.message); }
-  };
-  tick(); runTimer = setInterval(tick, 1200);
-}
-async function loadRuns() {
-  try {
-    const r = await api('/api/runs');
-    const ST = { running: '运行中', done: '完成', error: '失败', interrupted: '中断', reported: '外部上报' };
-    $('#runsBody').innerHTML = r.runs.length ? r.runs.map(t => `<tr data-run="${esc(t.id)}" style="cursor:pointer"><td>${new Date(t.createdAt).toLocaleString()}</td><td>${esc(t.title)}</td>
-      <td>${esc(t.team ? t.team.teamName : (t.agents || []).map(a => a.connectionLabel).join(' / ') || (t.kind === 'external' ? '外部' : ''))}</td>
-      <td class="${t.status === 'error' ? 'e' : t.status === 'running' ? 'w' : ''}">${esc(ST[t.status] || t.status)}</td></tr>`).join('') : '<tr><td colspan="4" class="note">暂无任务</td></tr>';
-  } catch (e) { /* 忽略 */ }
-}
-$('#runsBody').addEventListener('click', e => { const tr = e.target.closest('[data-run]'); if (tr) pollRun(tr.dataset.run); });
-$('#runsRefresh').addEventListener('click', loadRuns);
 
 /* ======================= 外部接入 ======================= */
 let snipTab = 'node';
@@ -792,7 +716,7 @@ async function load(first = true) {
   CFG = c; MODELS = c.models; TEAMS = t.teams;
   if (first) { TPL = await api('/api/team-templates'); renderWizard(); renderTemplates(); renderSnippet(); }
   else onTpl();
-  renderModels(); renderTeams(); renderRunSelectors(); renderSettings(); renderGuide(); syncRefresh();
+  renderModels(); renderTeams(); renderSettings(); renderGuide(); syncRefresh();
 }
 /* B7d：首次使用（无模型或无项目）显示两步引导 */
 async function renderGuide() {

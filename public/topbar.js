@@ -21,7 +21,11 @@
   .aij-top .aij-menu a:hover{background:#173049}
   .aij-top .aij-menu small{display:block;color:#8fa6ba}
   .aij-top .aij-sp{flex:1}
-  body[data-topbar=overlay] .aij-top{position:fixed;top:8px;right:8px;left:auto;border:1px solid #22384f;border-radius:12px;background:rgba(11,22,34,.92);max-width:calc(100vw - 16px)}
+  .aij-top .aij-watch{color:#9fb6c9;white-space:nowrap}.aij-top select{background:#10202f;color:#e7f0f8;border:1px solid #2a4560;border-radius:8px;padding:5px 8px;font:inherit;max-width:180px}
+  body[data-topbar=overlay] .aij-top{position:fixed;top:6px;right:8px;left:auto;gap:5px;padding:4px 6px;font-size:12px;border:1px solid #22384f;border-radius:10px;background:rgba(11,22,34,.9);max-width:calc(100vw - 16px)}
+  body[data-topbar=overlay] .aij-top a,body[data-topbar=overlay] .aij-top button{padding:3px 8px}
+  body[data-topbar=overlay] .aij-top .aij-brand,body[data-topbar=overlay] .aij-top .aij-sp{display:none}
+  body[data-topbar=overlay] .aij-top select{padding:2px 6px;max-width:140px}
   @media (max-width:640px){.aij-top{padding:8px}.aij-top a,.aij-top button{padding:6px 9px}.aij-top .aij-brand{display:none}.aij-top .aij-sp{display:none}}`;
   const here = location.pathname === '/' ? '/workspace.html' : location.pathname;
   const isNew = new URLSearchParams(location.search).get('new') === '1';
@@ -42,9 +46,20 @@
       link('/panel.html', '实时大屏', { id: 'aij-panel' }),
       link('/admin.html', '模型设置', { id: 'aij-models' }),
       el('span', { className: 'aij-sp' }),
-      el('span', { className: 'aij-run' }, [btn, menu])]);
+      el('span', { className: 'aij-run' }, [btn, menu]), ...watchPicker(running)]);
     if (bar) bar.replaceWith(next); else document.body.prepend(next);
     bar = next;
+  }
+  /* 大屏专用“看哪个任务”：默认最新运行中的任务；显示它在第几步、谁在做，并可一键进它的进度页 */
+  let watching = null;
+  function watchPicker(running) {
+    if (document.body.dataset.topbar !== 'overlay' || !running.length) return [];
+    if (!running.some(t => t.runId === watching)) watching = running[0].runId;
+    const t = running.find(x => x.runId === watching);
+    const sel = el('select', { id: 'aij-watch', ariaLabel: '看哪个任务', onchange: e => { watching = e.target.value; if (last) render(last); } },
+      running.map(x => el('option', { value: x.runId, text: x.name, selected: x.runId === watching })));
+    const info = el('a', { id: 'aij-watch-info', href: '/workspace.html?run=' + encodeURIComponent(t.runId), text: '第 ' + Math.min(t.stepsDone + 1, t.stepsTotal || 1) + '/' + (t.stepsTotal || 1) + ' 步' + (t.currentRole ? ' · ' + t.currentRole + '正在做' : '') + ' · 看进度' });
+    return [el('label', { className: 'aij-watch' }, ['看哪个任务 ', sel]), info];
   }
   async function refresh() {
     try {

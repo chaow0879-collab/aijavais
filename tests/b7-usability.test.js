@@ -74,7 +74,8 @@ test('B7e: unknown-price models are never assigned and are named; no priced mode
   assert.ok(p.roles.every(r => r.model.connectionId !== 'b')); assert.ok(!('b' in p.approval.prices));
   const none = Plan.plan({ models: [POOL[1]], goal: '写一份方案' });
   assert.equal(none.ok, false); assert.equal(none.problems[0].code, 'no_priced_model');
-  assert.match(none.problems[0].text, /价格未知，按规定不调用：DeepSeek · deepseek-v4-pro。请到 管理中心 → 模型 → 编辑/, 'QA-B7-06: names the models and the exact steps');
+  assert.match(none.problems[0].text, /没有登记价格的平台，按规定不调用：DeepSeek · deepseek-v4-pro。/, 'QA-B7-06: names the models');
+  assert.doesNotMatch(none.problems[0].text, /管理中心|单价|改用/, 'B5-2: never sends the user to edit unit prices, never suggests the platform already in use');
 });
 test('B7e: conversion formula — RMB price at FX 7.5 -> USD rates; USD cap = RMB max / 7.5; max clipped to the per-run cap', () => {
   const p = Plan.plan({ models: POOL, goal: '写一份方案', capCny: 5 });

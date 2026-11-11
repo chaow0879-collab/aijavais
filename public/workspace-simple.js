@@ -38,7 +38,7 @@
       const others = window.SmartPlan.usable(pool()).filter(m => m.connectionId !== ctx.connectionId);
       if (ctx.connectionId && others.length && retry) box.append(el('button', { type: 'button', className: 'fixbtn', text: '自动换成其它可用模型', onclick: () => { S.excluded.add(ctx.connectionId); for (const k of Object.keys(S.picks)) if (S.picks[k] === ctx.connectionId) delete S.picks[k]; box.hidden = true; retry(); } }));
       else box.append(el('div', { className: 'hint', text: '没有其它可用的模型了，请管理员添加模型。' }));
-    } else if (fix && fix.action === 'add_model') box.append(el('div', { className: 'hint', text: '请管理员添加模型。' }));
+    } else if (fix && fix.action === 'add_model') box.append(el('a', { className: 'fixbtn', href: '/admin.html', text: fix.label })); // 一个模型都没有：只能先添加
     else if (fix && retry) box.append(el('button', { type: 'button', className: 'fixbtn', text: fix.label, onclick: () => { box.hidden = true; retry(); } }));
     if (info.detail) box.append(el('details', {}, [el('summary', { text: '给管理员看的详细信息' }), el('div', { text: info.detail })]));
     box.hidden = false; box.scrollIntoView({ block: 'center' });
@@ -58,7 +58,7 @@
     if (show) {
       $('s-plan').hidden = !S.plan.ok;
       $('s-plan-team').textContent = S.plan.ok ? '智能分配：' + S.plan.summary : '';
-      $('s-plan-note').textContent = S.plan.ok ? S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : '') + ' ' + (S.plan.estimatedNote || '') + ' ' + skippedText(S.plan) : '';
+      $('s-plan-note').textContent = S.plan.ok ? [S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : ''), S.plan.estimatedNote, skippedText(S.plan)].filter(Boolean).join(' ') : '';
       if (S.plan.ok) renderSwap(S.plan);
     }
     return S.plan;
