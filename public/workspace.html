@@ -19,6 +19,12 @@
     /* B5-1 我的任务（任务中心） */
     .home-sum{font-size:16px;margin:4px 0 12px}.home-sum b{color:var(--accent)}
     .budget-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.budget-row input{width:140px}.budget-row .yen{font-weight:700}
+    .btn-outline{display:inline-block;border:1px solid var(--accent);color:var(--accent);background:rgba(102,223,210,.08);border-radius:8px;padding:6px 14px;font-weight:600;text-decoration:none}.btn-outline:hover{background:rgba(102,223,210,.18);text-decoration:none}
+    .home-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+    .home-live{border:1px solid var(--line);border-radius:10px;padding:12px;background:#0b1622}.home-live h3{margin:0;font-size:15px}
+    .live-list{list-style:none;margin:8px 0;padding:0;max-height:320px;overflow:auto;font-size:13px}.live-list li{padding:5px 0;border-bottom:1px solid #1a2c3f;display:flex;gap:6px}
+    .live-list .t{color:var(--dim);font-variant-numeric:tabular-nums}.live-list .k{font-weight:600}.live-list .err{color:var(--bad)}.live-list .ok{color:var(--accent)}.live-list .dim{color:var(--dim)}
+    @media (max-width:900px){.home-grid{grid-template-columns:1fr}}
     .home-empty{text-align:center;padding:24px 8px}.home-empty .newtask{display:inline-block;margin-top:10px}.home-empty .guide{text-align:left}
     .tgroup h3{margin:16px 0 8px;font-size:15px;color:var(--dim)}.tcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
     .tcard{display:block;border:1px solid var(--line);border-radius:10px;padding:12px;background:#0d1a29;color:var(--text);text-decoration:none}.tcard:hover{border-color:var(--accent);text-decoration:none}
@@ -44,7 +50,8 @@
   <aside><div class="side-head"><span class="side-title">我的任务</span><button id="new-project" class="small" type="button">＋ 新建</button></div><div id="projects" class="projects" aria-label="项目列表"><p class="empty">正在读取项目…</p></div></aside>
   <main>
     <section id="home" class="card simple-only" hidden aria-labelledby="home-title">
-      <div class="row-head"><h2 id="home-title">我的任务</h2><a class="newtask big" id="home-new" href="/workspace.html?new=1">＋ 新建任务</a></div>
+      <div class="row-head"><h2 id="home-title">我的任务</h2><a class="btn-outline" id="home-new" href="/workspace.html?new=1">＋ 新建任务</a></div>
+      <div class="home-grid"><div class="home-main">
       <p class="home-sum" id="home-sum" role="status" aria-live="polite">正在读取任务…</p>
       <div id="home-empty" class="home-empty" hidden>
         <p class="home-sum">还没有任务。说说想让 AI 帮你做什么，系统会自动配好团队、先请你确认费用再开始。</p>
@@ -52,6 +59,12 @@
         <a class="newtask big" id="home-empty-new" href="/workspace.html?new=1">＋ 新建任务</a>
       </div>
       <div id="home-groups"></div>
+      </div>
+      <aside id="home-live" class="home-live" aria-labelledby="home-live-title">
+        <div class="row-head"><h3 id="home-live-title">实时动态</h3><a id="home-live-open" href="/panel.html">打开实时大屏 →</a></div>
+        <ol id="home-live-list" class="live-list"><li class="dim">等待模型信号…</li></ol>
+        <p class="hint">只显示服务器真实记录的模型调用与交接；本机演示信号会标明“演示”。</p>
+      </aside></div>
     </section>
     <section id="simple" class="card simple-only" aria-labelledby="s-title">
       <div class="row-head"><h2 id="s-title">新建任务</h2><button id="s-advanced" type="button" class="small">高级设置</button></div>

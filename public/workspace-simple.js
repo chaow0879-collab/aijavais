@@ -252,6 +252,18 @@
     if (!$('s-progress').hidden) renderRunNav();
   }
   addEventListener('aij:tasks', e => onTasks(e.detail));
+  /* B5-F2 F：首页右侧“实时动态”小卡——大屏同一条真实事件流（/api/events），点标题进完整大屏 */
+  const LIVE_TEXT = { model_start: '开始调用模型', model_done: '模型完成', model_error: '模型出错', handoff: '交接给下一岗位', task_start: '任务开始', task_done: '任务完成',
+    task_error: '任务出错', tool_start: '开始用工具', tool_done: '工具完成', review: '审核', planning: '规划', file_change: '生成文件', test_start: '开始检查', test_result: '检查结果', activity: '动态' };
+  const liveItems = [];
+  addEventListener('aij:event', e => {
+    const v = e.detail; if (!v || v.type !== 'event' || !LIVE_TEXT[v.eventType]) return;
+    const when = new Date(v.t || v.timestamp || Date.now()), hh = n => String(n).padStart(2, '0');
+    liveItems.unshift({ time: hh(when.getHours()) + ':' + hh(when.getMinutes()) + ':' + hh(when.getSeconds()), who: String(v.label || v.agent || '').slice(0, 24) + (v.role ? ' · ' + String(v.role).slice(0, 12) : ''),
+      what: LIVE_TEXT[v.eventType] + (v.source === 'demo' ? '（演示）' : ''), cls: /error/.test(v.eventType) ? 'err' : /done/.test(v.eventType) ? 'ok' : '' });
+    liveItems.splice(12);
+    $('home-live-list').replaceChildren(...liveItems.map(x => el('li', {}, [el('span', { className: 't', text: x.time }), el('span', { className: 'k ' + x.cls, text: x.what }), el('span', { text: x.who })])));
+  });
   /* 从进度页链接直接打开时，按任务当初选的成果格式下载 */
   function restoreFormat(run) {
     const label = ((/想要的成果：(.+)/.exec(run.projectSnapshot && run.projectSnapshot.description || '') || [])[1] || '').split('\n')[0];

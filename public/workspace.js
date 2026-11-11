@@ -347,6 +347,7 @@
     stream.onopen=()=>{$('stream-status').textContent='实时事件已连接';};stream.onerror=()=>{$('stream-status').textContent='事件流重连中；任务状态继续轮询';};
     stream.onmessage=event=>{
       let value;try{value=JSON.parse(event.data);}catch{return;}
+      try{dispatchEvent(new CustomEvent('aij:event',{detail:value}));}catch{/* 首页实时动态卡只是展示 */}
       const payload=value.payload || value.data || value;
       if(state.run && (payload.runId===state.run.runId || value.runId===state.run.runId))periodicRefresh();
     };

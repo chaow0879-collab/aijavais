@@ -118,7 +118,19 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     ok('left list shows plain status and opens the task progress page (not the configuration page)');
 
     /* ---- coming back after finishing: results to download are visible on my tasks ---- */
+    // B5-F2 F: the home embeds a small live card fed by the same real event stream as the screen
+    await lp.goto(base + '/workspace.html'); await lp.waitForSelector('#home-live');
+    assert.equal(await lp.getAttribute('#home-live-open', 'href'), '/panel.html');
+    await lp.waitForFunction(() => /事件|已连接|等待/.test(document.body.innerText)); await lp.waitForTimeout(500);
     hold = false; for (const f of held.splice(0)) f();
+    await lp.waitForFunction(() => [...document.querySelectorAll('#home-live-list li')].some(li => /模型完成/.test(li.textContent)), null, { timeout: 15000 });
+    assert.match(await lp.innerText('#home-live-list'), /本地写手/);
+    ok('home live card shows real model events from the screen stream and links to the full screen');
+    // B5-F2 G: ＋ 新建任务 sits on the right of the top bar in the bar's own style (outline, not a solid colour block)
+    const g = await lp.evaluate(() => { const n = document.querySelector('#aij-new'), cs = getComputedStyle(n), r = n.getBoundingClientRect(), m = document.querySelector('#aij-models').getBoundingClientRect();
+      return { right: r.left > m.right + 40, bg: cs.backgroundColor, border: cs.borderTopColor }; });
+    assert.ok(g.right, 'right side of the bar'); assert.match(g.bg, /rgba\(79, 179, 255, 0\.1[0-9]*\)/, 'light tint, not a solid block: ' + g.bg); assert.match(g.border, /rgb\(79, 179, 255\)/);
+    ok('top bar ＋ 新建任务: right side, outline style matching the bar');
     await lp.goto(base + '/workspace.html');
     await lp.waitForFunction(() => /正在运行 0 个/.test(document.querySelector('#home-sum')?.textContent || '') , null, { timeout: 15000 });
     assert.match(await lp.innerText('#home-groups'), /有成果可下载/);

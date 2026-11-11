@@ -11,7 +11,8 @@
   .aij-top a,.aij-top button{color:#cfe3f3;text-decoration:none;border:1px solid #2a4560;background:#10202f;border-radius:999px;padding:6px 12px;font:inherit;cursor:pointer;white-space:nowrap}
   .aij-top a:hover,.aij-top button:hover{border-color:#4fb3ff}
   .aij-top a[aria-current=page]{background:#173049;border-color:#4fb3ff;color:#fff}
-  .aij-top .aij-new{background:#1f9d55;border-color:#1f9d55;color:#fff;font-weight:700}
+  .aij-top .aij-new{background:rgba(79,179,255,.12);border-color:#4fb3ff;color:#d8ecff;font-weight:600}
+  .aij-top .aij-new:hover{background:rgba(79,179,255,.22)}
   .aij-top .aij-brand{font-weight:800;letter-spacing:.04em;margin-right:6px;color:#fff;border:0;background:none;padding:0}
   .aij-top .aij-run{position:relative}
   .aij-top .aij-run>button{background:#2b1f05;border-color:#d99a00;color:#ffd666}
@@ -43,10 +44,10 @@
     bar = el('nav', { className: 'aij-top', id: 'aij-topbar', ariaLabel: '主导航' }, [
       el('span', { className: 'aij-brand', text: 'AIJAVAIS' }),
       link('/workspace.html', '我的任务', { id: 'aij-home' }),
-      link('/workspace.html?new=1', '＋ 新建任务', { id: 'aij-new', className: 'aij-new' }),
       link('/panel.html', '实时大屏', { id: 'aij-panel' }),
       link('/admin.html', '模型设置', { id: 'aij-models' }),
       el('span', { className: 'aij-sp' }),
+      link('/workspace.html?new=1', '＋ 新建任务', { id: 'aij-new', className: 'aij-new' }),
       el('span', { className: 'aij-run' }, [btn, menu]), watchBox]);
     document.body.prepend(bar);
   }
