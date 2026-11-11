@@ -45,7 +45,7 @@
     box.hidden = false; box.scrollIntoView({ block: 'center' });
   }
   /* B5-F2：可选预算（人民币）。空着=自动；填了就按它做上限（不超过管理员的单次上限），引擎门禁不变 */
-  const budget = () => { const v = Number($('s-budget-cny').value); return $('s-budget-cny').value.trim() && Number.isFinite(v) && v > 0 ? v : null; };
+  const budget = () => $('s-budget-cny').value.trim() === '' ? null : $('s-budget-cny').value.trim(); // validated in SmartPlan.plan (0/负数/文字 -> 提示)
   function makePlan(choice) {
     return window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value, output: output(), deadline: $('s-deadline').value, capCny: S.capCny, picks: S.picks, choice: choice || S.choice, budgetCny: budget() });
   }
@@ -55,8 +55,12 @@
   }
   /* 填的金额比建议金额低：一句人话 + 两个按钮，用户选了“就用这个金额”才继续 */
   function budgetCheck(p) {
-    if (!p.underBudget || S.budgetAck === p.budgetCny) return true;
-    $('s-budget-warn-text').textContent = '预算可能不够，做到一半会停下（已完成的部分仍可下载）。建议金额约 ¥' + p.suggestedCny.toFixed(2) + '，你填的是 ¥' + p.chosen.maxCny.toFixed(2) + '。';
+    if (!p.underBudget || (!p.belowMin && S.budgetAck === p.budgetCny)) return true;
+    // 低于第一步所需：不能开始，也不悄悄抬高，只给“改成建议金额”
+    $('s-budget-keep').hidden = p.belowMin;
+    $('s-budget-warn-text').textContent = p.belowMin
+      ? '这个金额连第一步都不够（第一步最少约 ¥' + p.minCny.toFixed(2) + '），开始后会马上停下，所以先不开始。建议金额约 ¥' + p.suggestedCny.toFixed(2) + '。'
+      : '预算可能不够，做到一半会停下（已完成的部分仍可下载）。建议金额约 ¥' + p.suggestedCny.toFixed(2) + '，你填的是 ¥' + p.chosen.maxCny.toFixed(2) + '。';
     $('s-budget-suggest').onclick = () => { $('s-budget-cny').value = p.suggestedCny.toFixed(2); $('s-budget-warn').hidden = true; S.budgetAck = null; if (!$('s-plan').hidden) preview(true); };
     $('s-budget-keep').onclick = () => { S.budgetAck = p.budgetCny; $('s-budget-warn').hidden = true; go(); };
     $('s-budget-warn').hidden = false; $('s-budget-warn').scrollIntoView({ block: 'center' });

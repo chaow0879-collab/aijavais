@@ -206,6 +206,14 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     const cdlg = await page.innerText('#s-confirm');
     assert.match(cdlg, /上限按你填的金额：¥\d+\.\d{2}（比建议金额低，可能做到一半会停下）/); assert.doesNotMatch(cdlg, /USD|美元|Token/i);
     await page.click('#s-confirm-cancel');
+    // AUD-4AAD-01 / QA: below the first step -> no start, no silent lift, only 改成建议金额; 0 / negative -> plain error
+    await page.fill('#s-budget-cny', '0.01'); await page.click('#s-go'); await page.waitForSelector('#s-budget-warn:not([hidden])');
+    assert.match(await page.innerText('#s-budget-warn'), /连第一步都不够/); assert.equal(await page.isVisible('#s-budget-keep'), false); assert.equal(await page.isVisible('#s-confirm[open]'), false);
+    for (const bad of ['0', '-3']) { await page.fill('#s-budget-cny', bad); await page.click('#s-go'); await page.waitForSelector('#s-error:not([hidden])'); assert.match(await page.innerText('#s-error'), /请填大于 0 的金额，或者留空/); assert.equal(await page.isVisible('#s-confirm[open]'), false); }
+    await page.fill('#s-budget-cny', '0.53'); await page.click('#s-go');
+    if (await page.isVisible('#s-budget-warn')) await page.click('#s-budget-keep');
+    await page.waitForSelector('#s-confirm[open]'); assert.match(await page.innerText('#s-confirm'), /¥0\.53/); assert.doesNotMatch(await page.innerText('#s-confirm'), /¥0\.60/, 'never rounded up');
+    await page.click('#s-confirm-cancel');
     await page.fill('#s-budget-cny', '2'); await page.click('#s-go'); await page.waitForSelector('#s-confirm[open]');
     assert.match(await page.innerText('#s-confirm'), /最多不超过 ¥2\.00[\s\S]*上限按你填的金额：¥2\.00。/);
     await shot(page, '6-budget');

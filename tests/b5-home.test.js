@@ -65,7 +65,14 @@ test('B5-F2: optional RMB budget — the user amount becomes the cap (never abov
   assert.equal(low.options.saving, undefined, 'no silent downgrade: the user decides');
   const high = Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: 50 });
   assert.equal(high.chosen.maxCny, 5); assert.equal(high.budgetClipped, true, 'never above the administrator per-run cap');
-  for (const bad of [0, -1, 'abc', null, undefined, NaN]) assert.equal(Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: bad }).budgetCny, null, String(bad));
+  // AUD-4AAD-01 / QA: a user amount is floored to the fen, never raised; below the first step it is flagged; 0/negative/text is an error
+  for (const [v, max] of [[0.53, 0.53], [0.539, 0.53], [2, 2], [1, 1], [0.01, 0.01]]) assert.equal(Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: v }).chosen.maxCny, max, String(v));
+  for (const v of [0.53, 0.539, 2, 0.01, 0.03]) { const p = Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: v }); assert.ok(p.chosen.maxCny <= v, 'never above what the user typed: ' + v); assert.ok(p.approval.maxCost * Plan.FX <= v + 1e-9, 'engine cap <= user amount: ' + v); }
+  const tiny = Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: 0.03 });
+  assert.equal(tiny.belowMin, true); assert.equal(tiny.chosen.maxCny, 0.03, 'not silently lifted to 0.10'); assert.ok(tiny.minCny > 0.03);
+  assert.equal(Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: 0.01 }).belowMin, true);
+  for (const bad of [0, -1, 'abc', NaN, 0.004]) { const r = Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: bad }); assert.equal(r.ok, false, String(bad)); assert.equal(r.problems[0].code, 'budget_invalid'); assert.match(r.problems[0].text, /大于 0|最少填/); }
+  for (const blank of [null, undefined, '', '  ']) assert.equal(Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: blank }).budgetCny, null, 'blank = automatic');
 });
 
 test('B5-F2 A: a PPT task asks its final role for slide JSON with the exact page count; other outputs are unchanged', () => {

@@ -38,6 +38,7 @@
   const bytes = s => (typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(String(s)).length : Buffer.byteLength(String(s)));
   const yuan = n => Math.ceil(n * 100 - 1e-9) / 100;
   const yuan10 = n => Math.ceil(n * 10 - 1e-9) / 10;
+  const fen = n => Math.floor(n * 100 + 1e-9) / 100; // AUD-4AAD-01: a user amount is only ever rounded DOWN
   const isLocal = m => m.pricingMode === 'local';
   const thinkingHost = m => /(^|\.)dashscope(-intl|-us)?\.aliyuncs\.com$/i.test((() => { try { return new URL(m.baseUrl).hostname; } catch { return ''; } })());
   function cnyRate(m) {
@@ -86,23 +87,25 @@
       { m: roles[0].model, inTok: EXPECT.systemTokens + goalTok, outTok: EXPECT.draftOut, inBytes: EXPECT.systemBytes + bytes(goal) },
       { m: roles[1].model, inTok: EXPECT.systemTokens + goalTok + EXPECT.draftOut, outTok: EXPECT.reviewOut, inBytes: EXPECT.systemBytes + bytes(goal) + MAX_OUTPUT * 4 },
     ];
-    let estimate = 0, reserveNeed = 0;
+    let estimate = 0, reserveNeed = 0, firstNeed = 0;
     steps.forEach((s, i) => {
       const r = cnyRate(s.m);
       const expected = (s.inTok * r.input + s.outTok * r.output) / 1e6;
       const bound = ((s.inBytes + 256) * r.input + (MAX_OUTPUT + (thinkingHost(s.m) ? MAX_OUTPUT / 2 : 0)) * r.output) / 1e6;
       reserveNeed = Math.max(reserveNeed, (i ? estimate : 0) + bound);
+      if (!i) firstNeed = bound;
       estimate += expected;
     });
-    return { estimate: yuan(estimate), needed: yuan10(Math.max(3 * estimate, reserveNeed)) };
+    return { estimate: yuan(estimate), needed: yuan10(Math.max(3 * estimate, reserveNeed)), firstNeed: yuan(firstNeed) };
   }
   function option(roles, goal, capCny, kind, budgetCny = null) {
     const c = cost(roles, goal), free = roles.every(r => isLocal(r.model));
     // B5-F2：用户自己填了人民币上限就按它（不超过管理员设的单次上限）；没填就“自动”= 需要的金额与单次上限取小
     const fixed = budgetCny != null && !free;
-    const maxCny = free ? 0 : fixed ? Math.max(0.1, Math.min(capCny, yuan10(budgetCny))) : Math.max(0.1, Math.min(capCny, c.needed));
+    // a user amount is floored to the fen and never raised; below what the first step needs it is flagged, not lifted
+    const maxCny = free ? 0 : fixed ? Math.min(capCny, fen(budgetCny)) : Math.max(0.1, Math.min(capCny, c.needed));
     return { kind, roles, summary: summary(roles), estimateCny: free ? 0 : Math.max(0.01, c.estimate), maxCny, neededCny: c.needed, autoCny: free ? 0 : Math.max(0.1, Math.min(capCny, c.needed)),
-      overCap: !free && !fixed && c.needed > capCny, underBudget: fixed && maxCny < c.needed, userBudget: fixed, free };
+      minCny: free ? 0 : Math.max(0.01, c.firstNeed), overCap: !free && !fixed && c.needed > capCny, underBudget: fixed && maxCny < c.needed, belowMin: fixed && maxCny < Math.max(0.01, c.firstNeed), userBudget: fixed, free };
   }
   /* B5-F2 A：PPT 的最后一步输出幻灯片 JSON（服务端严格校验；不合格时按“第N页”回退解析） */
   function pageCount(goal) {
@@ -122,11 +125,15 @@
       '标题写给听众看，不要写“第N页”；不要写视觉建议、配色、配图或排版说明；不要使用 # * - 等 Markdown 符号。';
   }
   function plan({ models, goal, output = 'word', deadline = '', capCny = 5, picks = {}, choice = 'quality', budgetCny = null } = {}) {
-    const budget = Number(budgetCny) > 0 && Number.isFinite(Number(budgetCny)) ? Number(budgetCny) : null;
+    // empty = automatic; anything else must be a positive amount (0, negative or text is an error, never "automatic")
+    const blank = budgetCny == null || String(budgetCny).trim() === '';
+    const budget = blank ? null : Number(budgetCny);
     const problems = [], out = OUTPUTS[output] || OUTPUTS.text, text = String(goal || '').trim();
     const chats = chat(models), pool = usable(models);
     const skipped = chats.filter(m => !cnyRate(m)).map(m => Hints.platformLabel(m));
     if (!text) problems.push({ code: 'goal_missing', text: '请先用一句话说说想做什么。' });
+    if (budget !== null && !(Number.isFinite(budget) && budget > 0)) problems.push({ code: 'budget_invalid', text: '请填大于 0 的金额，或者留空让系统自动估算。' });
+    else if (budget !== null && fen(budget) < 0.01) problems.push({ code: 'budget_invalid', text: '金额太小了，最少填 ¥0.01，或者留空让系统自动估算。' });
     if (!chats.length) problems.push({ code: 'no_model', text: '还没有可用的模型。请先添加一个模型（填一次密钥即可）。', fix: { action: 'add_model', label: '去添加模型' } });
     // B5-2: known platforms always get a price (official or a conservative estimated ceiling), so this only
     // happens when every model is on a platform without any registered price. Never send the user to edit prices.
@@ -154,7 +161,7 @@
     };
     const approval = { approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(chosen.maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
     return { ok: true, problems: [], skipped, options, chosen, roles: chosen.roles, summary: chosen.summary, project, approval, format: out.format, outputLabel: out.label, confirmText: confirmText(chosen, chosen.roles.some(r => estimated(r.model))), estimatedNote: estimatedNote(chosen.roles.map(r => r.model)), capCny: cap,
-      budgetCny: budget, suggestedCny: chosen.autoCny, underBudget: !!chosen.underBudget, budgetClipped: budget != null && budget > cap };
+      budgetCny: budget, suggestedCny: chosen.autoCny, minCny: chosen.minCny, underBudget: !!chosen.underBudget, belowMin: !!chosen.belowMin, budgetClipped: budget != null && fen(budget) > cap };
   }
   /* QA-B7-01 返工：只重做"审核并定稿"这一步（沿用已完成的初稿），按审核员单价重新估算，再确认一次人民币。
    * 每轮返工都是新的显式批准，不继承上一次。snapshot = run.projectSnapshot. */
