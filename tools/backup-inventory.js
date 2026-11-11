@@ -14,7 +14,7 @@
  * same inode as a published backup ("published"). A quick_check of "ok" is
  * NOT proof that a copy is complete or safe to restore; every item is marked
  * recoveryUse: manual_review_required. Cleanup or restore needs a separate,
- * human-approved procedure (docs/BACKUP-OPERATIONS.md).
+ * human-approved procedure (docs/DEPLOYMENT.md, section 备份运维).
  *
  * Usage: node tools/backup-inventory.js [DATA_DIR] [--json]
  * Exit:  0 scanned, nothing needing attention; 2 scanned, attention needed;

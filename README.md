@@ -2,7 +2,7 @@
 
 当前应用是安全登录的多 AI 项目工作台，使用 **Node.js 24+**，运行 `npm start`。首次登录需要服务器一次性设置码，入口为 `/workspace.html`（项目执行）、`/admin.html`（模型/团队管理）、`/project-intake.html`（立项向导）。无需安装生产依赖。
 
-开发接力先读 [CLAUDE.md](CLAUDE.md)（当前治理、断点续跑、命名规范）和 GitHub #20 最新快照，再按需查阅 [功能实况](docs/FEATURE-STATUS.md)、[测试](docs/TESTING.md)、[部署](docs/DEPLOYMENT.md)。远程模型调用默认禁止未经批准收费；当前验证主要使用本地模型/MCP协议fixture，详见测试记录。
+开发接力先读 [CLAUDE.md](CLAUDE.md)（当前治理、断点续跑、命名规范）和 GitHub #20 最新快照，再按需查阅 [产品与功能实况](docs/PRODUCT.md)、[架构](docs/ARCHITECTURE.md)、[开发流程](docs/DEV-PROCESS.md)、[测试](docs/TESTING.md)、[部署](docs/DEPLOYMENT.md)。远程模型调用默认禁止未经批准收费；当前验证主要使用本地模型/MCP协议fixture，详见测试记录。
 
 下面保留大屏原作 HALOFLUX 的说明、版权与非商业许可证。其静态文件说明不能替代 AIJAVAIS 当前启动/认证说明。
 

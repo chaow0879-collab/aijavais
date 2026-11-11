@@ -31,9 +31,9 @@
 > - 常设 Issue（固定编号，不再为每轮新开 Issue）：#26【01-战略】、#10【02-总控】、#20【03-交接】、#2【04-审计】、#4【05-测试】、#24【06-运维】。缺陷和待办另开 Issue，标题前缀用【缺陷-Pn】或【待办】。旧的 R 轮次 Issue 已归档关闭（标签 `archived-r-series`）。
 > - 分支：开发用 `claude/dev/<主题>`（当前主干开发分支为 `claude/beautiful-pascal-xj5qd0`），审计证据用 `audit/<sha7>-<yyyymmdd>`，QA 用 `qa/<sha7>-<yyyymmdd>`。旧分支保留作为历史证据，不删除。
 > - 报告标记：`[AGENT_REPORT_V1]`（审计 / QA / 子会话）、`[STRATEGY_REVIEW_V3]`（战略参谋）、`[PLANNER_DECISION_V5]`（总指挥）、`[SERVER_CHANGE_LOG]`（运维）。
-> - 文件：新文档统一用 `docs/<领域>-<主题>.md`，全部 UTF-8、LF 换行。现有 R 编号文档属于历史资产，等进入产品阶段、R57 来源守卫退役后，再统一迁移到 `docs/archive/`。
+> - 文件：新文档统一用 `docs/<领域>-<主题>.md`，全部 UTF-8、LF 换行。C1（2026-11-11）起当前文档只有 5 份：`docs/PRODUCT.md`、`ARCHITECTURE.md`、`DEV-PROCESS.md`、`TESTING.md`、`DEPLOYMENT.md`；R 编号等历史文档已移到 `docs/archive/`。relay（R43–R57）代码冻结在 `tools/relay/`，R57 来源守卫不再约束产品代码。
 
-以下为代码层面的长期约束。需要时按任务卡指定的范围查阅 `docs/FEATURE-STATUS.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`。文档描述的是当前实现，未经验证的项不等于已完成。
+以下为代码层面的长期约束。需要时按任务卡指定的范围查阅 `docs/PRODUCT.md`（含功能实况）、`docs/ARCHITECTURE.md`、`docs/DEV-PROCESS.md`、`docs/TESTING.md`、`docs/DEPLOYMENT.md`。文档描述的是当前实现，未经验证的项不等于已完成。
 
 ## 正确开始
 
@@ -96,9 +96,9 @@ Skill 是版本化 prompt/tool/check 配方，不能执行任意脚本。工具�
 
 接力优先级：真实供应商协议回归（需负责人授权额度）→ 专业工具/文件读取与专业能力测试 → 更多 UI 异常路径 → 性能与保留策略 → 企业多用户/持久队列。如需自主工具选择，先设计有界授权及预算状态机，不直接执行模型返回的 shell。
 
-工作单元2使用 `lib/budget.js` 共享授权/预留/结算策略；`lib/intake-draft.js`只提一次模型草案，使用system_usage单行预留和结算。`public/project-intake/ai-draft.js`保留规则向导并提供编辑/确认保存。不得把生成草案当执行或绕过预算。新增浏览器命令`npm run test:intake`。接口、12类测试和待验证边界见`docs/AI-DRAFT.md`。
+工作单元2使用 `lib/budget.js` 共享授权/预留/结算策略；`lib/planner/ai-draft.js`（原 lib/intake-draft.js）只提一次模型草案，使用system_usage单行预留和结算。`public/project-intake/ai-draft.js`保留规则向导并提供编辑/确认保存。不得把生成草案当执行或绕过预算。新增浏览器命令`npm run test:intake`。接口、12类测试和待验证边界见`docs/ARCHITECTURE.md`「AI 草案」一节。
 
 
 第十轮安全约束：草案请求按owner+kind+requestId永久占位，摘要绑定规范化参数与模型目标。claim和费用预留同事务；网络前必须提交dispatching；一次ledgerId仅结算一次。启动恢复claimed可证明未调用记0；dispatching和v3无证据预留按未知费用null保留上界，不重放。旧ID迁移为通配墓碑，不能清理后复用。管理员只读异常查询`GET /api/v2/usage/system/exceptions`，能力中心显示警示。无人工改账写接口。
 
-本轮不修#7取消底层Promise生命周期或#9。`abortable/close`行为仍有独立待整改P1，不将此交付当全部安全门禁通过。恢复算法仅启动时在DATA锁下调用，不得针对活跃请求手动调用恢复。迁移后有新请求时，不可丢失v4墓碑回滚旧备份再开放服务。完整状态机、迁移/回滚和核对步骤见[LEDGER-RECOVERY](docs/LEDGER-RECOVERY.md)。
+本轮不修#7取消底层Promise生命周期或#9。`abortable/close`行为仍有独立待整改P1，不将此交付当全部安全门禁通过。恢复算法仅启动时在DATA锁下调用，不得针对活跃请求手动调用恢复。迁移后有新请求时，不可丢失v4墓碑回滚旧备份再开放服务。完整状态机、迁移/回滚和核对步骤见[DEPLOYMENT 账本恢复一节](docs/DEPLOYMENT.md)。

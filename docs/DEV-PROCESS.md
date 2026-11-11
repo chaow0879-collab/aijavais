@@ -1,4 +1,30 @@
-# 开发指南
+# 开发流程（DEV-PROCESS）
+
+> C1 收敛（2026-11-11）后的唯一开发说明。治理与指挥关系以 CLAUDE.md 和 GitHub #26 / #10 / #20 为准；本文件只写代码层面的流程。
+
+## 分支、评审与合并
+
+- `main` 是唯一集成线。每个开发任务从最新 `main` 拉 `claude/dev/<主题>` 分支，提交后推送，产品 CI 全绿后由总指挥合并。不要直接推 `main`。
+- 每个有意义的单元完成后立即 commit + push（容器随时可能被回收）。
+- 按风险分级评审：安全、内核、账本、预算类改动需要独立审计；界面改动需要产品 QA；只改文档不审计。审计只看 `git diff 基线..候选`。
+- 改动前备份、写好回滚；停机类操作先在 #24 公告。没有负责人授权不产生真实付费调用。
+
+## 产品 CI 与测试入口
+
+- 产品 CI：`.github/workflows/product.yml`，在 `claude/**` 分支、`main` 和发往 `main` 的 PR 上运行：
+  - `npm test`（= `npm run test:product`）：全部产品单元、HTTP、SQLite、MCP fixture、Office 文件与通用工作流测试；
+  - `npm run test:release`：严格的独立 Office 解析门禁；
+  - `npm run test:product:ui`：全部产品浏览器套件（`tests/ui/run-all.cjs`）；
+  - 容器构建与健康检查。
+- 细节与证据分类见 [TESTING.md](TESTING.md)。新增产品测试必须挂进 `tests/all.test.js`（或 `run-all.cjs`），不能另开一条只在某个工作流里跑的路径。
+
+## 代码布局（C1）
+
+- 服务端：`server.js`（HTTP、认证、静态页面、模型适配器）、`lib/`（V2 引擎、存储、预算、工具、交付）。
+- 规划器只有一套：`lib/planner/`（`rules.js` 规则兜底、`ai-draft.js` AI 草案增强、`universal.js` 一句话通用工作流、`index.js` 统一入口）。浏览器用到的同一份文件由 `server.js` 的 `SHARED_ASSETS` 按原网址提供；服务端代码不得 `require` `public/` 下的文件。
+- 前端：`public/`。所有页面共用顶栏 `public/topbar.js`；任务中心、进度页在 `public/workspace*.js`。
+- relay（R43–R57 自动接力机制）整体冻结在 `tools/relay/`，见 `tools/relay/README.md`。它的工作流只能手动触发，来源守卫（R57 `sources.js`）不再约束产品代码；不再为产品改动登记 POST_R57。
+- 历史文档在 `docs/archive/`，只读备查；当前有效的只有本目录的 5 份文档。
 
 ## 本地工作
 
@@ -12,16 +38,6 @@ npm start
 默认监听本机 8787。首次运行自动建立私有 DATA、一次性设置码和 SQLite schema v1。使用设置码在登录页设密码；不要重置已有管理员。`AIJ_DATA_DIR=/secure/path` 可隔离开发实例。`GET /healthz` 检查进程；项目 API 需要会话，401 不表示服务未就绪。
 
 工作台 `/workspace.html` 支持岗位/步骤、模型选择、工具、Skills、预算及审核。模型和团队管理仍在 `/admin.html`；六步立项向导保存草案后进入工作台。原向导的保守能力和工具门槛保留，不通过伪造 verified 字段宣称专业能力。
-
-## 分支与集成
-
-这次在 `feat/codex-v2-integration` 合并：
-
-- main: `adb4d02306af7c0be4d5491f996279877354e308`
-- event/security: `755fdae70c776730efddd323e954fc111bb9f143`
-- intake/OpenAI: `0f833dfa36d54b6fcac9adc2e6a239039dd6f43e`
-
-使用真实 git merge 保留历史，没有用旧文件覆盖新功能，没有合并 main。接力从核对过的交付提交新建独立分支，禁止两名开发者同时写同一分支。修改前检查状态和来源分支是否又有新增提交。
 
 ## 添加能力
 
