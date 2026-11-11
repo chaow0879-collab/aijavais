@@ -1,0 +1,452 @@
+{
+  "steps": [
+    {
+      "step": "扫描 首次打开登录页（设置密码）",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "1 首次打开看到什么",
+      "ok": true,
+      "note": "显示“设置密码”表单，要求输入一次性设置码（文案：一次性设置码（请向管理员获取））"
+    },
+    {
+      "step": "1 登录后落点",
+      "ok": true,
+      "note": "/workspace.html"
+    },
+    {
+      "step": "扫描 登录后首页（无模型）",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "1 新手引导 + ＋新建任务",
+      "ok": true,
+      "note": "引导可见=true ＋新建任务可见=true；引导文字：首次使用，两步开始：① 添加模型（填一次密钥，点“连接并全部添加”）→ ② 回到这里，说说想做什么，点“一键智能配置并开始”。"
+    },
+    {
+      "step": "扫描 管理中心（无模型）",
+      "ok": false,
+      "note": "英文词=Based,Ryder,modified 美元/Token=false JSON/null=false"
+    },
+    {
+      "step": "2 一次点击添加全部",
+      "ok": true,
+      "note": "已添加 4 个，已自动跳过 1 个（非对话类或旧快照）。 查看已添加的模型 查看跳过的模型和原因 开始任务时系统会自动检查要用到的模型能否连接（会真实调用一次，费用极少）。"
+    },
+    {
+      "step": "2 模型卡片“平台 · 模型名”",
+      "ok": true,
+      "note": "自定义 · deepseek-flash 默认 未测试费用未知 自定义（任意 OpenAI 兼容接口） · 模型 deepseek-flash · 密钥已保存（尾号 0000） · 单价未知 推理分析 写作 中文 数据分析 速度快 低成本 团队引用：无 测试 / 诊断 停用 更换模型 / 编辑 删除 自定义 · deepseek-v4-pro 未测试费用未知 自定义（任意 OpenAI 兼容接口） · 模型 deepseek-v4-pro · 密钥已保存（尾号 0000） · 单价未知 推理分析 写作 中文 数据分析 长上下文 资料研究 团队引用：无 测试 / 诊断 停用 更换模型 / 编辑 "
+    },
+    {
+      "step": "2 中文擅长标签",
+      "ok": true,
+      "note": "卡片含中文擅长项"
+    },
+    {
+      "step": "扫描 管理中心（已添加模型）",
+      "ok": false,
+      "note": "英文词=Based,Ryder,modified,Base,URL 美元/Token=false JSON/null=false"
+    },
+    {
+      "step": "3 ＋新建任务",
+      "ok": true,
+      "note": "工作台顶栏可见"
+    },
+    {
+      "step": "3 简单模式输入项数量",
+      "ok": true,
+      "note": "可见输入控件 7 个（想做什么 / 成果 / 时间）"
+    },
+    {
+      "step": "扫描 简单模式表单",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "B7-06 自定义接入未填单价：明确指引",
+      "ok": false,
+      "note": "主线被挡住，提示：现在的模型都来自没有登记价格的平台，按规定不调用：自定义 · deepseek-flash、自定义 · deepseek-v4-pro、自定义 · qwen3.8-flash、自定义 · qwen3.8-max。请管理员添加已登记价格平台的模型。"
+    },
+    {
+      "step": "扫描 编辑模型对话框（单价）",
+      "ok": false,
+      "note": "英文词=Based,Ryder,modified 美元/Token=true JSON/null=false"
+    },
+    {
+      "step": "B7-02 编辑框单价文案",
+      "ok": true,
+      "note": "单价：每百万字约多少（当前未知，简单模式不会调用）\n说明\n元\n美元 || 美元"
+    },
+    {
+      "step": "3 先看看配置（人话）",
+      "ok": true,
+      "note": "智能分配：起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.8-flash（便宜快速） 预计花费约 ¥0.02，最多不超过 ¥0.10，超过会自动停下。 这些模型所在的平台没有登记价格，按规定不调用，已换成其它模型：自定义 · deepseek-v4-pro、自定义 · qwen3.8-max。 换一个起草员换一个审核员"
+    },
+    {
+      "step": "扫描 先看看配置",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "3 确认框",
+      "ok": true,
+      "note": "确认开始 预计花费约 ¥0.02，最多不超过 ¥0.10，超过会自动停下。 团队：起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.8-flash（便宜快速） 这些模型所在的平台没有登记价格，按规定不调用，已换成其它模型：自定义 · deepseek-v4-pro、自定义 · qwen3.8-max。 这个任务累计已花约 ¥0.00（估算，以厂商账单为准）。 开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。 确认开始 取消"
+    },
+    {
+      "step": "扫描 确认框",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "4 直达进度页",
+      "ok": true,
+      "note": "点击确认后 78ms 内进入进度页"
+    },
+    {
+      "step": "扫描 进度/成果页",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "4 进度页内容可读",
+      "ok": true,
+      "note": "写出初稿 · 已完成 审核并定稿 · 已完成"
+    },
+    {
+      "step": "6 下载成果",
+      "ok": true,
+      "note": "文件名 Word 文档.docx，4280 字节，真实 zip 头=true"
+    },
+    {
+      "step": "B7-01 返工入口（简单模式）",
+      "ok": true,
+      "note": "进度页可见按钮：上一个运行中的任务 | 下一个运行中的任务 | 调整团队 | 到此为止，下载已完成部分 | 追加 ¥0.50 继续（即将支持） | 下载 Word 文档 | 满意，确认完成 | 不满意，要修改 | 按意见修改 | 先不改了 | ＋ 新建任务"
+    },
+    {
+      "step": "扫描 返工输入框",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "B7-01 返工时再次确认（人民币）",
+      "ok": true,
+      "note": "确认修改 预计花费约 ¥0.01，最多不超过 ¥0.10，超过会自动停下。 团队：审核员 → 自定义 · qwen3.8-flash 这个任务累计已花约 ¥0.00（估算，以厂商账单为准）。 只重做“审核并定稿”这一步，沿用已完成的初稿。 确认开始 取消"
+    },
+    {
+      "step": "扫描 返工确认框",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "B7-01 返工完成后看到新成果",
+      "ok": true,
+      "note": "AIJAVAIS 我的任务 ＋ 新建任务 实时大屏 模型设置 运行中 0 AIJAVAIS V2项目协作与成果交付工作台 智能立项 能力中心 退出登录 我的任务 ＋ 新建 给社区咖啡店写一份周末促销方案进行中 第 2/2 步 ← 返回我的任务 执行进度 调整团队 正在按你的意见修改。预计花费约 ¥0.01，最多不超过 ¥0.10，超过会自动停下。 写出初稿 · 已完成 审核并定稿 · 已完成 审核并定稿 · 已完成 这个任务累计已花约 ¥0.00（估算，以厂商账单为准）。 已完成，请查看成果。 成果 【模拟回复】周"
+    },
+    {
+      "step": "扫描 返工完成页",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "B7-01 返工后再下载",
+      "ok": true,
+      "note": "Word 文档.docx"
+    },
+    {
+      "step": "6 满意，确认完成",
+      "ok": true,
+      "note": "确认完成状态"
+    },
+    {
+      "step": "B7-01 “调整团队”回到简单表单（不进高级页）",
+      "ok": true,
+      "note": "当前页面是否为简单表单=true；目标预填=给社区咖啡店写一份周末促销方案"
+    },
+    {
+      "step": "扫描 调整团队后页面",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "5 管理员把单次上限设为0",
+      "ok": true,
+      "note": "HTTP 200 {\"settings\":{\"showText\":false,\"idleTimeoutSec\":120,\"maxTokens\":4096,\"timeoutSec\":300,\"defaultConnectionId\":\"mc_7cd0bd\",\""
+    },
+    {
+      "step": "5 单次上限=0",
+      "ok": true,
+      "note": "确认开始 预计花费约 ¥0.02，最多不超过 ¥0.10，超过会自动停下。 团队：起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.8-flash（便宜快速） 这些模型所在的平台没有登记价格，按规定不调用，已换成其它模型：自定义 · deepseek-v4-pro、自定义 · qwen3.8-max。 这个任务累计已花约 ¥0.00（估算，以厂商账单为准）。 开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。 确认开始 取消||"
+    },
+    {
+      "step": "扫描 预算为0",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "5a 预算很低：开始前效果优先/省钱",
+      "ok": true,
+      "note": "确认开始 按现在的分配，预计会超过单次上限 ¥0.10。请选一个： 效果优先 约¥0.38，最多 ¥0.10，可能中途停下。起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · deepseek-v4-pro（擅长分析推理） 省钱 约¥0.02（效果可能稍差），最多 ¥0.10。起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.8-flash（便宜快速） 这些模型所在的平台没有登记价格，按规定不调用，已换成其它模型：自定义 · qwen3.8-max。 这个任务累计已花约 ¥0.00（估算，以厂商账单为准）。 开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。 确认开始 取消||"
+    },
+    {
+      "step": "扫描 低预算选择框",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "5b 钱用完：中文提示+可下载已完成部分",
+      "ok": true,
+      "note": "已完成 1/2 步，花了约 ¥0.00"
+    },
+    {
+      "step": "扫描 钱用完停止页",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "5c 是否悄悄换成更差模型",
+      "ok": true,
+      "note": "实际纳入运行的模型：deepseek-flash,deepseek-v4-pro"
+    },
+    {
+      "step": "B7-07 用量超出预计：停下页文案",
+      "ok": false,
+      "note": "AIJAVAIS 我的任务 ＋ 新建任务 实时大屏 模型设置 运行中 0 AIJAVAIS V2项目协作与成果交付工作台 智能立项 能力中心 退出登录 我的任务 ＋ 新建 用量超出预计的任务已停下 完成 0/2 步 低预算任务已停下 完成 1/2 步 · 有成果可下载 给社区咖啡店写一份周末促销方案已完成 完成 2/2 步 · 有成果可下载 ← 返回我的任务 执行进度 调整团队 团队：起草员 → 自定义 · deepseek-flash（便宜快速）｜审核员 → 自定义 · qwen3.8-flash（便宜快速）。预计花费约 ¥0.02，最多不超过 ¥0.10，超过会自动停下。 写出初稿 · 没有完成 这个任务累计已花约 ¥0.03（估算，以厂商账单为准）。 任务没有全部完成。 已完成 0/2 步，花了约 ¥0.03（估算，以厂商账单为准）。模型这次实际用得比预计多，任务已停下，后面的步骤不会再花钱。多用的那一点费用已经产生，无法"
+    },
+    {
+      "step": "扫描 用量超出停下页",
+      "ok": true,
+      "note": "无英文技术词/原始JSON/美元/Token"
+    },
+    {
+      "step": "5d 高级模式默认设置点开始",
+      "ok": true,
+      "note": "提示：没有开始：需要你确认本次可能产生费用。 确认并开始，然后重新开始"
+    },
+    {
+      "step": "扫描 高级模式默认开始",
+      "ok": false,
+      "note": "英文词=Skills,PDF,CSV,JSON,unknown,Skill,Token,MCP,builtin,text,stats,UTF,json,validate,DOCX,docx_generation,XLSX,xlsx_generation,pptx_generation,file_read,project_file_read,data_analysis,TSV,SVG,chart_generation,Office,LibreOffice,document_convert,document_render,PNG,poppler,utils,JavaScript,code_execution,out 美元/Token=true JSON/null=false"
+    },
+    {
+      "step": "B7-04 高级表单主值为人民币，Token/USD 收进专业设置",
+      "ok": false,
+      "note": "执行权限与费用上限 本次最多花费（元） 最多返工次数 专业设置 我明确批准本次任务使用收费模型（默认关闭，仍受费用与 Token 上限限制） 我明确批准本次任务使用外部 MCP 工具或代码执行（它们可能修改外部数据、发送消息或产生平台无法估算的费用；默认关闭，每次运行单独批准） 本项目允许的工具 文本统计 [built"
+    },
+    {
+      "step": "5e 缺少能力：中文说明+一键修复",
+      "ok": true,
+      "note": "岗位「研究员」需要的能力，自定义 · deepseek-flash 还没有登记：资料研究 为 自定义 · deepseek-flash 补充能力：资料研究更换为 自定义 · deepseek-v4-pro"
+    },
+    {
+      "step": "扫描 检查执行条件(能力缺失)",
+      "ok": false,
+      "note": "英文词=Skills,PDF,CSV,JSON,unknown,Skill,Token,MCP,builtin,text,stats,UTF,json,validate,DOCX,docx_generation,XLSX,xlsx_generation,pptx_generation,file_read,project_file_read,data_analysis,TSV,SVG,chart_generation,Office,LibreOffice,document_convert,document_render,PNG,poppler,utils,JavaScript,code_execution,out 美元/Token=true JSON/null=false"
+    },
+    {
+      "step": "手机宽度(390)简单模式",
+      "ok": true,
+      "note": "无横向滚动"
+    },
+    {
+      "step": "扫描 实时大屏 HALOFLUX（含小号英文副标）",
+      "ok": false,
+      "note": "英文词=ASSISTED,DEVELOPMENT,LIVE,SIGNAL,SOURCES,WORKING,CALLS,TOKENS,ERRORS,CONSOLE,ADMIN,Based,Ryder,RYDER,CODE,MAIKEBAIs,CAT,github,com,haloflux,modified,FEED,FLOW,FIELD,MODEL,ACTIVITY,ROUTES,deepse,qwen,THROUGHPUT,AGENTS,INDEX 美元/Token=false JSON/null=false"
+    },
+    {
+      "step": "B7-03 大屏主文案（去掉 .en 小号副标）",
+      "ok": false,
+      "note": "剩余英文词：Based,Ryder,RYDER,CODE,MAIKEBAIs,CAT,github,com,haloflux,modified,deepse,qwen,CONSOLE"
+    },
+    {
+      "step": "页面脚本错误",
+      "ok": true,
+      "note": "无"
+    }
+  ],
+  "findings": [
+    {
+      "where": "管理中心（无模型）",
+      "words": [
+        "Based",
+        "Ryder",
+        "modified"
+      ],
+      "money_or_token": false,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "管理中心（已添加模型）",
+      "words": [
+        "Based",
+        "Ryder",
+        "modified",
+        "Base",
+        "URL"
+      ],
+      "money_or_token": false,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "编辑模型对话框（单价）",
+      "words": [
+        "Based",
+        "Ryder",
+        "modified"
+      ],
+      "money_or_token": true,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "高级模式默认开始",
+      "words": [
+        "Skills",
+        "PDF",
+        "CSV",
+        "JSON",
+        "unknown",
+        "Skill",
+        "Token",
+        "MCP",
+        "builtin",
+        "text",
+        "stats",
+        "UTF",
+        "json",
+        "validate",
+        "DOCX",
+        "docx_generation",
+        "XLSX",
+        "xlsx_generation",
+        "pptx_generation",
+        "file_read",
+        "project_file_read",
+        "data_analysis",
+        "TSV",
+        "SVG",
+        "chart_generation",
+        "Office",
+        "LibreOffice",
+        "document_convert",
+        "document_render",
+        "PNG",
+        "poppler",
+        "utils",
+        "JavaScript",
+        "code_execution",
+        "out"
+      ],
+      "money_or_token": true,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "检查执行条件(能力缺失)",
+      "words": [
+        "Skills",
+        "PDF",
+        "CSV",
+        "JSON",
+        "unknown",
+        "Skill",
+        "Token",
+        "MCP",
+        "builtin",
+        "text",
+        "stats",
+        "UTF",
+        "json",
+        "validate",
+        "DOCX",
+        "docx_generation",
+        "XLSX",
+        "xlsx_generation",
+        "pptx_generation",
+        "file_read",
+        "project_file_read",
+        "data_analysis",
+        "TSV",
+        "SVG",
+        "chart_generation",
+        "Office",
+        "LibreOffice",
+        "document_convert",
+        "document_render",
+        "PNG",
+        "poppler",
+        "utils",
+        "JavaScript",
+        "code_execution",
+        "out"
+      ],
+      "money_or_token": true,
+      "raw_json_or_null": false
+    },
+    {
+      "where": "实时大屏 HALOFLUX（含小号英文副标）",
+      "words": [
+        "ASSISTED",
+        "DEVELOPMENT",
+        "LIVE",
+        "SIGNAL",
+        "SOURCES",
+        "WORKING",
+        "CALLS",
+        "TOKENS",
+        "ERRORS",
+        "CONSOLE",
+        "ADMIN",
+        "Based",
+        "Ryder",
+        "RYDER",
+        "CODE",
+        "MAIKEBAIs",
+        "CAT",
+        "github",
+        "com",
+        "haloflux",
+        "modified",
+        "FEED",
+        "FLOW",
+        "FIELD",
+        "MODEL",
+        "ACTIVITY",
+        "ROUTES",
+        "deepse",
+        "qwen",
+        "THROUGHPUT",
+        "AGENTS",
+        "INDEX"
+      ],
+      "money_or_token": false,
+      "raw_json_or_null": false
+    }
+  ],
+  "shots": [
+    "01-first-visit.png",
+    "02-after-login.png",
+    "03-admin-empty.png",
+    "04-models-added.png",
+    "05-simple-form.png",
+    "05b-price-unknown-block.png",
+    "05c-edit-dialog.png",
+    "06-plan.png",
+    "07-confirm.png",
+    "08-progress-early.png",
+    "09-progress-done.png",
+    "10a-rework-box.png",
+    "10b-rework-confirm.png",
+    "10c-rework-done.png",
+    "10-adjust.png",
+    "11-cap-zero.png",
+    "12-low-budget-choice.png",
+    "13-low-budget-stopped.png",
+    "18-overuse-stop.png",
+    "15-advanced-default.png",
+    "16-capability-missing.png",
+    "17-mobile-simple.png",
+    "14-haloflux.png"
+  ],
+  "mockChatCalls": 8
+}
