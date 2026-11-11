@@ -72,3 +72,19 @@ test('B5-F2 B: Markdown and designer notes never reach a slide, without a page c
   assert.ok(deck.slides.filter(s => s.layout === 'bullets').every(s => s.bullets.length <= 6));
   assert.ok(deck.slides.some(s => /（续）$/.test(s.title)), 'continued slide when more than 6 points');
 });
+
+test('AUD-6BBD-01: hostile 200 000-character lines are parsed in well under a second (no regex backtracking blow-up)', () => {
+  const N = 200000;
+  const cases = { spaces: '第1页：' + ' '.repeat(N) + '!', mark: 'Slide 1 ' + ' '.repeat(N) + 'x', hashes: '##### ' + ' '.repeat(N) + '#x', field: '标题：' + ' \t'.repeat(N / 2) + 'x',
+    pipes: '|' + ' |'.repeat(N / 2) + 'x', rule: '- '.repeat(N / 2) + 'x', stars: '**'.repeat(N / 2) + 'x', single: '*' + 'a'.repeat(N), plain: 'a'.repeat(N),
+    manyLines: Array.from({ length: 2000 }, () => '第1页：' + ' '.repeat(98) + '!').join('\n') };
+  for (const [name, text] of Object.entries(cases)) {
+    const t0 = process.hrtime.bigint();
+    const deck = S.buildDeck({ title: 'x', text });
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    assert.ok(ms < 1000, name + ' took ' + ms.toFixed(0) + ' ms'); assert.ok(deck.slides.length >= 1);
+    const t1 = process.hrtime.bigint(); createDeliverable('pptx', { title: 'x', text }); assert.ok(Number(process.hrtime.bigint() - t1) / 1e6 < 2000, name + ' export');
+  }
+  // the normal owner fixture is unchanged by the length caps
+  assert.deepEqual(S.buildDeck({ title: 't', text: SCRIPT, pageCount: 5 }).slides.map(s => s.title), ['任职资格体系：让成长有标准、有路径', '什么是任职资格体系', '体系的三大构成', '如何落地实施', '总结']);
+});
