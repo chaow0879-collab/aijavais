@@ -210,6 +210,9 @@
     return a;
   }
   function renderHome() {
+    const empty = !TASKS || !TASKS.tasks.length;
+    $('home-empty').hidden = !empty; $('home-sum').hidden = empty; $('home-groups').hidden = empty;
+    $('home-guide').hidden = !(empty && !window.SmartPlan.chat(S.models).length);
     if (!TASKS) return;
     const c = TASKS.counts;
     $('home-sum').textContent = '正在运行 ' + c.running + ' 个（最多同时 ' + TASKS.maxConcurrent + ' 个）· 等你审核 ' + c.review + ' 个 · 已完成 ' + c.done + ' 个' + (c.stopped ? ' · 已停下 ' + c.stopped + ' 个' : '') + (c.draft ? ' · 草稿 ' + c.draft + ' 个' : '');
@@ -256,11 +259,10 @@
     try { await loadModels(); } catch { /* 页面其余部分仍可用 */ }
     if (q.get('run')) { S.runId = q.get('run'); try { const run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; S.projectId = run.projectId; restoreFormat(run); showProgress(null); } catch { reset(); } }
     else if (!q.get('project') && q.get('new') !== '1') {
-      // 默认落点“我的任务”；一个任务都没有时直接给新建表单（0 次额外点击），并附一句引导
-      $('simple').hidden = true;
-      try { onTasks(await api('/api/v2/tasks')); } catch { TASKS = null; }
-      if (TASKS && TASKS.tasks.length) $('home').hidden = false;
-      else { $('simple').hidden = false; $('s-first').hidden = false; }
+      // B5-F2：默认落点永远是“我的任务”（顶栏“我的任务”在任何页面点了都显示任务列表）；
+      // 一个任务都没有时显示空状态：一句引导 + 大号“＋ 新建任务”（首屏可见，不用滚动）
+      $('simple').hidden = true; $('home').hidden = false;
+      try { onTasks(await api('/api/v2/tasks')); } catch { TASKS = null; renderHome(); }
     }
     try { if (!TASKS) onTasks(await api('/api/v2/tasks')); else renderRunNav(); } catch { /* 顶栏会继续刷新 */ }
   });

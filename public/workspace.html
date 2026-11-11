@@ -18,6 +18,7 @@
     .steps-list li.done{border-color:var(--accent)}.steps-list li.running{border-color:var(--warn)}.steps-list li.failed{border-color:var(--bad)}
     /* B5-1 我的任务（任务中心） */
     .home-sum{font-size:16px;margin:4px 0 12px}.home-sum b{color:var(--accent)}
+    .home-empty{text-align:center;padding:24px 8px}.home-empty .newtask{display:inline-block;margin-top:10px}.home-empty .guide{text-align:left}
     .tgroup h3{margin:16px 0 8px;font-size:15px;color:var(--dim)}.tcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
     .tcard{display:block;border:1px solid var(--line);border-radius:10px;padding:12px;background:#0d1a29;color:var(--text);text-decoration:none}.tcard:hover{border-color:var(--accent);text-decoration:none}
     .tcard strong{display:block;font-size:15px;margin-bottom:4px}.tcard .meta{color:var(--dim);font-size:13px}.tcard .tag{display:inline-block;border-radius:999px;padding:1px 8px;font-size:12px;margin-right:6px;border:1px solid var(--line)}
@@ -44,10 +45,14 @@
     <section id="home" class="card simple-only" hidden aria-labelledby="home-title">
       <div class="row-head"><h2 id="home-title">我的任务</h2><a class="newtask big" id="home-new" href="/workspace.html?new=1">＋ 新建任务</a></div>
       <p class="home-sum" id="home-sum" role="status" aria-live="polite">正在读取任务…</p>
+      <div id="home-empty" class="home-empty" hidden>
+        <p class="home-sum">还没有任务。说说想让 AI 帮你做什么，系统会自动配好团队、先请你确认费用再开始。</p>
+        <p id="home-guide" class="guide" hidden><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里点“＋ 新建任务”。</p>
+        <a class="newtask big" id="home-empty-new" href="/workspace.html?new=1">＋ 新建任务</a>
+      </div>
       <div id="home-groups"></div>
     </section>
     <section id="simple" class="card simple-only" aria-labelledby="s-title">
-      <p id="s-first" class="hint" hidden>还没有任务。说说想让 AI 帮你做什么，点“一键智能配置并开始”就行。</p>
       <div class="row-head"><h2 id="s-title">新建任务</h2><button id="s-advanced" type="button" class="small">高级设置</button></div>
       <div id="ws-guide" class="guide" hidden><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里，说说想做什么，点“一键智能配置并开始”。</div>
       <label for="s-goal">想做什么</label><textarea id="s-goal" rows="3" maxlength="4000" placeholder="例如：给社区咖啡店写一份周末促销方案"></textarea>

@@ -30,25 +30,34 @@
   const here = location.pathname === '/' ? '/workspace.html' : location.pathname;
   const isNew = new URLSearchParams(location.search).get('new') === '1';
   let bar = null, last = null;
-  function render(data) {
-    const running = data.tasks.filter(t => t.group === 'running').sort((a, b) => b.updatedAt - a.updatedAt);
-    const btn = el('button', { type: 'button', id: 'aij-running', className: running.length ? '' : 'idle', ariaHasPopup: 'true', ariaExpanded: 'false', text: '运行中 ' + running.length });
-    const menu = el('div', { className: 'aij-menu', id: 'aij-running-menu', hidden: true, role: 'menu' });
-    menu.append(...(running.length ? running.map(t => el('a', { role: 'menuitem', href: '/workspace.html?run=' + encodeURIComponent(t.runId), dataset: { runId: t.runId } }, [t.name,
-      el('small', { text: '第 ' + Math.min(t.stepsDone + 1, t.stepsTotal || 1) + '/' + (t.stepsTotal || 1) + ' 步' + (t.currentRole ? ' · ' + t.currentRole + '正在做' : '') })]))
-      : [el('a', { role: 'menuitem', href: '/workspace.html', text: '现在没有运行中的任务，去看看我的任务' })]));
+  /* B5-F2：导航链接只建一次，之后每 5 秒只就地更新徽标、下拉和“看哪个任务”。
+   * 以前每次刷新都整条替换，鼠标按下与松开之间被替换的话，这次点击就丢了（“点了没反应”）。 */
+  let btn = null, menu = null, watchBox = null;
+  function build() {
+    btn = el('button', { type: 'button', id: 'aij-running', className: 'idle', ariaHasPopup: 'true', ariaExpanded: 'false', text: '运行中 0' });
+    menu = el('div', { className: 'aij-menu', id: 'aij-running-menu', hidden: true, role: 'menu' });
     btn.addEventListener('click', e => { e.stopPropagation(); menu.hidden = !menu.hidden; btn.ariaExpanded = String(!menu.hidden); });
+    menu.addEventListener('click', e => e.stopPropagation());
+    watchBox = el('span', { className: 'aij-watchbox', id: 'aij-watchbox' });
     const link = (href, text, extra = {}) => el('a', { href, text, ...extra, ...((href === here && !isNew && href !== '/workspace.html?new=1') || (href === '/workspace.html?new=1' && isNew) ? { ariaCurrent: 'page' } : {}) });
-    const next = el('nav', { className: 'aij-top', id: 'aij-topbar', ariaLabel: '主导航' }, [
+    bar = el('nav', { className: 'aij-top', id: 'aij-topbar', ariaLabel: '主导航' }, [
       el('span', { className: 'aij-brand', text: 'AIJAVAIS' }),
       link('/workspace.html', '我的任务', { id: 'aij-home' }),
       link('/workspace.html?new=1', '＋ 新建任务', { id: 'aij-new', className: 'aij-new' }),
       link('/panel.html', '实时大屏', { id: 'aij-panel' }),
       link('/admin.html', '模型设置', { id: 'aij-models' }),
       el('span', { className: 'aij-sp' }),
-      el('span', { className: 'aij-run' }, [btn, menu]), ...watchPicker(running)]);
-    if (bar) bar.replaceWith(next); else document.body.prepend(next);
-    bar = next;
+      el('span', { className: 'aij-run' }, [btn, menu]), watchBox]);
+    document.body.prepend(bar);
+  }
+  function render(data) {
+    if (!bar) build();
+    const running = data.tasks.filter(t => t.group === 'running').sort((a, b) => b.updatedAt - a.updatedAt);
+    btn.textContent = '运行中 ' + running.length; btn.className = running.length ? '' : 'idle';
+    menu.replaceChildren(...(running.length ? running.map(t => el('a', { role: 'menuitem', href: '/workspace.html?run=' + encodeURIComponent(t.runId), dataset: { runId: t.runId } }, [t.name,
+      el('small', { text: '第 ' + Math.min(t.stepsDone + 1, t.stepsTotal || 1) + '/' + (t.stepsTotal || 1) + ' 步' + (t.currentRole ? ' · ' + t.currentRole + '正在做' : '') })]))
+      : [el('a', { role: 'menuitem', href: '/workspace.html', text: '现在没有运行中的任务，去看看我的任务' })]));
+    if (!watchBox.contains(document.activeElement)) watchBox.replaceChildren(...watchPicker(running));
   }
   /* 大屏专用“看哪个任务”：默认最新运行中的任务；显示它在第几步、谁在做，并可一键进它的进度页 */
   let watching = null;
@@ -56,7 +65,7 @@
     if (document.body.dataset.topbar !== 'overlay' || !running.length) return [];
     if (!running.some(t => t.runId === watching)) watching = running[0].runId;
     const t = running.find(x => x.runId === watching);
-    const sel = el('select', { id: 'aij-watch', ariaLabel: '看哪个任务', onchange: e => { watching = e.target.value; if (last) render(last); } },
+    const sel = el('select', { id: 'aij-watch', ariaLabel: '看哪个任务', onchange: e => { watching = e.target.value; if (last) { watchBox.replaceChildren(); render(last); } } },
       running.map(x => el('option', { value: x.runId, text: x.name, selected: x.runId === watching })));
     const info = el('a', { id: 'aij-watch-info', href: '/workspace.html?run=' + encodeURIComponent(t.runId), text: '第 ' + Math.min(t.stepsDone + 1, t.stepsTotal || 1) + '/' + (t.stepsTotal || 1) + ' 步' + (t.currentRole ? ' · ' + t.currentRole + '正在做' : '') + ' · 看进度' });
     return [el('label', { className: 'aij-watch' }, ['看哪个任务 ', sel]), info];
@@ -66,9 +75,7 @@
       const res = await fetch('/api/v2/tasks', { credentials: 'same-origin', headers: { accept: 'application/json' } });
       if (!res.ok) { if (bar && (res.status === 401 || res.status === 403)) { bar.remove(); bar = null; } return; } // 只读大屏 / 未登录：不显示
       const data = await res.json(); last = data;
-      const open = bar && !$('aij-running-menu')?.hidden;
       render(data);
-      if (open) { $('aij-running-menu').hidden = false; $('aij-running').ariaExpanded = 'true'; }
       dispatchEvent(new CustomEvent('aij:tasks', { detail: data }));
     } catch { /* 网络抖动：下次再试 */ }
   }

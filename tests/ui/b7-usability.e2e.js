@@ -70,8 +70,12 @@ function englishLeft(text) {
     } finally { await freshApp.stop(); }
     await lp.fill('#pw', H.TEST_PASSWORD); await lp.click('#loginBtn');
     await lp.waitForURL(/\/workspace\.html/);
-    await lp.waitForSelector('#s-go');
+    // B5-F2: login lands on my tasks; with no task yet it is an empty state with a big ＋ 新建任务 and the two-step guide
+    await lp.waitForSelector('#home-empty:not([hidden])');
     await lp.waitForSelector('#aij-new'); assert.ok(await lp.isVisible('#aij-new'), '＋ 新建任务 is visible after login (shared top bar)');
+    assert.ok(await lp.isVisible('#home-empty-new'), 'big ＋ 新建任务 in the empty state');
+    await lp.waitForSelector('#home-guide:not([hidden])');
+    await lp.click('#home-empty-new'); await lp.waitForSelector('#s-go');
     await lp.waitForSelector('#ws-guide:not([hidden])');
     checks.push(['B7d login lands on workspace; ＋ 新建任务 + two-step guide when no model', null]);
     // B7g fallback: no model yet -> guidance, not an error dump

@@ -35,6 +35,24 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     await ctx.addCookies([{ name: ck[0], value: ck.slice(1).join('='), domain: 'localhost', path: '/' }]); return ctx;
   };
   try {
+    /* ---- B5-F2 P0: clicking 我的任务 on every page shows my tasks (also with zero tasks) ---- */
+    const PAGES = ['/workspace.html', '/workspace.html?new=1', '/panel.html', '/admin.html', '/capabilities.html', '/project-intake.html'];
+    const homeEverywhere = async (page, expect, extra = []) => {
+      for (const u of [...PAGES, ...extra]) {
+        await page.goto(base + u); await page.waitForSelector('#aij-home');
+        await page.click('#aij-home');
+        await page.waitForURL(base + '/workspace.html');
+        await page.waitForSelector('#home:not([hidden])');
+        assert.equal(await page.isHidden('#simple'), true, u + ': the new-task form is not what 我的任务 shows');
+        await page.waitForSelector(expect);
+        assert.ok(await page.isVisible(expect), u + ' -> ' + expect);
+      }
+    };
+    const zp = await (await adminCtx()).newPage();
+    await homeEverywhere(zp, '#home-empty-new');
+    assert.match(await zp.innerText('#home-empty'), /还没有任务/);
+    ok('我的任务 from every page with zero tasks shows my tasks (empty state + big ＋ 新建任务), not the new-task form');
+
     /* ---- two running tasks (held by the local mock) + one finished draft-free task ---- */
     const add = await app.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'local-writer', displayName: '本地写手', pricingMode: 'local', capabilities: ['writing', 'reasoning'] });
     assert.equal(add.status, 200, add.text); const id = add.json.connection.connectionId;
@@ -85,6 +103,12 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     await lp.waitForSelector('#s-prev:not([hidden])'); await lp.click('#s-prev'); await lp.waitForURL(new RegExp('run=' + runs[0].runId));
     await shot(lp, '2-progress-switch');
     ok('two running tasks: top-bar menu opens a progress page; previous/next switch between them; ← 返回我的任务');
+    await homeEverywhere(lp, '#home-groups .tcard', ['/workspace.html?run=' + runs[0].runId, '/workspace.html?project=' + runs[1].projectId]);
+    // the top bar refresh (every 5 s) updates in place: the 我的任务 link element survives a refresh
+    await lp.goto(base + '/workspace.html?new=1'); await lp.waitForSelector('#aij-home');
+    const before = await lp.$('#aij-home'); await lp.evaluate(() => window.AIJTopbar.refresh());
+    assert.equal(await before.evaluate(n => n.isConnected), true, 'top bar is not rebuilt on refresh (clicks are not lost)');
+    ok('我的任务 from every page with tasks shows the task cards; refresh never replaces the link under the pointer');
     // left list: plain status, click opens the progress page
     await lp.goto(base + '/workspace.html');
     await lp.waitForFunction(() => document.querySelectorAll('#projects .pstate').length >= 3);
