@@ -22,7 +22,7 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     let body = ''; req.on('data', c => body += c); req.on('end', () => {
       const j = JSON.parse(body || '{}');
       const asked = JSON.stringify(j.messages || '');
-      const reply = j.max_tokens <= 32 ? '好' : asked.includes('上次没有生成合格') ? SCRIPT : asked.includes('MOCK_SORRY') ? '抱歉，我无法生成这个演示文稿。' : asked.includes('MOCK_EMPTY') ? '' : asked.includes('MOCK_SCRIPT') ? SCRIPT : '本地模型写出的成果文字，内容足够长。';
+      const reply = j.max_tokens <= 32 ? '好' : asked.includes('上次没有生成合格') ? SCRIPT : asked.includes('MOCK_SORRY') ? '抱歉，我无法生成这个演示文稿。' : asked.includes('MOCK_EMPTY') ? '' : asked.includes('MOCK_PARA') ? '任职资格体系是企业对员工能力进行分级管理的制度。它包括职业通道、能力标准和认证机制三部分。职业通道让员工看到成长方向。能力标准描述每一级需要的知识和技能。认证机制保证评价公平。' : asked.includes('MOCK_SCRIPT') ? SCRIPT : '本地模型写出的成果文字，内容足够长。';
       const send = () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n'); };
       if (hold && j.max_tokens > 32) held.push(send); else send();
     });
@@ -224,6 +224,12 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     assert.ok(await pp.isVisible('#s-download'), 'download is back right after the regenerated deck, no reload');
     assert.equal(await pp.isVisible('#s-run-error'), false);
     ok('B5-F3: 重新生成 on a run awaiting review reworks it; the new deck shows and the download button returns without a reload');
+    // B5-F3 (3): one paragraph -> paged by sentences, and the page says so (never a silent 2-page deck)
+    const paraRun = await pptRun('MOCK_PARA', '一段话演示');
+    await pp.goto(base + '/workspace.html?run=' + paraRun); await pp.waitForSelector('#s-deck-notice:not([hidden])');
+    assert.match(await pp.innerText('#s-deck-notice'), /没有分页结构，已按句子自动分成 2 页内容页/);
+    assert.equal((await pp.innerText('#s-final')).match(/^第 \d+ 页/gm).length, 3, 'cover + 2 content pages, as the notice says');
+    ok('B5-F3: a one-paragraph reply is paged by sentences and the page says so');
 
     /* ---- B5-2: only deepseek-v4-pro + qwen3.8-max (remote, never called here) -> RMB confirmation directly ---- */
     const b = await app.call('POST', '/api/models/batch', { providerId: 'deepseek', apiKey: 'sk-B5-TEST-ONLY-0000', models: [{ modelId: 'deepseek-v4-pro', capabilities: ['writing', 'reasoning', 'chinese'] }] });

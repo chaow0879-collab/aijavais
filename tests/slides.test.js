@@ -98,6 +98,21 @@ test('QA-F2-1: an apology or cover-only answer is refused (422 pptx_unusable), n
   assert.equal(S.assess(S.buildDeck({ title: 't', text: SCRIPT }), SCRIPT).usable, true);
 });
 
+test('B5-F3 (3): one paragraph without page structure is paged by sentences and says so; a list keeps its pages', () => {
+  const para = '任职资格体系是企业对员工能力进行分级管理的制度。它包括职业通道、能力标准和认证机制三部分。职业通道让员工看到成长方向。能力标准描述每一级需要的知识和技能。认证机制保证评价公平。实施时先梳理岗位，再编写标准，然后试点，最后全面推行。';
+  const asked = S.buildDeck({ title: '任职资格', text: para, pageCount: 5 });
+  assert.equal(asked.slides.length, 5, 'the requested 5 pages, cover included'); assert.deepEqual(asked.slides.slice(1).map(x => x.bullets.length), [2, 2, 1, 1], 'sentences spread evenly');
+  assert.match(asked.notice, /没有分页结构，已按句子自动分成 4 页内容页/);
+  const free = S.buildDeck({ title: '任职资格', text: para });
+  assert.equal(free.slides.length, 3); assert.ok(free.slides.slice(1).every(x => x.bullets.length <= 3)); assert.match(free.notice, /已按句子自动分成 2 页/);
+  assert.equal(free.slides.slice(1).flatMap(x => x.bullets).join(''), para.replace(/\s/g, ''), 'no sentence lost or invented');
+  assert.match(S.buildDeck({ title: 'x', text: '只有一句话没有任何结构' }).notice, /没有可分页的结构/);
+  const few = S.buildDeck({ title: 'x', text: '第一句。第二句。', pageCount: 5 });
+  assert.equal(few.slides.length, 3); assert.match(few.notice, /内容不够分成要求的 5 页/, 'never pads with empty pages');
+  assert.equal(S.buildDeck({ title: 't', text: SCRIPT, pageCount: 5 }).notice, undefined, 'a structured script has no notice');
+  assert.equal(S.buildDeck({ title: 't', text: Array.from({ length: 23 }, (_, i) => '第' + (i + 1) + '条').join('\n') }).notice, undefined, 'a list of lines is not prose');
+});
+
 test('QA-F2 P3: the closing summary survives the page cut, does not repeat itself or the previous page; footer is the deck title + date', () => {
   const json = [{ layout: 'cover', title: '封面标题' }, ...Array.from({ length: 6 }, (_, i) => ({ layout: 'bullets', title: '第' + (i + 1) + '部分', bullets: ['要点' + i] })), { layout: 'summary', title: '总结', quote: '金句', bullets: ['要点5', '金句', '新要点'] }];
   const d = S.buildDeck({ title: 'x', slides: json, pageCount: 5 });

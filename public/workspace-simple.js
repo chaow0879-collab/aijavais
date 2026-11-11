@@ -290,6 +290,9 @@
   async function deckPreview() {
     let d; try { d = await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/deck'); } catch { return; }
     if (!d.usable) return unusableDeck('这次 PPT 没能生成合格的页面：' + d.reason + '。');
+    // B5-F3 (3): say plainly when the reply had no page structure and how it was paged
+    let note = $('s-deck-notice'); if (!note) { note = el('p', { id: 's-deck-notice', className: 'hint', role: 'status' }); $('s-final').before(note); }
+    note.textContent = d.notice || ''; note.hidden = !d.notice;
     $('s-final').textContent = d.slides.map((s, i) => {
       const pts = [s.subtitle, s.quote, ...s.bullets, ...s.cards.map(c => c.title + (c.text ? '：' + c.text : '')), ...s.steps.map(c => c.title + (c.text ? '：' + c.text : '')),
         ...[s.left, s.right].filter(Boolean).flatMap(c => [c.title + '：', ...c.bullets.map(b => '  ' + b)])].filter(Boolean);
