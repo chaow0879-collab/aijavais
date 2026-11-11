@@ -157,7 +157,7 @@
     if (active) return;
     clearInterval(S.timer);
     const last = [...steps].reverse().find(st => st.status === 'done' && typeof st.output === 'string' && st.output.trim());
-    if (last) { $('s-final').textContent = last.output; $('s-result').hidden = false; }
+    if (last) { $('s-final').textContent = readable(last.output); $('s-result').hidden = false; }
     $('s-accept').hidden = $('s-rework').hidden = run.status !== 'review_required';
     if (run.status !== 'review_required') $('s-rework-box').hidden = true;
     if (run.status === 'failed' || run.status === 'cancelled') {
@@ -268,6 +268,18 @@
   function restoreFormat(run) {
     const label = ((/想要的成果：(.+)/.exec(run.projectSnapshot && run.projectSnapshot.description || '') || [])[1] || '').split('\n')[0];
     const o = Object.values(OUT).find(x => x.label === label); if (o) { S.format = o.format; S.outputLabel = o.label; }
+  }
+  /* B5-F2：PPT 的最终输出是幻灯片 JSON——页面上显示成人能读的提纲，不显示原始 JSON */
+  function readable(text) {
+    try {
+      const j = JSON.parse(String(text).replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''));
+      if (!j || !Array.isArray(j.slides)) return text;
+      return j.slides.map((s, i) => {
+        const pts = [...(s.subtitle ? [s.subtitle] : []), ...(s.quote ? [s.quote] : []), ...(s.bullets || []), ...(s.cards || []).map(c => (c.title || '') + (c.text ? '：' + c.text : '')),
+          ...(s.steps || []).map(c => (c.title || '') + (c.text ? '：' + c.text : '')), ...['left', 'right'].filter(k => s[k]).flatMap(k => [(s[k].title || '') + '：', ...(s[k].bullets || []).map(b => '  ' + b)])];
+        return '第 ' + (i + 1) + ' 页　' + (s.title || '') + '\n' + pts.filter(Boolean).map(p => '　· ' + p).join('\n');
+      }).join('\n\n');
+    } catch { return text; }
   }
   window.AIJSimple = { reset };
   addEventListener('DOMContentLoaded', async () => {

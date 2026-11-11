@@ -68,6 +68,17 @@ test('B5-F2: optional RMB budget — the user amount becomes the cap (never abov
   for (const bad of [0, -1, 'abc', null, undefined, NaN]) assert.equal(Plan.plan({ models, goal: '起草一个PPT', capCny: 5, budgetCny: bad }).budgetCny, null, String(bad));
 });
 
+test('B5-F2 A: a PPT task asks its final role for slide JSON with the exact page count; other outputs are unchanged', () => {
+  const models = [conn('a', 'deepseek', 'DeepSeek', 'deepseek-v4-pro'), conn('b', 'dashscope', '通义千问', 'qwen3.8-max')];
+  const p = Plan.plan({ models, goal: '做一个任职资格体系的概念介绍，5页，最美观达成', output: 'ppt', capCny: 5 });
+  const review = p.project.steps.find(s => s.stepId === 'review').prompt;
+  assert.match(review, /只输出一个 JSON 对象/); assert.match(review, /"layout":"cover"/); assert.match(review, /一共正好 5 页（含封面）/);
+  assert.match(review, /不要写视觉建议/); assert.match(review, /不要写“第N页”/);
+  assert.match(Plan.plan({ models, goal: '做一个PPT', output: 'ppt', capCny: 5 }).project.steps[1].prompt, /一共 5–8 页/);
+  assert.doesNotMatch(Plan.plan({ models, goal: '写方案', output: 'word', capCny: 5 }).project.steps[1].prompt, /JSON/);
+  assert.equal(Plan.pageCount('十二页'), 12); assert.equal(Plan.pageCount('两页'), 2); assert.equal(Plan.pageCount('页面'), null);
+});
+
 /* ---------------- B5-1 server: task summary + root redirect ---------------- */
 async function fixture(t) {
   const mock = http.createServer((req, res) => { let b = ''; req.on('data', c => b += c); req.on('end', () => {

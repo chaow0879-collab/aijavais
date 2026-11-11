@@ -104,6 +104,23 @@
     return { kind, roles, summary: summary(roles), estimateCny: free ? 0 : Math.max(0.01, c.estimate), maxCny, neededCny: c.needed, autoCny: free ? 0 : Math.max(0.1, Math.min(capCny, c.needed)),
       overCap: !free && !fixed && c.needed > capCny, underBudget: fixed && maxCny < c.needed, userBudget: fixed, free };
   }
+  /* B5-F2 A：PPT 的最后一步输出幻灯片 JSON（服务端严格校验；不合格时按“第N页”回退解析） */
+  function pageCount(goal) {
+    const CN = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+    const m = /(\d{1,2}|[一二两三四五六七八九十]{1,3})\s*(?:页|张)(?!面)/.exec(String(goal || '')); if (!m) return null;
+    const v = /^\d+$/.test(m[1]) ? Number(m[1]) : m[1] === '十' ? 10 : m[1].length === 2 && m[1][0] === '十' ? 10 + CN[m[1][1]] : m[1].length === 2 && m[1][1] === '十' ? CN[m[1][0]] * 10 : CN[m[1]];
+    return v >= 1 && v <= 30 ? v : null;
+  }
+  function slidesAsk(goal) {
+    const n = pageCount(goal);
+    return '审核上一步的演示稿提纲，修正错误与遗漏，然后只输出一个 JSON 对象，不要代码块标记，不要任何其它文字。格式：' +
+      '{"slides":[{"layout":"cover","title":"主标题","subtitle":"副标题"},{"layout":"bullets","title":"页标题","bullets":["要点"]},' +
+      '{"layout":"cards","title":"页标题","cards":[{"title":"卡片标题","text":"一句说明"}]},{"layout":"two-column","title":"页标题","left":{"title":"左栏标题","bullets":["要点"]},"right":{"title":"右栏标题","bullets":["要点"]}},' +
+      '{"layout":"timeline","title":"页标题","steps":[{"title":"步骤","text":"一句说明"}]},{"layout":"summary","title":"总结","quote":"一句金句","bullets":["要点"]}]}。' +
+      '规则：第一页必须是 cover；' + (n ? '一共正好 ' + n + ' 页（含封面）；' : '一共 5–8 页（含封面）；') +
+      '按内容选最合适的 layout（并列的 3–4 个概念用 cards，先后步骤用 timeline，对比用 two-column，最后一页用 summary）；每页要点不超过 6 条，每条不超过 30 个字；' +
+      '标题写给听众看，不要写“第N页”；不要写视觉建议、配色、配图或排版说明；不要使用 # * - 等 Markdown 符号。';
+  }
   function plan({ models, goal, output = 'word', deadline = '', capCny = 5, picks = {}, choice = 'quality', budgetCny = null } = {}) {
     const budget = Number(budgetCny) > 0 && Number.isFinite(Number(budgetCny)) ? Number(budgetCny) : null;
     const problems = [], out = OUTPUTS[output] || OUTPUTS.text, text = String(goal || '').trim();
@@ -132,7 +149,7 @@
       roles: chosen.roles.map(r => ({ roleId: r.spec.roleId, name: r.spec.name, duty: r.spec.duty, boundary: r.spec.boundary, standard: r.spec.standard, connectionId: r.model.connectionId, requiredCapabilities: [] })),
       steps: [
         { stepId: 'draft', roleId: 'drafter', title: '写出初稿', prompt: '任务：' + text + '\n' + out.ask, checks: [{ type: 'minLength', value: 20 }] },
-        { stepId: 'review', roleId: 'reviewer', title: '审核并定稿', prompt: '审核上一步的初稿，修正错误与遗漏。只输出修订后的完整最终成果，不要附加审核过程。' + out.ask, checks: [{ type: 'minLength', value: 20 }], handoff: 'previous' },
+        { stepId: 'review', roleId: 'reviewer', title: '审核并定稿', prompt: output === 'ppt' ? slidesAsk(text) : '审核上一步的初稿，修正错误与遗漏。只输出修订后的完整最终成果，不要附加审核过程。' + out.ask, checks: [{ type: 'minLength', value: 20 }], handoff: 'previous' },
       ],
     };
     const approval = { approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(chosen.maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
@@ -200,5 +217,5 @@
     if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null };
     return { text: '启动没有成功。', fix: { action: 'retry', label: '再试一次' }, detail: msg };
   }
-  return { plan, rework, explain, summary, estimatedNote, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
+  return { plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
 });

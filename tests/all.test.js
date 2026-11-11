@@ -25,7 +25,7 @@ require('./proxy.test.js');
 require('./projects-v2.test.js');
 require('./tools-v2.test.js');
 require('./skills-v2.test.js');
-require('./deliverables.test.js');
+require('./deliverables.test.js'); require('./slides.test.js');
 require('./v2-api.test.js');
 require('./auth-concurrency.test.js');
 require('./product-neutrality.test.js');
