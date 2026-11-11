@@ -97,3 +97,13 @@ test('QA-F2-1: an apology or cover-only answer is refused (422 pptx_unusable), n
   }
   assert.equal(S.assess(S.buildDeck({ title: 't', text: SCRIPT }), SCRIPT).usable, true);
 });
+
+test('QA-F2 P3: the closing summary survives the page cut, does not repeat itself or the previous page; footer is the deck title + date', () => {
+  const json = [{ layout: 'cover', title: '封面标题' }, ...Array.from({ length: 6 }, (_, i) => ({ layout: 'bullets', title: '第' + (i + 1) + '部分', bullets: ['要点' + i] })), { layout: 'summary', title: '总结', quote: '金句', bullets: ['要点5', '金句', '新要点'] }];
+  const d = S.buildDeck({ title: 'x', slides: json, pageCount: 5 });
+  assert.equal(d.slides.length, 5); assert.equal(d.slides[4].layout, 'summary', 'the closing summary survives the page cut');
+  assert.deepEqual(S.buildDeck({ title: 'x', slides: json }).slides.at(-1).bullets, ['新要点'], 'summary drops its quote and a repeat of the previous page');
+  const raw = createDeliverable('pptx', { title: '做一个任职资格体系的概念介绍，5页，最美观达成', text: SCRIPT, goal: '5页' }).buffer;
+  assert.match(raw.toString(), /任职资格体系：让成长有标准、有路径  ·  \d{4}年\d{1,2}月\d{1,2}日/, 'footer = cover title + date');
+  for (const t of slidesText(raw)) assert.ok(!t.includes('最美观达成'), 'the raw request is printed on no slide (footer included)');
+});
