@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   control:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
@@ -51,7 +51,7 @@ jobs:
           path: ${{ runner.temp }}/r46-evidence
           if-no-files-found: error
   regressions:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

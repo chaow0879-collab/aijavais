@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   scheduler:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +30,7 @@ jobs:
           node tools/agent-scheduler/cli.js --once --fixture tests/agent-scheduler/round24.json > out.json || true
           node -e "const r=require('./out.json');console.log(r.state,r.missing_gates);if(r.state==='READY_FOR_HUMAN_GATE'||r.actual_dispatch!==false||r.would_dispatch.length)process.exit(1)"
   full-suite:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
