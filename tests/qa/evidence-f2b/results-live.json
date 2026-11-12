@@ -1,0 +1,24 @@
+{
+  "rows": [
+    {
+      "id": "② 首页开着时另一页跑任务：实时动态卡显示真实事件",
+      "ok": true,
+      "note": "16:40:03 模型完成 自定义 · qwen3.8-flash · 审核员 16:40:03 开始调用模型 自定义 · qwen3.8-flash · 审核员 16:40:03 模型完成 自定义 · deepseek-flash · 起草员 16:40:03 开始调用模型 自定义 · deepseek-flash · 起草员 16:40:03 模型完成 自定义 · qwen3.8-flash · 连接测试 16:40:03 开始调用模型 自定义 · qwen3.8-flash · 连接测试 16:40:03 模型完成 自定义 · deepseek-flash · 连接测试 16:40:03 开始调用模型 自定义 · deepseek-flash · 连接测试"
+    },
+    {
+      "id": "② 实时动态卡：无英文技术词/JSON/美元/Token",
+      "ok": false,
+      "note": "残留英文：qwen,flash,qwen,flash,deepseek,flash,deepseek,flash,qwen,flash,qwen,flash,deepseek,flash,deepseek,flash"
+    },
+    {
+      "id": "② 任务跑完后重新打开首页，动态卡显示什么（观察）",
+      "ok": true,
+      "note": "等待模型信号…"
+    }
+  ],
+  "shots": [
+    "live-card-open-page.png",
+    "live-card-fresh-visit.png"
+  ],
+  "chats": 2
+}
