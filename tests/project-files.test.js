@@ -110,7 +110,7 @@ test('store: schema v1 database migrates to v2 with an automatic consistent back
   store.close();
   // Recreate the exact v1 shape: no project_files table, user_version=1, no v2 migration row.
   const db = new DatabaseSync(path.join(dir, 'projects.sqlite'));
-  db.exec('DROP TABLE model_requests; DROP TABLE project_files; DROP TABLE system_usage; DELETE FROM schema_migrations WHERE version>=2; PRAGMA user_version=1;'); db.close();
+  db.exec('DROP TABLE users; DROP INDEX projects_owner; DROP INDEX runs_created; DROP TABLE model_requests; DROP TABLE project_files; DROP TABLE system_usage; DELETE FROM schema_migrations WHERE version>=2; PRAGMA user_version=1;'); db.close();
   store = new ProjectStore({ dir });
   t.after(() => store.close());
   assert.equal(store.schemaVersion, SCHEMA_VERSION);

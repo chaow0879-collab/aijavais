@@ -38,6 +38,7 @@
     .choice{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:10px;margin:8px 0;cursor:pointer}.choice input{width:auto;margin-top:5px}
     .final{white-space:pre-wrap;background:#0d1a29;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;overflow:auto}
   </style>
+  <script src="/role.js"></script>
   <script src="/model-hints.js" defer></script>
   <script src="/smart-plan.js" defer></script>
   <script src="/workspace.js" defer></script>
@@ -45,9 +46,9 @@
   <script src="/topbar.js" defer></script>
 </head>
 <body data-mode="simple">
-<header><div><strong>AIJAVAIS <span style="color:var(--accent)">V2</span></strong><small>项目协作与成果交付工作台</small></div><nav><a href="/project-intake.html">智能立项</a><a href="/capabilities.html">能力中心</a><button class="small" id="logout" type="button">退出登录</button></nav></header>
+<header class="admin-only"><div><strong>AIJAVAIS <span style="color:var(--accent)">V2</span></strong><small>项目协作与成果交付工作台</small></div><nav><a href="/project-intake.html">智能立项</a><a href="/capabilities.html">能力中心</a><button class="small" id="logout" type="button">退出登录</button></nav></header>
 <div class="shell">
-  <aside><div class="side-head"><span class="side-title">我的任务</span><button id="new-project" class="small" type="button">＋ 新建</button></div><div id="projects" class="projects" aria-label="项目列表"><p class="empty">正在读取项目…</p></div></aside>
+  <aside><div class="side-head"><span class="side-title">我的任务</span><button id="new-project" class="small admin-only" type="button">＋ 新建</button></div><div id="projects" class="projects" aria-label="项目列表"><p class="empty">正在读取项目…</p></div></aside>
   <main>
     <section id="home" class="card simple-only" hidden aria-labelledby="home-title">
       <div class="row-head"><h2 id="home-title">我的任务</h2><a class="btn-outline" id="home-new" href="/workspace.html?new=1">＋ 新建任务</a></div>
@@ -55,7 +56,7 @@
       <p class="home-sum" id="home-sum" role="status" aria-live="polite">正在读取任务…</p>
       <div id="home-empty" class="home-empty" hidden>
         <p class="home-sum">还没有任务。说说想让 AI 帮你做什么，系统会自动配好团队、先请你确认费用再开始。</p>
-        <p id="home-guide" class="guide" hidden><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里点“＋ 新建任务”。</p>
+        <p id="home-guide" class="guide" hidden><span class="user-only">管理员还没有准备好可用的模型，请联系管理员。</span><span class="admin-only"><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里点“＋ 新建任务”。</span></p>
         <a class="newtask big" id="home-empty-new" href="/workspace.html?new=1">＋ 新建任务</a>
       </div>
       <div id="home-groups"></div>
@@ -67,8 +68,8 @@
       </aside></div>
     </section>
     <section id="simple" class="card simple-only" aria-labelledby="s-title">
-      <div class="row-head"><h2 id="s-title">新建任务</h2><button id="s-advanced" type="button" class="small">高级设置</button></div>
-      <div id="ws-guide" class="guide" hidden><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里，说说想做什么，点“一键智能配置并开始”。</div>
+      <div class="row-head"><h2 id="s-title">新建任务</h2><button id="s-advanced" type="button" class="small admin-only">高级设置</button></div>
+      <div id="ws-guide" class="guide" hidden><span class="user-only">管理员还没有准备好可用的模型，现在还不能开始任务，请联系管理员。</span><span class="admin-only"><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里，说说想做什么，点“一键智能配置并开始”。</span></div>
       <label for="s-goal">想做什么</label><textarea id="s-goal" rows="3" maxlength="4000" placeholder="例如：给社区咖啡店写一份周末促销方案"></textarea>
       <label>想要什么成果</label><div class="chips" id="s-output" role="radiogroup" aria-label="想要什么成果"></div>
       <label for="s-deadline">什么时候要（可选）</label><input id="s-deadline" maxlength="60" placeholder="例如：本周五前">
@@ -118,7 +119,7 @@
     </section>
     <section id="panel-resources" role="tabpanel" aria-labelledby="tab-resources" hidden><div class="grid"><div class="card"><h2>工具注册表</h2><p class="hint">只展示服务端实际注册的工具。使用前需要加入项目白名单；MCP 工具的连接与调用结果会单独记录。</p><div class="toolbar"><button id="discover-tools" type="button">发现已配置 MCP 工具</button></div><div id="tools-list"></div></div><div class="card"><h2>Skills 执行规范</h2><p class="hint">Skill 将明确的指令和工具权限绑定到执行步骤，不能绕过项目费用和工具限制。</p><div id="skills-list"></div></div></div><details class="card"><summary>注册自定义 Skill（高级）</summary><p class="hint">先查看现有 Skill 的结构；提交后由服务端验证，不会自动执行。</p><label for="skill-json">Skill JSON</label><textarea id="skill-json" rows="8" spellcheck="false">{"skillId":"custom-review","name":"证据审核","version":"1.0.0","description":"逐项检查结论与交付标准","steps":[{"type":"prompt","text":"逐项检查结论与交付标准，并列出可核查证据。"},{"type":"check","check":"nonempty"}]}</textarea><div class="toolbar"><button id="save-skill" type="button">注册 Skill</button></div></details></section>
     </div>
-    <footer>AIJAVAIS · 实际状态以服务端记录为准 · 密钥只在管理中心配置</footer>
+    <footer>AIJAVAIS · 实际状态以服务端记录为准<span class="admin-only"> · 密钥只在管理中心配置</span></footer>
   </main>
 </div>
 </body></html>

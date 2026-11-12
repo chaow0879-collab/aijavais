@@ -126,6 +126,7 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
   <button data-pane="run">我的任务</button>
   <button data-pane="live">实时状态</button>
   <button data-pane="ingest">外部接入</button>
+  <button data-pane="users" id="nav-users">使用者</button>
   <button data-pane="settings">设置</button>
 </nav>
 <div class="guide hidden" id="guide" role="note"><strong>首次使用：两步开始</strong><ol><li id="g1">① 添加模型：在下方选服务商、粘贴密钥，点“连接并全部添加”</li><li id="g2">② 新建任务：<a href="/workspace.html?new=1">去项目工作台新建任务 →</a></li></ol></div>
@@ -266,6 +267,25 @@ td.w{color:var(--pink)}td.e{color:var(--red)}
     </div>
   </div>
 
+  <!-- ======================= B8 使用者（前台账号） ======================= -->
+  <div class="pane one" id="pane-users">
+    <section>
+      <h2>新增使用者 <small>使用者只能在前台做项目和任务，看不到这里的任何设置</small></h2>
+      <div class="grid2">
+        <label>用户名（2–32 个字符）<input id="uName" maxlength="32" autocomplete="off"></label>
+        <label>初始密码（至少 10 个字符）<input id="uPw" type="password" maxlength="200" autocomplete="new-password"></label>
+        <label>每月上限（元）<input id="uCap" type="number" min="0" max="100000" step="0.01" value="50"></label>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="pri" id="uAdd">新增使用者</button><span class="note" id="uRes"></span></div>
+      <p class="note">前台登录地址：<code id="uLoginUrl">/login.html</code>。把用户名和初始密码交给使用者本人；密码只在这里输入一次，系统不保存明文。</p>
+    </section>
+    <section style="margin-top:16px">
+      <h2>使用者列表</h2>
+      <div style="overflow:auto"><table><thead><tr><th>用户名</th><th>状态</th><th>每月上限</th><th>本月已花费</th><th>本月剩余</th><th>操作</th></tr></thead><tbody id="uBody"><tr><td colspan="6" class="note">正在读取…</td></tr></tbody></table></div>
+      <p class="note" id="uNote">本月已花费按北京时间自然月、保守口径计算：进行中的任务按已批准的上限计入。这是估算，不等于厂商账单。超过上限时，使用者会看到“本月额度已用完，请联系管理员”。</p>
+    </section>
+  </div>
+
   <!-- ======================= 设置 ======================= -->
   <div class="pane one" id="pane-settings">
     <section>
@@ -327,7 +347,7 @@ $('#modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.ta
 async function api(path, method = 'GET', body, { raw = false } = {}) {
   const headers = body === undefined ? {} : { 'content-type': 'application/json' };
   const r = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
-  if (r.status === 401) { location.href = '/login.html?next=/admin.html'; throw new Error('登录已失效，请重新登录'); }
+  if (r.status === 401) { location.href = '/admin-login.html?next=/admin.html'; throw new Error('登录已失效，请重新登录'); }
   const j = await r.json().catch(() => ({}));
   if (raw) return { status: r.status, json: j };
   if (!r.ok) { const e = new Error(j.error || ('HTTP ' + r.status)); e.data = j; e.status = r.status; throw e; }
@@ -341,6 +361,53 @@ $('#nav').addEventListener('click', e => {
   $$('.pane').forEach(x => x.classList.toggle('on', x.id === 'pane-' + p));
   if (p === 'ingest') loadIngest();
   if (p === 'settings') loadSessions();
+  if (p === 'users') loadUsers();
+});
+
+/* ======================= B8 使用者 ======================= */
+const yuan = n => '¥' + Number(n || 0).toFixed(2);
+async function loadUsers() {
+  $('#uLoginUrl').textContent = location.origin + '/login.html';
+  const r = await api('/api/v2/users');
+  $('#uBody').innerHTML = r.users.length ? r.users.map(u => `<tr data-user="${esc(u.userId)}"><td>${esc(u.username)}</td>
+    <td>${u.enabled ? '<span class="badge available">正常</span>' : '<span class="badge disabled">已停用</span>'}</td>
+    <td>${yuan(u.monthlyCapCny)}</td><td>${yuan(u.month.spentCny)}${u.month.activeRuns ? ' <span class="note">（含进行中）</span>' : ''}</td><td>${yuan(u.month.remainingCny)}</td>
+    <td class="row"><button class="sm" data-u-act="toggle">${u.enabled ? '停用' : '启用'}</button><button class="sm" data-u-act="cap">改上限</button><button class="sm" data-u-act="pw">重置密码</button></td></tr>`).join('')
+    : '<tr><td colspan="6" class="note">还没有使用者。在上面新增一个。</td></tr>';
+}
+$('#uAdd').addEventListener('click', async () => {
+  $('#uRes').textContent = '';
+  try {
+    // QA-B8-03: send what was typed; blank is refused (server and here), never silently ¥0
+    if ($('#uCap').value.trim() === '') { $('#uRes').textContent = '请填每月上限（元）。填 0 表示这个人不能用收费模型。'; return; }
+    const r = await api('/api/v2/users', 'POST', { username: $('#uName').value, password: $('#uPw').value, monthlyCapCny: $('#uCap').value.trim() });
+    $('#uPw').value = ''; $('#uName').value = '';
+    $('#uRes').textContent = '已新增：' + r.user.username + '，每月上限 ' + yuan(r.user.monthlyCapCny) + (r.user.monthlyCapFen === 0 ? '（上限是 ¥0：这个人不能用收费模型）' : '');
+    loadUsers();
+  } catch (e) { $('#uRes').textContent = e.message; }
+});
+$('#uBody').addEventListener('click', async e => {
+  const act = e.target.dataset.uAct, tr = e.target.closest('tr[data-user]'); if (!act || !tr) return;
+  const id = tr.dataset.user, name = tr.cells[0].textContent;
+  try {
+    if (act === 'toggle') {
+      const enable = e.target.textContent === '启用';
+      if (!enable && !confirm('停用「' + name + '」？停用后他立刻被登出，不能再登录。')) return;
+      await api('/api/v2/users/' + id, 'POST', { enabled: enable }); toast(enable ? '已启用' : '已停用，并已登出这个账号');
+    } else if (act === 'cap') {
+      modal(`<h2>修改每月上限：${esc(name)}</h2><label>每月上限（元）<input id="uCapNew" type="number" min="0" max="100000" step="0.01"></label><div class="row" style="margin-top:10px"><button class="pri" id="uCapSave">保存</button><button data-close>取消</button><span class="note" id="uCapRes"></span></div>`);
+      $('#uCapSave').onclick = async () => {
+        if ($('#uCapNew').value.trim() === '') { $('#uCapRes').textContent = '请填每月上限（元）。填 0 表示这个人不能用收费模型。'; return; }
+        try { const r = await api('/api/v2/users/' + id, 'POST', { monthlyCapCny: $('#uCapNew').value.trim() }); closeModal(); toast('已修改上限：' + yuan(r.user.monthlyCapCny) + (r.user.monthlyCapFen === 0 ? '（不能用收费模型）' : '')); loadUsers(); } catch (err) { $('#uCapRes').textContent = err.message; }
+      };
+      return;
+    } else if (act === 'pw') {
+      modal(`<h2>重置密码：${esc(name)}</h2><label>新密码（至少 10 个字符）<input id="uPwNew" type="password" maxlength="200" autocomplete="new-password"></label><p class="note">重置后，这个账号已登录的设备会全部登出。</p><div class="row" style="margin-top:10px"><button class="pri" id="uPwSave">重置</button><button data-close>取消</button><span class="note" id="uPwRes"></span></div>`);
+      $('#uPwSave').onclick = async () => { try { await api('/api/v2/users/' + id + '/password', 'POST', { password: $('#uPwNew').value }); closeModal(); toast('密码已重置'); } catch (err) { $('#uPwRes').textContent = err.message; } };
+      return;
+    }
+    loadUsers();
+  } catch (err) { toast(err.message); }
 });
 
 /* ======================= 模型：添加向导 ======================= */
@@ -679,7 +746,7 @@ $('#saveSettings').addEventListener('click', async () => {
 /* ======================= 账户与安全 ======================= */
 async function loadSessions() {
   const r = await api('/api/auth/sessions');
-  $('#sessBody').innerHTML = r.sessions.map(x => `<tr><td>${x.kind === 'admin' ? '管理员' : '大屏观看'}${x.label ? ' · ' + esc(x.label) : ''}${x.sid === r.current ? ' <span class="badge available">当前</span>' : ''}</td><td>${esc(x.ip || '')}</td><td>${new Date(x.lastSeen).toLocaleString()}</td><td>${new Date(x.expiresAt).toLocaleString()}</td><td>${x.sid === r.current ? '' : `<button class="sm danger" data-revoke-s="${esc(x.sid)}">撤销</button>`}</td></tr>`).join('');
+  $('#sessBody').innerHTML = r.sessions.map(x => `<tr><td>${x.kind === 'admin' ? '管理员' : x.kind === 'user' ? '使用者' : '大屏观看'}${x.label ? ' · ' + esc(x.label) : ''}${x.sid === r.current ? ' <span class="badge available">当前</span>' : ''}</td><td>${esc(x.ip || '')}</td><td>${new Date(x.lastSeen).toLocaleString()}</td><td>${new Date(x.expiresAt).toLocaleString()}</td><td>${x.sid === r.current ? '' : `<button class="sm danger" data-revoke-s="${esc(x.sid)}">撤销</button>`}</td></tr>`).join('');
 }
 $('#sessBody').addEventListener('click', async e => { const sid = e.target.dataset.revokeS; if (sid) { await api('/api/auth/sessions/' + sid, 'DELETE'); loadSessions(); } });
 $('#pwSave').addEventListener('click', async () => {
@@ -687,7 +754,7 @@ $('#pwSave').addEventListener('click', async () => {
   catch (e) { $('#pwRes').className = 'bad'; $('#pwRes').textContent = e.message; }
 });
 $('#logoutAll').addEventListener('click', async () => { if (confirm('退出所有设备（包括本机和大屏）？')) { await api('/api/auth/logout-all', 'POST'); location.href = '/login.html'; } });
-$('#logoutBtn').addEventListener('click', async () => { await api('/api/auth/logout', 'POST').catch(() => {}); location.href = '/login.html'; });
+$('#logoutBtn').addEventListener('click', async () => { await api('/api/auth/logout', 'POST').catch(() => {}); location.href = '/admin-login.html'; });
 $('#dlCreate').addEventListener('click', async () => {
   const r = await api('/api/auth/display-link', 'POST', { label: $('#dlLabel').value.trim() || '大屏', hours: +$('#dlHours').value || 24 });
   $('#dlOut').classList.remove('hidden'); $('#dlOut').textContent = location.origin + r.path + '\n' + r.note;

@@ -2,7 +2,8 @@
 /* B5-1 统一顶栏：任务中心、实时大屏、模型设置、能力中心、智能立项都用同一套。
  * 固定四个入口：我的任务 / ＋ 新建任务 / 实时大屏 / 模型设置，外加“运行中 N”徽标（点开列出运行中的任务，点一项直达进度页）。
  * 数据来自管理员接口 /api/v2/tasks；只读大屏会话拿不到这个接口，顶栏就不出现，大屏的脱敏行为不变。
- * 用法：<script src="/topbar.js" defer></script>；body[data-topbar=overlay] 时浮在右上角（大屏用）。 */
+ * 用法：<script src="/topbar.js" defer></script>；body[data-topbar=overlay] 时浮在右上角（大屏用）。
+ * B8：使用者账号（/api/v2/tasks 返回 me.kind = user）只有「我的任务」「＋ 新建任务」「实时大屏」「退出」，没有任何后台入口。 */
 (() => {
   const $ = id => document.getElementById(id);
   const el = (tag, props = {}, kids = []) => { const n = document.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k === 'text') n.textContent = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else if (k === 'dataset') Object.assign(n.dataset, v); else n[k] = v; } n.append(...kids); return n; };
@@ -34,6 +35,21 @@
   /* B5-F2：导航链接只建一次，之后每 5 秒只就地更新徽标、下拉和“看哪个任务”。
    * 以前每次刷新都整条替换，鼠标按下与松开之间被替换的话，这次点击就丢了（“点了没反应”）。 */
   let btn = null, menu = null, watchBox = null;
+  function buildUser(me) {
+    const link = (href, text, extra = {}) => el('a', { href, text, ...extra, ...((href === here && !isNew && href !== '/workspace.html?new=1') || (href === '/workspace.html?new=1' && isNew) ? { ariaCurrent: 'page' } : {}) });
+    bar = el('nav', { className: 'aij-top', id: 'aij-topbar', ariaLabel: '主导航', dataset: { role: 'user' } }, [
+      el('span', { className: 'aij-brand', text: 'AIJAVAIS' }),
+      link('/workspace.html', '我的任务', { id: 'aij-home' }),
+      link('/workspace.html?new=1', '＋ 新建任务', { id: 'aij-new', className: 'aij-new' }),
+      link('/panel.html', '实时大屏', { id: 'aij-panel' }),
+      el('span', { className: 'aij-sp' }),
+      el('span', { className: 'aij-watch', id: 'aij-user', text: me.username || '' }),
+      el('button', { type: 'button', id: 'aij-logout', text: '退出', onclick: async () => {
+        try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' }); } catch { /* 仍然回到登录页 */ }
+        location.assign('/login.html');
+      } })]);
+    document.body.prepend(bar);
+  }
   function build() {
     btn = el('button', { type: 'button', id: 'aij-running', className: 'idle', ariaHasPopup: 'true', ariaExpanded: 'false', text: '运行中 0' });
     menu = el('div', { className: 'aij-menu', id: 'aij-running-menu', hidden: true, role: 'menu' });
@@ -52,6 +68,7 @@
     document.body.prepend(bar);
   }
   function render(data) {
+    if (data.me && data.me.kind === 'user') { if (!bar) buildUser(data.me); return; }
     if (!bar) build();
     const running = data.tasks.filter(t => t.group === 'running').sort((a, b) => b.updatedAt - a.updatedAt);
     btn.textContent = '运行中 ' + running.length; btn.className = running.length ? '' : 'idle';

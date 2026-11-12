@@ -25,7 +25,7 @@
   async function api(path, method = 'GET', body) {
     const res = await fetch(path, { method, credentials:'same-origin', headers:{ Accept:'application/json', ...(body === undefined ? {} : {'content-type':'application/json'}) }, body:body === undefined ? undefined : JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 401) { location.assign('/login.html?next=/workspace.html'); throw Error('会话已过期，请重新登录'); }
+    if (res.status === 401) { location.assign('/login.html?next=/workspace.html&expired=1'); throw Error('会话已过期，请重新登录'); }
     if (!res.ok) throw Object.assign(Error(data.error || data.message || '请求失败（HTTP ' + res.status + '）'), { code: data.code, status: res.status });
     return data;
   }
@@ -211,10 +211,10 @@
   const TASK_STATE={running:'进行中',review:'需要你处理',stopped:'已停下',done:'已完成',draft:'草稿'};
   function renderProjectList() {
     const target=$('projects');target.replaceChildren();
-    if(!state.projects.length)target.append(node('p',{class:'empty',text:'还没有项目。从智能立项开始，或点击新建。'}));
+    if(!state.projects.length)target.append(node('p',{class:'empty',text:document.body.dataset.role==='user'?'还没有任务。点上面的“＋ 新建任务”开始。':'还没有项目。从智能立项开始，或点击新建。'}));// QA-B8-01: users cannot open 智能立项
     for(const project of state.projects){
       const task=(state.tasks||[]).find(t=>t.projectId===project.projectId);
-      const open=()=>{if(task&&task.runId&&document.body.dataset.mode!=='advanced'){location.assign('/workspace.html?run='+encodeURIComponent(task.runId));return;}return openProject(project.projectId);};
+      const open=()=>{if(task&&task.runId&&document.body.dataset.mode!=='advanced'){location.assign('/workspace.html?run='+encodeURIComponent(task.runId));return;}if(document.body.dataset.role==='user'){location.assign('/workspace.html?new=1');return;}return openProject(project.projectId);};
       const small=task?(task.runId?(task.group==='running'?'第 '+Math.min(task.stepsDone+1,task.stepsTotal||1)+'/'+(task.stepsTotal||1)+' 步':'完成 '+task.stepsDone+'/'+(task.stepsTotal||1)+' 步')+(task.downloadable&&task.group!=='running'?' · 有成果可下载':''):'还没开始'):(project.roles || []).length+' 个岗位';
       const button=node('button',{type:'button',class:'project-button','data-project-id':project.projectId,'aria-current':String(state.project && state.project.projectId===project.projectId),onclick:work(open)},[node('strong',{},[project.name,...(task?[node('span',{class:'pstate '+task.group,text:TASK_STATE[task.group]})]:[])]),node('small',{text:small})]);
       target.append(button);
@@ -317,6 +317,8 @@
     $('skills-list').replaceChildren(...(state.skills.length?state.skills.map(skill=>node('div',{class:'resource'},[node('strong',{text:skill.name || identity(skill)}),node('p',{text:skill.description || skill.instructions || ''}),node('details',{},[node('summary',{text:'查看规范与权限'}),node('pre',{text:JSON.stringify(skill,null,2)})])])):[node('p',{class:'empty',text:'未注册 Skill'})]));
   }
   async function refreshResources() {
+    // B8: a front-end user never calls back-end interfaces; tools/skills are administrator resources
+    if(await (window.AIJRole||Promise.resolve(null))==='user'){const me=await api('/api/v2/me');state.models=list(me,'models');state.tools=[];state.skills=[];renderResources();return;}
     const [models,tools,skills]=await Promise.all([api('/api/models'),api('/api/v2/tools'),api('/api/v2/skills')]);
     state.models=list(models,'models');state.tools=list(tools,'tools');state.skills=list(skills,'skills');renderResources();
     if(state.project){
@@ -427,7 +429,7 @@
   $('discover-tools').addEventListener('click',work(async()=>{const result=await api('/api/v2/tools/discover','POST',{});await refreshResources();feedback('已刷新服务端配置的 MCP 工具；新增工具需加入本次运行白名单。'+(result.servers?'\n连接诊断：'+JSON.stringify(result.servers):''));}));
   $('logout').addEventListener('click',work(async()=>{await api('/api/auth/logout','POST',{});location.assign('/login.html');}));
   (async()=>{
-    try{await refreshResources();await refreshProjects();const id=new URLSearchParams(location.search).get('project');if(id)await openProject(id);else renderProject(blankProject());connectEvents();}
+    try{await refreshResources();await refreshProjects();const id=new URLSearchParams(location.search).get('project');if(id&&await (window.AIJRole||Promise.resolve(null))!=='user')await openProject(id);else renderProject(blankProject());connectEvents();}
     catch(error){feedback(error.message,true);if(!state.project)renderProject(blankProject());}
   })();
 })();

@@ -13,7 +13,7 @@
   async function api(path, method = 'GET', body) {
     const res = await fetch(path, { method, credentials: 'same-origin', headers: { accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 401) { location.assign('/login.html?next=/workspace.html'); throw Error('请重新登录'); }
+    if (res.status === 401) { location.assign('/login.html?next=/workspace.html&expired=1'); throw Error('请重新登录'); }
     if (!res.ok) throw Object.assign(Error(data.error || '请求失败'), { code: data.code, status: res.status });
     return data;
   }
@@ -23,7 +23,16 @@
     for (const id of ['s-output', 's-goal', 's-deadline']) $(id).addEventListener('input', () => { S.picks = {}; if (!$('s-plan').hidden) preview(true); showAuto(); });
     $('s-budget-cny').addEventListener('input', () => { $('s-budget-warn').hidden = true; S.budgetAck = null; if (!$('s-plan').hidden) preview(true); });
   }
+  /* B8：使用者账号不读后台接口：可用模型（只含管理员已测通的）、单次上限和本月额度都来自 /api/v2/me */
+  const isUser = async () => (await (window.AIJRole || Promise.resolve(null))) === 'user';
   async function loadModels() {
+    if (await isUser()) {
+      const me = await api('/api/v2/me');
+      S.models = me.models || []; S.me = me.me;
+      if (me.settings && Number(me.settings.simpleRunCapCny) > 0) S.capCny = Number(me.settings.simpleRunCapCny);
+      $('ws-guide').hidden = window.SmartPlan.chat(S.models).length > 0;
+      return;
+    }
     const [m, c] = await Promise.all([api('/api/models'), api('/api/config').catch(() => null)]);
     S.models = m.models || [];
     if (c && c.settings && Number(c.settings.simpleRunCapCny) > 0) S.capCny = Number(c.settings.simpleRunCapCny);
@@ -32,14 +41,17 @@
   /* B5-2：普通用户不被赶去管理中心。模型不能用时，在当前页一键换成其它可用模型；
    * 只有一个可用模型都没有时，才提示“请管理员添加模型”。 */
   const pool = () => S.models.filter(m => !S.excluded.has(m.connectionId));
+  /* QA-B8-01：使用者看不到后台、密钥、管理中心这些字；模型的问题统一说“请联系管理员” */
+  const forUser = text => document.body.dataset.role !== 'user' || !/密钥|管理中心|添加一个模型/.test(text) ? text
+    : /还没有可用的模型/.test(text) ? '管理员还没有准备好可用的模型，现在还不能开始任务，请联系管理员。' : '所选的模型现在不能用，请联系管理员检查。';
   function showError(box, info, retry, ctx = {}) {
-    box.replaceChildren(el('div', { text: info.text }));
+    box.replaceChildren(el('div', { text: forUser(info.text) }));
     const fix = info.fix;
     if (fix && fix.action === 'fix_model') {
       const others = window.SmartPlan.usable(pool()).filter(m => m.connectionId !== ctx.connectionId);
       if (ctx.connectionId && others.length && retry) box.append(el('button', { type: 'button', className: 'fixbtn', text: '自动换成其它可用模型', onclick: () => { S.excluded.add(ctx.connectionId); for (const k of Object.keys(S.picks)) if (S.picks[k] === ctx.connectionId) delete S.picks[k]; box.hidden = true; retry(); } }));
       else box.append(el('div', { className: 'hint', text: '没有其它可用的模型了，请管理员添加模型。' }));
-    } else if (fix && fix.action === 'add_model') box.append(el('a', { className: 'fixbtn', href: '/admin.html', text: fix.label })); // 一个模型都没有：只能先添加
+    } else if (fix && fix.action === 'add_model') box.append(document.body.dataset.role === 'user' ? el('div', { className: 'hint', text: '请联系管理员添加模型。' }) : el('a', { className: 'fixbtn', href: '/admin.html', text: fix.label })); // 一个模型都没有：只能先添加
     else if (fix && retry) box.append(el('button', { type: 'button', className: 'fixbtn', text: fix.label, onclick: () => { box.hidden = true; retry(); } }));
     if (info.detail) box.append(el('details', {}, [el('summary', { text: '给管理员看的详细信息' }), el('div', { text: info.detail })]));
     box.hidden = false; box.scrollIntoView({ block: 'center' });
@@ -72,13 +84,18 @@
       const i = r.candidates.indexOf(r.model.connectionId); S.picks[r.spec.roleId] = r.candidates[(i + 1) % r.candidates.length]; preview(true);
     } }));
   }
-  function skippedText(p) { return p.skipped && p.skipped.length ? '这些模型所在的平台没有登记价格，按规定不调用，已换成其它模型：' + p.skipped.join('、') + '。' : ''; }
+  /* QA-B8 P3-1：使用者看不到模型名，只看岗位和档次（“起草员（均衡）”）；模型属于后台信息 */
+  const isUserPage = () => document.body.dataset.role === 'user';
+  const team = s => (!isUserPage() ? s : String(s || '').replace(/ → [^（｜]+/g, ''));
+  const estNote = s => (!isUserPage() || !s ? s : String(s).replace(/^[\s\S]*? 还没有官方单价/, '所选模型还没有官方单价'));
+  function skippedText(p) { if (isUserPage() && p.skipped && p.skipped.length) return '有些模型没有登记价格，按规定不调用，已自动换成其它模型。';
+    return p.skipped && p.skipped.length ? '这些模型所在的平台没有登记价格，按规定不调用，已换成其它模型：' + p.skipped.join('、') + '。' : ''; }
   function preview(show) {
     S.plan = makePlan();
     if (show) {
       $('s-plan').hidden = !S.plan.ok;
-      $('s-plan-team').textContent = S.plan.ok ? '智能分配：' + S.plan.summary : '';
-      $('s-plan-note').textContent = S.plan.ok ? [S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : ''), S.plan.estimatedNote, skippedText(S.plan)].filter(Boolean).join(' ') : '';
+      $('s-plan-team').textContent = S.plan.ok ? '智能分配：' + team(S.plan.summary) : '';
+      $('s-plan-note').textContent = S.plan.ok ? [S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : ''), estNote(S.plan.estimatedNote), skippedText(S.plan)].filter(Boolean).join(' ') : '';
       if (S.plan.ok) renderSwap(S.plan);
     }
     return S.plan;
@@ -92,19 +109,29 @@
         body.append(el('p', { text: '按现在的分配，预计会超过单次上限 ¥' + p.capCny.toFixed(2) + '。请选一个：' }));
         for (const o of opts) body.append(el('label', { className: 'choice' }, [el('input', { type: 'radio', name: 's-choice', value: o.kind, checked: o.kind === 'quality' }),
           el('span', { text: (o.kind === 'quality' ? '效果优先 约¥' + o.estimateCny.toFixed(2) : '省钱 约¥' + o.estimateCny.toFixed(2) + '（效果可能稍差）') + (p.estimatedNote ? '，估计上限 ¥' : '，最多 ¥') + o.maxCny.toFixed(2) + (o.overCap ? '，可能中途停下' : '') + '。' + o.summary })]));
-      } else body.append(el('p', { className: 'team', text: p.confirmText }), el('p', { text: '团队：' + p.summary }));
+      } else body.append(el('p', { className: 'team', text: p.confirmText }), el('p', { text: '团队：' + team(p.summary) }));
       if (p.budgetCny != null && !p.isRework) body.append(el('p', { className: 'hint', id: 's-confirm-budget', text: p.budgetClipped ? '你填的 ¥' + p.budgetCny.toFixed(2) + ' 超过了单次上限 ¥' + p.capCny.toFixed(2) + '，按 ¥' + p.capCny.toFixed(2) + ' 计算。' : '上限按你填的金额：¥' + p.chosen.maxCny.toFixed(2) + (p.underBudget ? '（比建议金额低，可能做到一半会停下）' : '') + '。' }));
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
-      if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: p.estimatedNote }));
+      if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: estNote(p.estimatedNote) }));
       body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : '¥0.00') + '（估算，以厂商账单为准）。' }));
-      if (!p.isRework) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
-      else body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' }));
+      if (S.me && S.me.kind === 'user') body.append(el('p', { className: 'hint', id: 's-confirm-quota', text: '你本月额度还剩 ¥' + (Number(S.me.month.remainingCny) || 0).toFixed(2) + '（每月上限 ¥' + (Number(S.me.month.capCny) || 0).toFixed(2) + '，由管理员设置）。' }));
+      // QA-B8-02: the rework sentence belongs to a rework only; a user's models are already tested, so no connection-check sentence
+      if (p.isRework) body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' }));
+      else if (!(S.me && S.me.kind === 'user')) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
       $('s-confirm-title').textContent = p.isRework ? '确认修改' : '确认开始';
       const done = ok => { dlg.close(); resolve(ok ? (document.querySelector('input[name=s-choice]:checked')?.value || 'quality') : null); };
       $('s-confirm-ok').onclick = () => done(true); $('s-confirm-cancel').onclick = () => done(false);
       dlg.addEventListener('cancel', () => resolve(null), { once: true });
       dlg.showModal();
     });
+  }
+  /* B8：使用者每月有人民币上限。先在页面上用人话拦下来（不创建任务）；服务器开始运行前还会再查一次，以服务器为准 */
+  function quotaProblem(p) {
+    if (!S.me || S.me.kind !== 'user' || !p.approval || !(p.approval.approvePaid || p.chosen.maxCny > 0)) return null;
+    const left = Number(S.me.month.remainingCny) || 0;
+    if (left <= 0) return '本月额度已用完，请联系管理员';
+    if (p.chosen.maxCny > left + 1e-9) return '本月额度只剩 ¥' + left.toFixed(2) + '，这次最多要花 ¥' + p.chosen.maxCny.toFixed(2) + '。请把预算改到 ¥' + left.toFixed(2) + ' 以内，或联系管理员';
+    return null;
   }
   async function go() {
     if (S.busy) return;
@@ -113,10 +140,16 @@
     const first = preview(false);
     if (!first.ok) return showError($('s-error'), first.problems[0], go);
     if (!budgetCheck(first)) return;
+    // QA-B8 P3-5: say "quota not enough" before the confirmation, not after the user confirmed an amount it cannot cover
+    // (only when no option of the dialog fits; if the 省钱 option fits, the dialog still lets the user pick it)
+    const q0 = quotaProblem(first), saving = first.options && first.options.saving;
+    if (q0 && !(saving && !quotaProblem({ ...first, chosen: saving }))) return showError($('s-error'), { text: q0, fix: null });
     const choice = await confirm(first);
     if (!choice) return;
     S.choice = choice;
     const p = makePlan(choice);
+    const q1 = quotaProblem(p);
+    if (q1) return showError($('s-error'), { text: q1, fix: null });
     S.busy = true; $('s-go').disabled = true;
     try {
       $('s-busy').textContent = '正在创建任务…';
@@ -140,7 +173,7 @@
   }
   function showProgress(p) {
     $('simple').hidden = true; $('s-progress').hidden = false;
-    $('s-team').textContent = p ? '团队：' + p.summary + '。' + p.confirmText : '';
+    $('s-team').textContent = p ? '团队：' + team(p.summary) + '。' + p.confirmText : '';
     $('s-download').textContent = DL[S.format] || '下载成果'; $('s-download').hidden = false;
     $('s-result').hidden = true; $('s-run-error').hidden = true; $('s-stop').hidden = true; $('s-steps').replaceChildren();
     history.replaceState(null, '', '/workspace.html?run=' + encodeURIComponent(S.runId));
@@ -201,6 +234,7 @@
     await loadModels();
     const r = window.SmartPlan.rework({ models: S.models, snapshot: S.snapshot, feedback: $('s-rework-text').value, capCny: S.capCny });
     if (!r.ok) return showError($('s-run-error'), r.problems[0], rework);
+    const qr = quotaProblem(r); if (qr) return showError($('s-run-error'), { text: qr, fix: null }); // QA-B8 P3-5
     if (!(await confirm({ ...r, isRework: true }))) return;
     $('s-result').hidden = true; $('s-run-error').hidden = true; $('s-state').textContent = '正在按你的意见修改…';
     try {
@@ -337,11 +371,11 @@
     $('s-download').addEventListener('click', download);
     $('s-stop-download').addEventListener('click', download);
     $('s-accept').addEventListener('click', async () => { await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/review', 'POST', { decision: 'approve', feedback: '用户在简单模式确认成果' }); poll(); });
-    const q = new URLSearchParams(location.search);
-    if (q.get('project')) document.body.dataset.mode = 'advanced';
+    const q = new URLSearchParams(location.search), user = await isUser();
+    if (q.get('project') && !user) document.body.dataset.mode = 'advanced'; // B8：使用者只有简单模式，没有后台式的高级配置
     try { await loadModels(); showAuto(); } catch { /* 页面其余部分仍可用 */ }
     if (q.get('run')) { S.runId = q.get('run'); try { const run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; S.projectId = run.projectId; restoreFormat(run); showProgress(null); } catch { reset(); } }
-    else if (!q.get('project') && q.get('new') !== '1') {
+    else if ((user || !q.get('project')) && q.get('new') !== '1') {
       // B5-F2：默认落点永远是“我的任务”（顶栏“我的任务”在任何页面点了都显示任务列表）；
       // 一个任务都没有时显示空状态：一句引导 + 大号“＋ 新建任务”（首屏可见，不用滚动）
       $('simple').hidden = true; $('home').hidden = false;

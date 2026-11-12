@@ -9,7 +9,7 @@
   };
   async function api(path, method = 'GET', body) {
     const res = await fetch(path, { method, credentials: 'same-origin', headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
-    if (res.status === 401) { location.assign('/login.html?next=/capabilities.html'); throw Error('请先登录'); }
+    if (res.status === 401) { location.assign('/admin-login.html?next=/capabilities.html'); throw Error('请先登录'); }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw Error(data.error || '请求失败（HTTP ' + res.status + '）');
     return data;

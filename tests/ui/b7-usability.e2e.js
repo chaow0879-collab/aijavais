@@ -54,7 +54,7 @@ function englishLeft(text) {
     /* ---- B7d: a real login lands on the workspace with "＋ 新建任务" and the two-step guide ---- */
     const fresh = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const lp = await fresh.newPage();
-    await lp.goto(base + '/login.html');
+    await lp.goto(base + '/admin-login.html'); // B8: the administrator signs in on the back-end login page
     await lp.waitForSelector('#loginForm:not(.hidden)');
     check('login page shows no English technical words', async () => { const r = englishLeft(await lp.innerText('body')); assert.deepEqual(r.words, [], 'login: ' + r.words); });
     for (const [n, f] of checks.splice(0)) await f().then(() => checks.push([n, null]));
@@ -62,7 +62,7 @@ function englishLeft(text) {
     const freshApp = await H.boot({ login: false });
     try {
       const sp = await (await browser.newContext()).newPage();
-      await sp.goto('http://localhost:' + freshApp.port + '/login.html');
+      await sp.goto('http://localhost:' + freshApp.port + '/admin-login.html');
       await sp.waitForSelector('#setupForm:not(.hidden)');
       const setupText = await sp.innerText('body');
       assert.deepEqual(englishLeft(setupText).words, [], 'setup screen'); assert.match(setupText, /请向管理员获取/);

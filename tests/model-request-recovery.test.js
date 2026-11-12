@@ -39,7 +39,7 @@ function v3(t, rows = []) {
   for (const row of rows) store.recordSystemUsage(row);
   store.close();
   const db = new DatabaseSync(path.join(dir, 'projects.sqlite'));
-  db.exec('DROP TABLE model_requests; DROP INDEX system_usage_status; DELETE FROM schema_migrations WHERE version=4; PRAGMA user_version=3;');
+  db.exec('DROP TABLE users; DROP INDEX projects_owner; DROP INDEX runs_created; DROP TABLE model_requests; DROP INDEX system_usage_status; DELETE FROM schema_migrations WHERE version>=4; PRAGMA user_version=3;'); // B8: a true v3 shape (no v4/v5 objects)
   db.close();
   return { dir, projectId: p.projectId };
 }
@@ -187,8 +187,8 @@ test('schema v4: legacy reserved/duplicate/completed/failed IDs and project data
   const rows = [legacy('legacy-reserved'), legacy('legacy-reserved', 'reserved', { cost: 0 }), legacy('legacy-completed', 'completed'),
     legacy('legacy-failed', 'failed'), legacy(null), { kind: 'connection_test', status: 'completed', cost: null, modelId: 'keep-probe' }];
   const { dir, projectId } = v3(t, rows); let store = new ProjectStore({ dir }); t.after(() => store.close());
-  assert.equal(store.schemaVersion, 4); assert.equal(SCHEMA_VERSION, 4); assert.equal(store.getProject(projectId).name, 'Keep project');
-  assert.equal(store.migrationBackups.length, 1);
+  assert.equal(store.schemaVersion, SCHEMA_VERSION); assert.equal(SCHEMA_VERSION, 5); assert.equal(store.getProject(projectId).name, 'Keep project');
+  assert.equal(store.migrationBackups.length, 2, 'B8: one consistent copy before v4 and one before v5');
   const backupFile = store.migrationBackups[0]; assert.equal(fs.statSync(backupFile).mode & 0o777, 0o600);
   const backup = new DatabaseSync(backupFile, { readOnly: true });
   assert.equal(Number(backup.prepare('PRAGMA user_version').get().user_version), 3);
@@ -222,7 +222,7 @@ test('schema v4: migration SQL failure rolls all changes back and preserves the 
   const backups = fs.readdirSync(dir).filter(name => name.includes('.pre-v4-') && !existingBackups.has(name));
   assert.equal(backups.length, 1); assert.equal(fs.statSync(path.join(dir, backups[0])).mode & 0o777, 0o600);
   db.exec('DROP TRIGGER fail_v4;'); db.close();
-  const store = new ProjectStore({ dir }); t.after(() => store.close()); assert.equal(store.schemaVersion, 4);
+  const store = new ProjectStore({ dir }); t.after(() => store.close()); assert.equal(store.schemaVersion, SCHEMA_VERSION);
 });
 
 test('schema v4: consistent backup failure aborts before schema or legacy fees are modified', t => {

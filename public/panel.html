@@ -136,6 +136,7 @@ header{display:grid;grid-template-columns:minmax(240px,1.7fr) repeat(5,minmax(0,
 }
 .en{font-size:.62em;opacity:.55;margin-left:.45em;letter-spacing:.08em;font-weight:400}
 </style>
+<script src="/role.js"></script>
 <script src="/topbar.js" defer></script>
 </head>
 <body data-topbar="overlay">
@@ -152,7 +153,7 @@ header{display:grid;grid-template-columns:minmax(240px,1.7fr) repeat(5,minmax(0,
   <div class="stage" id="stageWrap">
     <canvas id="stage"></canvas>
     <div class="ov console">◱ 控制台<small class="en">CONSOLE</small></div>
-    <a class="ov adm" href="/admin.html" target="_blank" rel="noopener">⚙ 管理中心<small class="en">ADMIN</small></a>
+    <a class="ov adm admin-only" href="/admin.html" target="_blank" rel="noopener">⚙ 管理中心<small class="en">ADMIN</small></a>
     <div class="ov music" id="bgm">
       <span class="mbtn" id="bgmBtn" title="开/关背景音乐（M 键）"><i class="eq"><b></b><b></b><b></b></i><em id="bgmTxt">BGM OFF</em></span>
       <input type="range" id="bgmVol" min="0" max="100" step="1" value="60" title="音量">

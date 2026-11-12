@@ -131,7 +131,7 @@ function v3Dir(t) {
   store.createProject({ name: 'Inventory', description: 'Leftover backup inventory fixture.' });
   const old = store.migrationBackups || []; store.close(); for (const f of old) fs.unlinkSync(f);
   const db = new DatabaseSync(path.join(dir, 'projects.sqlite'));
-  db.exec('DROP TABLE model_requests; DROP INDEX system_usage_status; DELETE FROM schema_migrations WHERE version=4; PRAGMA user_version=3;'); db.close();
+  db.exec('DROP TABLE users; DROP INDEX projects_owner; DROP INDEX runs_created; DROP TABLE model_requests; DROP INDEX system_usage_status; DELETE FROM schema_migrations WHERE version>=4; PRAGMA user_version=3;'); db.close(); // B8: true v3 shape
   return dir;
 }
 function child(modeName, dir) { return spawnSync(process.execPath, ['--no-warnings', CHILD, modeName, dir], { env: cleanEnv(), encoding: 'utf8', timeout: 10000 }); }
