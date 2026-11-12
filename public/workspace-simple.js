@@ -140,8 +140,10 @@
     const first = preview(false);
     if (!first.ok) return showError($('s-error'), first.problems[0], go);
     if (!budgetCheck(first)) return;
-    const q0 = S.me && S.me.kind === 'user' && Number(S.me.month.remainingCny) <= 0 && quotaProblem(first);
-    if (q0) return showError($('s-error'), { text: q0, fix: null });
+    // QA-B8 P3-5: say "quota not enough" before the confirmation, not after the user confirmed an amount it cannot cover
+    // (only when no option of the dialog fits; if the 省钱 option fits, the dialog still lets the user pick it)
+    const q0 = quotaProblem(first), saving = first.options && first.options.saving;
+    if (q0 && !(saving && !quotaProblem({ ...first, chosen: saving }))) return showError($('s-error'), { text: q0, fix: null });
     const choice = await confirm(first);
     if (!choice) return;
     S.choice = choice;
@@ -232,6 +234,7 @@
     await loadModels();
     const r = window.SmartPlan.rework({ models: S.models, snapshot: S.snapshot, feedback: $('s-rework-text').value, capCny: S.capCny });
     if (!r.ok) return showError($('s-run-error'), r.problems[0], rework);
+    const qr = quotaProblem(r); if (qr) return showError($('s-run-error'), { text: qr, fix: null }); // QA-B8 P3-5
     if (!(await confirm({ ...r, isRework: true }))) return;
     $('s-result').hidden = true; $('s-run-error').hidden = true; $('s-state').textContent = '正在按你的意见修改…';
     try {

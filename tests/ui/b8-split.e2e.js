@@ -177,8 +177,16 @@ const PASS = 'user-password-123';
     /* cap used up: only the priced model is available, cap set to the amount already spent (¥0) */
     await app.call('POST', '/api/models/' + localId + '/disable', {}); await app.call('POST', '/api/models/' + paidId + '/enable', {});
     const users = (await app.call('GET', '/api/v2/users')).json.users, wang = users.find(u => u.username === 'xiaowang');
-    await app.call('POST', '/api/v2/users/' + wang.userId, { monthlyCapCny: 0 });
+    // QA-B8 P3-5: only ¥0.02 left -> said before any confirmation (no dialog that promises "最多 ¥0.10" first)
+    await app.call('POST', '/api/v2/users/' + wang.userId, { monthlyCapCny: Math.round(wang.month.spentCny * 100 + 2) / 100 });
     const before = (await app.call('GET', '/api/v2/projects')).json.projects.length;
+    await up.goto(base + '/workspace.html?new=1'); await up.waitForSelector('#s-go');
+    await up.fill('#s-goal', '写一份会员日活动方案'); await up.click('#s-go');
+    await up.waitForSelector('#s-error:not([hidden])');
+    assert.match(await up.innerText('#s-error'), /^本月额度只剩 ¥0\.02，这次最多要花 ¥\d+\.\d{2}。请把预算改到 ¥0\.02 以内，或联系管理员/);
+    assert.equal(await up.isVisible('#s-confirm[open]'), false, 'P3-5: no confirmation dialog when the quota cannot cover it');
+    assert.equal((await app.call('GET', '/api/v2/projects')).json.projects.length, before, 'no task was created');
+    await app.call('POST', '/api/v2/users/' + wang.userId, { monthlyCapCny: 0 });
     await up.goto(base + '/workspace.html?new=1'); await up.waitForSelector('#s-go');
     await up.fill('#s-goal', '再写一份会员日活动方案'); await up.click('#s-go');
     await up.waitForSelector('#s-error:not([hidden])');
