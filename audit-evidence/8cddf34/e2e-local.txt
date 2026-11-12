@@ -1,0 +1,22 @@
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS click to choose, multi-select: docx / xlsx / image each show a plain status (字数、表格张数、图片不会看)
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS drag and drop uploads too
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS size limit, old Office formats, unsupported and mismatched files are explained in plain Chinese
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS 删除 removes the file from the task (server) and error rows from the list
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS reloading the new-task page restores the uploaded materials
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS MOCK request bodies of BOTH roles contain the docx and xlsx content plus the cite-the-source instruction; the run uses the draft task
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS B9b: understanding, model questions with clickable options + 其它, plain plan; the answers reach both roles' prompts
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS ＋ 新建任务 starts with an empty materials list
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS B9b 跳过，按你的理解来: the run starts and the roles are told to follow the understanding
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS B9b: a bad JSON reply falls back to rule-based questions (no dead end); re-opening does not call again
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:PASS user account: uploads materials to their own task, roles receive them; another user gets 404 on those files
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b9-smart.txt:B9 BROWSER CHECKS PASSED: 11
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b8-split.txt:PASS admin: back-end pages go to the separate admin login, which says 这是管理后台
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b8-split.txt:PASS admin 使用者 page: add users with a monthly ¥ cap; list shows status, cap, this month spent and remaining
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b8-split.txt:PASS user: front login with username; top bar only 我的任务 / ＋ 新建任务 / 实时大屏 / 退出; no back-end entry
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b8-split.txt:PASS user: new task → RMB confirmation (with remaining monthly quota) → result, all in the front end
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b8-split.txt:PASS user: /admin.html, /capabilities.html, /project-intake.html answer 403; live screen has the same four entries and no 管理中心
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b8-split.txt:PASS two users: the second user sees an empty task list, not the first user's task
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b8-split.txt:PASS AUD-C159-01: reworking last month's run counts this month; the new-task page shows ¥4.90 left, not ¥5.00
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b8-split.txt:PASS cap used up: plain 本月额度已用完，请联系管理员, no task created
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b8-split.txt:PASS admin: disabling logs the user out at once; reset password ends old sessions and the new password works
+/tmp/claude-0/-home-user-aijavais/49ce4c52-bc2d-59df-aaa8-5aac6f4a04e0/scratchpad/b9b-e2e-b8-split.txt:PASS user 退出 returns to the front login; the administrator can still enter the front end

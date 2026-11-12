@@ -1,0 +1,140 @@
+{
+ "t1": {
+  "status": 200,
+  "ok": true,
+  "calls": 1,
+  "understanding": "我理解你要的是<img src=x onerror=alert(1)>一份方案。",
+  "nq": 3,
+  "opts": [
+   "老板",
+   "客户",
+   "<b>x</b>"
+  ],
+  "planLen": 80,
+  "usage": {
+   "cost": 0.0288,
+   "costUpperBound": 0.053904
+  },
+  "rows": [
+   {
+    "purpose": "clarify",
+    "kind": "intake_draft",
+    "status": "completed",
+    "cost": 0.0288,
+    "ub": 0.053904,
+    "price": {
+     "inputPerMillion": 24,
+     "outputPerMillion": 24,
+     "currency": "USD"
+    }
+   }
+  ],
+  "month": {
+   "capCny": 1,
+   "spentCny": 0.22,
+   "remainingCny": 0.78
+  },
+  "expectedCostUsd": 0.0288
+ },
+ "t2": {
+  "cap02": 402,
+  "noApprove": "402:paid_approval_required",
+  "untested": 409,
+  "otherProject": 404,
+  "anon": 401,
+  "calls": 0
+ },
+ "t3": {
+  "first": 200,
+  "replay": "402:monthly_quota_insufficient",
+  "changed": "402:monthly_quota_insufficient",
+  "calls": 1,
+  "rowsForRid": 1
+ },
+ "t4_while_held": {
+  "calls": 1,
+  "month": {
+   "capCny": 1,
+   "spentCny": 0.41,
+   "remainingCny": 0.59
+  },
+  "rows": [
+   "reserved:null:0.0539"
+  ]
+ },
+ "t4_run_during_clarify": {
+  "status": 202
+ },
+ "t4": [
+  "402:monthly_quota_insufficient",
+  "402:monthly_quota_insufficient",
+  "402:monthly_quota_insufficient"
+ ],
+ "t4_month_after": {
+  "capCny": 1,
+  "spentCny": 0.67,
+  "remainingCny": 0.33
+ },
+ "t5_after_abort": {
+  "calls": 1,
+  "status": "failed",
+  "cost": null,
+  "ub": 0.053904,
+  "month": {
+   "capCny": 1,
+   "spentCny": 0.41,
+   "remainingCny": 0.59
+  }
+ },
+ "t5_late": {
+  "rows": 1,
+  "status": "failed",
+  "cost": null,
+  "month": {
+   "capCny": 1,
+   "spentCny": 0.41,
+   "remainingCny": 0.59
+  }
+ },
+ "t6": {
+  "status": 422,
+  "code": "invalid_draft",
+  "requestSent": true,
+  "cost": 0.0288,
+  "calls": 1,
+  "fallbackDraft": null,
+  "month": {
+   "capCny": 1,
+   "spentCny": 0.22,
+   "remainingCny": 0.78
+  }
+ },
+ "t7": {
+  "dispatchedBefore": 1,
+  "rowsAfter": 1,
+  "status": "failed",
+  "cost": null,
+  "ub": 0.053904,
+  "purpose": "clarify",
+  "ownerId": true,
+  "redispatched": 0,
+  "month": {
+   "capCny": 1,
+   "spentCny": 0.41,
+   "remainingCny": 0.59
+  }
+ },
+ "t8": {
+  "before": {
+   "capCny": 1,
+   "spentCny": 0.41,
+   "remainingCny": 0.59
+  },
+  "after": {
+   "capCny": 1,
+   "spentCny": 0,
+   "remainingCny": 1
+  }
+ },
+ "exceptions": 0
+}
