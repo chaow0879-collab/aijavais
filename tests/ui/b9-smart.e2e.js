@@ -22,7 +22,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
       const j = JSON.parse(body || '{}');
       const all = JSON.stringify(j.messages || ''), isClar = all.includes('你是任务助理');
       if (j.max_tokens > 32) (isClar ? clars : bodies).push(all);
-      const reply = j.max_tokens <= 32 ? '好' : isClar ? (all.includes('MOCK_BAD') ? '好的！请问你要给谁看？' : CLAR) : '根据资料，本季度客户满意度 92%（出处：report.docx）。华东销量 120（出处：sales.xlsx）。';
+      const reply = j.max_tokens <= 32 ? '好' : isClar ? (all.includes('MOCK_BAD') ? '好的！请问你要给谁看？' : CLAR) : all.includes('Previous version of the deliverable') ? '第二版：精简后的季度复盘，满意度 92%（出处：report.docx）。' : '根据资料，本季度客户满意度 92%（出处：report.docx）。华东销量 120（出处：sales.xlsx）。';
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n');
     });
@@ -144,6 +144,36 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     await shot(page, '3-result');
     ok('MOCK request bodies of BOTH roles contain the docx and xlsx content plus the cite-the-source instruction; the run uses the draft task');
     ok('B9b: understanding, model questions with clickable options + 其它, plain plan; the answers reach both roles\' prompts');
+
+    /* ---- B9c 对话式修改 ---- */
+    await page.waitForSelector('#s-rework-box:not([hidden])'); await page.waitForSelector('#s-versions-box:not([hidden])');
+    assert.match(await page.innerText('#s-versions'), /第 1 版（当前）\s*最初的成果/);
+    assert.equal(await page.innerText('#s-chat-left'), '这个任务还可以修改 3 次。');
+    await page.fill('#s-rework-text', '第3页太啰嗦，精简一下'); await page.click('#s-rework-go'); await page.waitForSelector('#s-confirm[open]');
+    const rdlg = await page.innerText('#s-confirm');
+    assert.match(rdlg, /确认修改/); assert.match(rdlg, /会在上一版的基础上修改（只改第 3 页，其它部分逐字保留），改完是新的一版，旧版本保留/);
+    assert.match(rdlg, /确认后这个任务还可以再修改 2 次/);
+    const k0 = bodies.length; await page.click('#s-confirm-cancel'); await page.waitForTimeout(500);
+    assert.equal(bodies.length, k0, 'cancelled: no model call without a new confirmation');
+    await page.click('#s-rework-go'); await page.waitForSelector('#s-confirm[open]'); await page.click('#s-confirm-ok');
+    await page.waitForFunction(() => /第 2 版（当前）/.test(document.querySelector('#s-versions')?.textContent || ''), null, { timeout: 20000 });
+    assert.equal(bodies.length - k0, 1, 'only the review step reruns');
+    assert.match(bodies.at(-1), /Previous version of the deliverable[\s\S]*根据资料，本季度客户满意度 92%/, 'starts from version 1');
+    assert.match(bodies.at(-1), /修改意见：第3页太啰嗦，精简一下\\n修改范围：只改第 3 页/);
+    assert.match(await page.innerText('#s-versions'), /第 1 版\s*最初的成果[\s\S]*第 2 版（当前）\s*你说：第3页太啰嗦，精简一下/);
+    assert.match(await page.innerText('#s-final'), /第二版：精简后的季度复盘/);
+    assert.equal(await page.innerText('#s-chat-left'), '这个任务还可以修改 2 次。');
+    // view and download the old version
+    await page.click('#s-versions li:nth-child(1) button:has-text("查看")');
+    assert.match(await page.innerText('#s-final'), /根据资料，本季度客户满意度 92%/); assert.match(await page.innerText('#s-viewing'), /正在看第 1 版（旧版本）/);
+    await page.evaluate(() => { window.__dl = []; document.addEventListener('click', e => { if (e.target.tagName === 'A' && e.target.download) window.__dl.push(e.target.download); }, true); });
+    const dl = page.waitForEvent('download'); await page.click('#s-versions li:nth-child(1) button:has-text("下载")'); const file = await dl;
+    assert.deepEqual(await page.evaluate(() => window.__dl), ['Word 文档-第1版.docx'], 'the old version is saved under its version name');
+    const X = require('../../lib/file-extract'), oldDoc = await X.extractFile('v1.docx', fs.readFileSync(await file.path()));
+    assert.match(oldDoc.text, /根据资料，本季度客户满意度 92%/); assert.doesNotMatch(oldDoc.text, /第二版/);
+    noEnglish(await page.innerText('#s-result'), ['report.docx', 'sales.xlsx'], 'result page with versions');
+    await shot(page, '5-versions');
+    ok('B9c: 对话式修改 -> RMB confirmation (cancel sends nothing) -> version 2 from version 1 with the scope; version 1 still viewable and downloadable');
 
     /* ---- a new task starts empty ---- */
     await page.click('#s-new'); await page.waitForSelector('#simple:not([hidden])');

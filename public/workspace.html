@@ -43,6 +43,9 @@
     /* B9b 开始前的确认（理解 / 问题 / 计划） */
     .clar{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:0 0 10px;background:#0d1a29}.clar h3{margin:0 0 6px;font-size:15px}.clar .q{margin:10px 0 4px;font-weight:600}
     .clar .chips label{padding:4px 12px}.clar .other{width:200px;display:inline-block;margin:4px 0 0}.clar .skip{width:auto;margin-top:8px}
+    /* B9c 版本和修改记录 */
+    .versions{list-style:none;padding:0;margin:4px 0}.versions li{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #1a2c3f}
+    .versions .vname{font-weight:700}.versions .vmsg{color:var(--dim);flex:1 1 200px}.versions li.current .vname{color:var(--accent)}.versions button{width:auto}
     .final{white-space:pre-wrap;background:#0d1a29;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;overflow:auto}
   </style>
   <script src="/role.js"></script>
@@ -104,7 +107,8 @@
       <div id="s-run-error" class="alert" role="alert" hidden></div>
       <div id="s-stop" class="alert" role="alert" hidden><div id="s-stop-text"></div><button id="s-stop-download" type="button" class="fixbtn">到此为止，下载已完成部分</button><button id="s-stop-more" type="button" disabled title="即将支持：追加预算后从停下的步骤继续">追加 ¥0.50 继续（即将支持）</button></div>
       <div id="s-result" hidden><h3>成果</h3><div class="final" id="s-final"></div><div class="toolbar"><button id="s-download" type="button" class="primary">下载成果</button><button id="s-accept" type="button">满意，确认完成</button><button id="s-rework" type="button">不满意，要修改</button></div>
-        <div id="s-rework-box" hidden><label for="s-rework-text">哪里不满意、想怎么改？</label><textarea id="s-rework-text" rows="3" maxlength="2000" placeholder="例如：语气再活泼一些，加上会员日的优惠"></textarea><div class="toolbar"><button id="s-rework-go" type="button" class="primary">按意见修改</button><button id="s-rework-cancel" type="button">先不改了</button></div></div></div>
+        <section id="s-versions-box" class="clar" hidden><h3>版本和修改记录</h3><ol id="s-versions" class="versions"></ol><p id="s-viewing" class="hint" hidden></p></section>
+        <div id="s-rework-box" hidden><label for="s-rework-text">想改哪里？直接说（每次修改都会先请你确认费用，旧版本会保留）</label><textarea id="s-rework-text" rows="3" maxlength="2000" placeholder="例如：第3页太啰嗦，精简一下；加一页竞品对比；语气再活泼一些"></textarea><p id="s-chat-left" class="hint"></p><div class="toolbar"><button id="s-rework-go" type="button" class="primary">按意见修改</button><button id="s-rework-cancel" type="button">先不改了</button></div></div></div>
       <p class="hint">想看动画？<a href="/panel.html" target="_blank" rel="noopener">打开实时大屏</a>，每一步都会同步显示。</p>
       <button id="s-new" type="button">＋ 新建任务</button>
     </section>

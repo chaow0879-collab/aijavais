@@ -171,3 +171,69 @@ test('B9b API: one budgeted call through system_usage (purpose clarify); approva
   assert.equal((await ask(D, { approvePaid: true, maxCost: 0.002 })).json.code, 'monthly_quota_exhausted');
   assert.equal(prompts.length, n1, 'no call over the quota');
 });
+
+/* ---------------- B9c: 对话式修改 ---------------- */
+test('B9c: scope from the user\'s words; feedback carries scope and earlier requests', () => {
+  assert.equal(Plan.reviseScope('第3页太啰嗦，精简一下'), '只改第 3 页，其它部分逐字保留');
+  assert.equal(Plan.reviseScope('加一页竞品对比'), '在合适的位置新增内容页，已有的页面逐字保留');
+  assert.equal(Plan.reviseScope('删掉第二页'), '删除第 2 页，其它部分逐字保留');
+  assert.equal(Plan.reviseScope('整体再活泼些'), '按意见修改；意见没有提到的部分尽量保持原样');
+  const f = Plan.reviseFeedback({ message: '加一页竞品对比', history: ['第3页太啰嗦'] });
+  assert.match(f, /^修改意见：加一页竞品对比\n修改范围：在合适的位置新增内容页[\s\S]*1\. 第3页太啰嗦\n请在上一版成果的基础上修改/);
+  const snapshot = Plan.plan({ models: PAID, goal: '写季度总结', capCny: 5 }).project;
+  const a = Plan.rework({ models: PAID, snapshot, feedback: '精简', capCny: 5 }), b = Plan.rework({ models: PAID, snapshot, feedback: '精简', capCny: 5, previousChars: 6000 });
+  assert.ok(b.chosen.estimateCny > a.chosen.estimateCny, 'the previous version is part of the revision cost');
+  assert.equal(b.approval.revise, true);
+});
+test('B9c API: a revision starts from the previous version, makes version N+1, old versions stay exportable, maxReworks holds, no paid call without approval', async t => {
+  const prompts = [];
+  const mock = http.createServer((req, res) => {
+    let body = ''; req.on('data', c => body += c); req.on('end', () => {
+      const input = JSON.parse(body), all = input.messages.map(m => m.content).join('\n'); if (input.max_tokens > 32) prompts.push(all);
+      const n = (all.match(/Previous version of the deliverable/) ? 'V' + (prompts.length) : 'FIRST');
+      const reply = input.max_tokens <= 32 ? '好' : '成果正文 ' + n + '：季度复盘，满意度 92%。';
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 50, completion_tokens: 10 } }) + '\n\ndata: [DONE]\n\n');
+    });
+  });
+  await new Promise(r => mock.listen(0, '127.0.0.1', r));
+  const mp = mock.address().port;
+  const S = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mp } });
+  t.after(async () => { await S.stop(); await new Promise(r => mock.close(r)); });
+  const paid = (await S.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'priced-writer', pricingMode: 'paid_api', capabilities: ['writing', 'reasoning'], price: { currency: 'CNY', inputPerMillion: 1, outputPerMillion: 1 } })).json.connection.connectionId;
+  assert.equal((await S.call('POST', '/api/models/' + paid + '/test', { approvePaid: true })).json.ok, true);
+  const models = (await S.call('GET', '/api/models')).json.models;
+  const p = Plan.plan({ models, goal: '写季度总结', capCny: 5 });
+  const project = (await S.call('POST', '/api/v2/projects', { ...p.project, maxReworks: 2 })).json.project;
+  const runId = (await S.call('POST', `/api/v2/projects/${project.projectId}/runs`, p.approval)).json.run.runId;
+  const wait = async () => { let r; for (let i = 0; i < 200; i++) { r = (await S.call('GET', '/api/v2/runs/' + runId)).json.run; if (!r.executionActive && r.status !== 'running') return r; await H.sleep(30); } return r; };
+  assert.equal((await wait()).status, 'review_required');
+  let v = (await S.call('GET', `/api/v2/runs/${runId}/versions`)).json;
+  assert.equal(v.versions.length, 1); assert.equal(v.reworksLeft, 2); assert.match(v.versions[0].text, /FIRST/);
+  // no confirmation (no approvePaid / cap) -> refused, nothing sent
+  const n0 = prompts.length;
+  const noApproval = await S.call('POST', `/api/v2/runs/${runId}/review`, { decision: 'rework', feedback: '精简', fromStepId: 'review', revise: true });
+  assert.equal(noApproval.status, 402, noApproval.text); assert.equal(prompts.length, n0, 'no model call without a new confirmation');
+  const ask = msg => { const r = Plan.rework({ models, snapshot: project, feedback: msg, capCny: 5, previousChars: 200 }); return S.call('POST', `/api/v2/runs/${runId}/review`, { ...r.approval, message: msg, feedback: Plan.reviseFeedback({ message: msg }) }); };
+  assert.equal((await ask('第3页太啰嗦，精简一下')).status, 200);
+  assert.equal((await wait()).status, 'review_required');
+  const revisePrompt = prompts.at(-1);
+  assert.equal(prompts.length - n0, 1, 'only the review step reruns');
+  assert.match(revisePrompt, /Previous version of the deliverable \(data\)\. Revise THIS version[\s\S]*成果正文 FIRST/);
+  assert.match(revisePrompt, /修改意见：第3页太啰嗦，精简一下\n修改范围：只改第 3 页，其它部分逐字保留/);
+  v = (await S.call('GET', `/api/v2/runs/${runId}/versions`)).json;
+  assert.deepEqual(v.versions.map(x => [x.version, x.current, x.message]), [[1, false, null], [2, true, '第3页太啰嗦，精简一下']]);
+  assert.equal(v.reworksLeft, 1);
+  const old = await fetch(`http://127.0.0.1:${S.port}/api/v2/runs/${runId}/export`, { method: 'POST', headers: { cookie: S.cookie, 'content-type': 'application/json', origin: `http://127.0.0.1:${S.port}` }, body: JSON.stringify({ format: 'md', artifactId: v.versions[0].artifactId }) });
+  assert.equal(old.status, 200); assert.match(await old.text(), /成果正文 FIRST/, 'version 1 is still downloadable');
+  const cur = await fetch(`http://127.0.0.1:${S.port}/api/v2/runs/${runId}/export`, { method: 'POST', headers: { cookie: S.cookie, 'content-type': 'application/json', origin: `http://127.0.0.1:${S.port}` }, body: JSON.stringify({ format: 'md' }) });
+  assert.match(await cur.text(), /成果正文 V/);
+  const bogus = await S.call('POST', `/api/v2/runs/${runId}/export`, { format: 'md', artifactId: 'art_000000000000000000000000' });
+  assert.equal(bogus.status, 404);
+  assert.equal((await ask('加一页竞品对比')).status, 200); assert.equal((await wait()).status, 'review_required');
+  assert.match(prompts.at(-1), /Previous version of the deliverable[\s\S]*成果正文 V/, 'the third version starts from the second');
+  v = (await S.call('GET', `/api/v2/runs/${runId}/versions`)).json;
+  assert.equal(v.versions.length, 3); assert.equal(v.reworksLeft, 0);
+  const n1 = prompts.length, limit = await ask('再改一次');
+  assert.equal(limit.status, 409); assert.equal(limit.json.code, 'rework_limit'); assert.equal(prompts.length, n1);
+});

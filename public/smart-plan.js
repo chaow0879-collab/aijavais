@@ -175,8 +175,9 @@
   }
   /* QA-B7-01 返工：只重做"审核并定稿"这一步（沿用已完成的初稿），按审核员单价重新估算，再确认一次人民币。
    * 每轮返工都是新的显式批准，不继承上一次。snapshot = run.projectSnapshot. */
-  function rework({ models, snapshot, feedback = '', capCny = 5, materials = [] } = {}) {
-    const share = materialShare(materials), mBytes = matBytes(share.review, share);
+  function rework({ models, snapshot, feedback = '', capCny = 5, materials = [], previousChars = 0 } = {}) {
+    // B9c: a revision also shows the reviewer the previous version (CJK counted at 3 bytes)
+    const share = materialShare(materials), mBytes = matBytes(share.review, share) + Math.max(0, Number(previousChars) || 0) * 3;
     const byId = new Map((models || []).map(m => [m.connectionId, m]));
     const roles = (snapshot && snapshot.roles) || [], reviewer = roles.find(r => r.roleId === 'reviewer') || roles[roles.length - 1];
     const text = String(feedback || '').trim();
@@ -184,7 +185,7 @@
     const missing = roles.map(r => byId.get(r.connectionId)).filter(m => !m || !cnyRate(m));
     if (!reviewer || missing.length) return { ok: false, problems: [{ code: 'no_priced_model', text: '这个任务用到的模型现在没有登记价格或已被移除，按规定不调用。请点“＋ 新建任务”重新开始。' }] };
     const m = byId.get(reviewer.connectionId), r = cnyRate(m), goal = String(snapshot.description || '');
-    const inTok = EXPECT.systemTokens + Math.ceil((goal.length + text.length + share.review) * 1.2) + EXPECT.draftOut, outTok = EXPECT.reviewOut;
+    const inTok = EXPECT.systemTokens + Math.ceil((goal.length + text.length + share.review + (Number(previousChars) || 0)) * 1.2) + EXPECT.draftOut, outTok = EXPECT.reviewOut;
     const est = (inTok * r.input + outTok * r.output) / 1e6;
     const bound = ((EXPECT.systemBytes + bytes(goal) + bytes(text) + MAX_OUTPUT * 4 + mBytes + 256) * r.input + (MAX_OUTPUT + (thinkingHost(m) ? MAX_OUTPUT / 2 : 0)) * r.output) / 1e6;
     const cap = Math.max(0.1, Number(capCny) || 5), free = isLocal(m);
@@ -192,7 +193,7 @@
     const option = { kind: 'quality', roles: [], summary: reviewer.name + ' → ' + Hints.platformLabel(m), estimateCny: free ? 0 : Math.max(0.01, yuan(est)), maxCny, neededCny: needed, overCap: !free && needed > cap, free };
     const prices = {};
     for (const role of roles) { const u = usdRate(byId.get(role.connectionId)); if (u) prices[role.connectionId] = u; }
-    const approval = { decision: 'rework', feedback: text, fromStepId: 'review', approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
+    const approval = { decision: 'rework', feedback: text, fromStepId: 'review', revise: true, approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
     return { ok: true, problems: [], skipped: [], options: { quality: option }, chosen: option, summary: option.summary, approval, confirmText: confirmText(option, estimated(m)), estimatedNote: estimatedNote([m]), capCny: cap };
   }
   /* B5-2 / AUD-F100-01：用了估计价的模型时如实说明——只是估计（同平台最贵价×2），实际可能更高或更低；
@@ -317,6 +318,25 @@
     });
     return { ...project, description: project.description + '\n\n开始前的确认：\n对需求的理解：' + clar.understanding + qa, steps };
   }
+  /* ---------- B9c 对话式修改：判断要改的范围，带上之前的对话，只改相关部分 ---------- */
+  const CNUM = s => /^\d+$/.test(s) ? Number(s) : ({ 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 })[s] || null;
+  function reviseScope(message) {
+    const m = String(message || ''), page = /第\s*(\d{1,2}|[一二两三四五六七八九十])\s*(页|张|部分|节|段|条|章)/.exec(m);
+    if (/(加|增加|新增|补|插入)\s*(一|1|两|2|几)?\s*(页|张)/.test(m)) return '在合适的位置新增内容页，已有的页面逐字保留' + (page ? '（位置参考：第 ' + CNUM(page[1]) + ' ' + page[2] + '）' : '');
+    if (page && /(删|去掉|不要)/.test(m)) return '删除第 ' + CNUM(page[1]) + ' ' + page[2] + '，其它部分逐字保留';
+    if (page) return '只改第 ' + CNUM(page[1]) + ' ' + page[2] + '，其它部分逐字保留';
+    const part = /(标题|开头|开场|结尾|结论|总结|摘要|封面|目录|表格|第一段|最后一段)/.exec(m);
+    if (part) return '只改“' + part[1] + '”相关的部分，其它部分逐字保留';
+    return '按意见修改；意见没有提到的部分尽量保持原样';
+  }
+  /* 发给审核岗位的修改说明：本次意见 + 范围 + 之前的修改对话（让模型知道已经改过什么） */
+  function reviseFeedback({ message, history = [] } = {}) {
+    const text = String(message || '').trim();
+    const past = (history || []).map(h => String(h || '').trim()).filter(Boolean).slice(-5);
+    return '修改意见：' + text + '\n修改范围：' + reviseScope(text) +
+      (past.length ? '\n之前已经按这些意见改过（已体现在上一版里，不要撤销）：\n' + past.map((h, i) => (i + 1) + '. ' + h).join('\n') : '') +
+      '\n请在上一版成果的基础上修改，只输出修改后的完整成果，格式与上一版相同，不要附加说明。';
+  }
   const spentCny = usd => Math.round((Number(usd) || 0) * FX * 100) / 100;
   function explain(err, ctx = {}) {
     const code = err && err.code, msg = String(err && err.message || '');
@@ -329,6 +349,7 @@
     if (code === 'model_unverified' || /connection test|not ready|未配置 API Key|Key/i.test(msg)) return { text: `${name}还不能用：没有密钥或连接测试没通过。`, fix: { action: 'fix_model', label: '去管理中心修复模型' } };
     if (code === 'model_missing') return { text: '有岗位还没有分配模型。', fix: { action: 'auto_assign', label: '自动分配模型' } };
     if (code === 'capability_missing') return { text: `${name}没有登记这个岗位需要的能力。`, fix: { action: 'add_caps', label: '为模型补充能力' } };
+    if (code === 'rework_limit') return { text: '已经修改到这个任务的上限，不能再改了；可以下载现在的版本，或新建一个任务。', fix: null };
     if (code === 'concurrency_limit') return { text: '同时最多运行 3 个任务，请等前面的任务结束后再试。', fix: null };
     if (code === 'model_changed') return { text: '模型设置刚被修改过，需要重新开始一次。', fix: { action: 'retry', label: '重新开始' } };
     if (/exceeded the conservative reservation/i.test(msg)) return { text: '模型这次实际用得比预计多，任务已停下，后面的步骤不会再花钱。多用的那一点费用已经产生，无法撤回。', fix: null, overrun: true };
@@ -337,5 +358,5 @@
     if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null };
     return { text: '启动没有成功。', fix: { action: 'retry', label: '再试一次' }, detail: msg };
   }
-  return { clarifyEstimate, clarifyRules, planText, applyClarify, CLARIFY, fileStatus, checkUpload, uploadError, materialsNote, materialShare, charsText, MATERIALS, ACCEPT, plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
+  return { reviseScope, reviseFeedback, clarifyEstimate, clarifyRules, planText, applyClarify, CLARIFY, fileStatus, checkUpload, uploadError, materialsNote, materialShare, charsText, MATERIALS, ACCEPT, plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
 });
