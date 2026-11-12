@@ -1,0 +1,21 @@
+{
+ "slow_body_drafts": {
+  "created": 25,
+  "rejected429": 0,
+  "inDb": 25,
+  "cap": 20
+ },
+ "filled_mb": 248,
+ "storage_concurrent_pdf": {
+  "statuses": [
+   "201:",
+   "201:",
+   "201:",
+   "413:storage_limit",
+   "201:",
+   "413:storage_limit"
+  ],
+  "totalMB": 276,
+  "capMB": 256
+ }
+}

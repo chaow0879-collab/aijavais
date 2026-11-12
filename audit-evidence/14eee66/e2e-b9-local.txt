@@ -1,0 +1,14 @@
+PASS click to choose, multi-select: docx / xlsx / image each show a plain status (字数、表格张数、图片不会看)
+PASS drag and drop uploads too
+PASS size limit, old Office formats, unsupported and mismatched files are explained in plain Chinese
+PASS 删除 removes the file from the task (server) and error rows from the list
+PASS reloading the new-task page restores the uploaded materials
+PASS MOCK request bodies of BOTH roles contain the docx and xlsx content plus the cite-the-source instruction; the run uses the draft task
+PASS B9b: understanding, model questions with clickable options + 其它, plain plan; the answers reach both roles' prompts
+PASS B9c: 对话式修改 -> RMB confirmation (cancel sends nothing) -> version 2 from version 1 with the scope; version 1 still viewable and downloadable
+PASS ＋ 新建任务 starts with an empty materials list
+PASS B9b 跳过，按你的理解来: the run starts and the roles are told to follow the understanding
+PASS B9b: a bad JSON reply falls back to rule-based questions (no dead end); re-opening does not call again
+PASS AUD-FEB8-01: a user's unfinished draft is on 我的任务, reopens with its materials, and 放弃这个草稿 deletes it (two clicks)
+PASS user account: uploads materials to their own task, roles receive them; another user gets 404 on those files
+B9 BROWSER CHECKS PASSED: 13

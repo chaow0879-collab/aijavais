@@ -1,0 +1,59 @@
+{
+ "draft_seq": {
+  "created": 20,
+  "last": 429
+ },
+ "draft_concurrent30": {
+  "created": 20,
+  "rejected": 10
+ },
+ "fill_err": "404:not_found",
+ "filled_mb": 224,
+ "storage_concurrent": {
+  "pdfMB": 7,
+  "statuses": [
+   "201:",
+   "201:",
+   "201:",
+   "201:",
+   "413:storage_limit",
+   "413:storage_limit"
+  ],
+  "totalMB": 252,
+  "capMB": 256
+ },
+ "storage_seq_after": "413:storage_limit",
+ "run_start": 202,
+ "expiry": {
+  "userDraftOld": "deleted",
+  "userDraftOldButRecentFile": "kept",
+  "userCustomOld": "deleted",
+  "userRunOld": "kept",
+  "userDraftRecent": "kept",
+  "adminCustomOld": "kept",
+  "adminPlaceholderOld": "deleted"
+ },
+ "orphan_files": 0,
+ "second_restart_ok": 200,
+ "exceptions_admin": {
+  "status": 200,
+  "n": 1,
+  "rows": [
+   {
+    "ownerKind": "user",
+    "username": "da",
+    "purpose": "clarify",
+    "cost": null,
+    "keys": "ledgerId,requestId,connectionId,modelId,createdAt,updatedAt,status,requestState,requestSent,cost,currency,budgetCost,costUpperBound,tokenUpperBound,reservedCost,reservedTokens,needsReconciliation,purpose,ownerKind,username,note"
+   }
+  ],
+  "leaksPrompt": false
+ },
+ "exceptions_user": 403,
+ "readiness": {
+  "n": 1,
+  "warn": true,
+  "leaks": false
+ },
+ "readiness_user": 403
+}
