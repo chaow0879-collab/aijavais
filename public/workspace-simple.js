@@ -38,6 +38,10 @@
   const DRAFT_NAME = '新任务（正在准备资料）';
   function renderFiles() {
     $('s-draft-row').hidden = !S.draft; $('s-draft-del').textContent = '放弃这个草稿（连同资料一起删除）'; S.delArmed = false;
+    // QA-B9 P2-②：资料太长被截取时，在文件旁边直接说哪部分没被使用
+    const alloc = window.SmartPlan.materialAllocation(doneFiles());
+    for (const f of S.files) { if (f.state !== 'done') continue; const a = alloc.find(x => x.file === f.file), cut = window.SmartPlan.cutText(a);
+      f.text = window.SmartPlan.fileStatus(f.file).text + (cut ? '。' + cut : ''); f.warn = !window.SmartPlan.fileStatus(f.file).ok || !!cut; }
     $('s-file-list').replaceChildren(...S.files.map(f => el('li', { className: 'file-' + f.state }, [
       el('span', { className: 'fname', text: f.name }),
       el('span', { className: 'fstate ' + (f.state === 'busy' ? 'busy' : f.state === 'error' ? 'bad' : f.warn ? 'warn' : ''), text: f.text }),

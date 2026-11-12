@@ -117,7 +117,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     assert.match(dlg, /理解需求用的是本机模型，不花钱。/);
     await page.check('input[name=s-clar-q0][value="领导"]');
     await page.check('input[name=s-clar-q1][value="__other"]'); await page.fill('#s-clar-other-1', '两页半');
-    assert.match(dlg, /资料：3 个文件，能读到的文字共 \d+ 字。每个岗位都会拿到资料摘录。/);
+    assert.match(dlg, /资料：3 个文件，能读到的文字共 \d+ 字。每个岗位都会拿到全部资料内容。/);
     noEnglish(dlg, ['local-writer'], 'confirm dialog'); // the model's own ID is a name
     await shot(page, '2-confirm');
     await page.click('#s-confirm-ok');
@@ -181,6 +181,15 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     await page.click('#s-new'); await page.waitForSelector('#simple:not([hidden])');
     assert.equal(await page.locator('#s-file-list li').count(), 0);
     ok('＋ 新建任务 starts with an empty materials list');
+
+    /* ---- QA-B9 P2-②: a long file says which part is not used ---- */
+    await page.setInputFiles('#s-files', [{ name: '长报告.txt', mimeType: 'text/plain', buffer: Buffer.from('甲'.repeat(35000)) }]);
+    await page.waitForFunction(() => /已读取/.test(document.querySelector('#s-file-list').textContent), null, { timeout: 10000 });
+    assert.equal(await fileState(page, '长报告.txt'), '已读取 3.5 万字。起草时只用前 30000 字，第 30001 字之后没被使用；审核时只用前 20000 字，第 20001 字之后没被使用');
+    await page.click('#s-preview'); await page.waitForSelector('#s-plan:not([hidden])');
+    assert.match(await page.innerText('#s-plan-note'), /资料比较长，岗位只用得上一部分：「长报告\.txt」起草时只用前 30000 字，第 30001 字之后没被使用/);
+    await page.click('#s-file-list li:has(.fname:text-is("长报告.txt")) button'); await page.waitForFunction(() => !document.querySelector('#s-file-list li'));
+    ok('QA-B9 P2-②: a cut file says in plain words which part is not used (upload list and plan note)');
 
     /* ---- B9b 跳过：按理解来做 ---- */
     await page.fill('#s-goal', '写一份门店周报'); await page.click('#s-go'); await page.waitForSelector('#s-confirm[open]');

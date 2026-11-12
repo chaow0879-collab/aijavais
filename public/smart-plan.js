@@ -86,7 +86,7 @@
   /* B9a: what each step will carry from the uploaded materials (chars; CJK counted at 3 bytes, the engine reserves by bytes) */
   function materialShare(list) {
     const files = (list || []).filter(Boolean), total = files.reduce((n, f) => n + (readableFile(f) ? fileChars(f) : 0), 0);
-    return { files: files.length, readable: files.filter(readableFile).length, total, draft: Math.min(total, MATERIALS.draft), review: Math.min(total, MATERIALS.review) };
+    return { files: files.length, readable: files.filter(readableFile).length, total, draft: Math.min(total, MATERIALS.draft), review: Math.min(total, MATERIALS.review), items: files };
   }
   const matBytes = (chars, share) => share.files ? chars * 3 + share.files * MATERIALS.perFileBytes + 200 : 0;
   function cost(roles, goal, share = materialShare([])) {
@@ -263,13 +263,28 @@
     if (/[\u4e00-\u9fff]/.test(msg)) return '「' + name + '」没有上传成功：' + msg.replace(/[。.]$/, '') + '。';
     return '「' + name + '」没有上传成功，请再试一次。';
   }
+  /* QA-B9 P2-②：和引擎同一个算法（按上传顺序，每个岗位的字数额度依次用完）算出每个文件每个岗位实际用到多少字 */
+  function materialAllocation(list) {
+    let d = MATERIALS.draft, r = MATERIALS.review;
+    return (list || []).filter(Boolean).map(f => {
+      if (!readableFile(f)) return { file: f, readable: false, total: 0, draft: 0, review: 0 };
+      const total = fileChars(f), draft = Math.min(d, total), review = Math.min(r, total);
+      d -= draft; r -= review;
+      return { file: f, readable: true, total, draft, review };
+    });
+  }
+  /* 一个文件没被用全时的一句人话（上传区、确认框共用） */
+  function cutText(a) {
+    if (!a || !a.readable || (a.draft >= a.total && a.review >= a.total)) return '';
+    const part = (who, n) => n <= 0 ? who + '没用上（前面的资料已经占满）' : n >= a.total ? who + '全部用上' : who + '只用前 ' + n + ' 字，第 ' + (n + 1) + ' 字之后没被使用';
+    return part('起草时', a.draft) + '；' + part('审核时', a.review);
+  }
   function materialsNote(share) {
     if (!share || !share.files) return '';
-    const unread = share.files - share.readable;
-    let t = '资料：' + share.files + ' 个文件' + (share.total ? '，能读到的文字共 ' + charsText(share.total) : '') + '。' + (share.readable ? '每个岗位都会拿到资料摘录。' : '');
-    if (share.total > MATERIALS.review) t += share.total > MATERIALS.draft
-      ? '资料比较长：起草时带上前 ' + charsText(MATERIALS.draft) + '，审核时带上前 ' + charsText(MATERIALS.review) + '，截取的地方会注明“已截取前 N 字”。'
-      : '审核时带上前 ' + charsText(MATERIALS.review) + '，截取的地方会注明“已截取前 N 字”。';
+    const unread = share.files - share.readable, alloc = materialAllocation(share.items), cut = alloc.filter(a => cutText(a));
+    let t = '资料：' + share.files + ' 个文件' + (share.total ? '，能读到的文字共 ' + charsText(share.total) : '') + '。';
+    if (share.readable) t += cut.length ? '资料比较长，岗位只用得上一部分：' + cut.map(a => '「' + (a.file.filename || '资料') + '」' + cutText(a)).join('；') + '。没被使用的部分岗位看不到，也不会编造；需要的话可以把重要内容放到前面或拆成小文件。'
+      : '每个岗位都会拿到全部资料内容。';
     if (unread) t += '有 ' + unread + ' 个文件读不到文字（图片或扫描件），岗位只知道它存在，不会编造其中内容。';
     return t;
   }
@@ -391,5 +406,5 @@
     if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null };
     return { text: '启动没有成功。', fix: { action: 'retry', label: '再试一次' }, detail: msg };
   }
-  return { reviseScope, reviseScopeInfo, reviseScopeOptions, reviseFeedback, clarifyEstimate, clarifyRules, planText, applyClarify, CLARIFY, fileStatus, checkUpload, uploadError, materialsNote, materialShare, charsText, MATERIALS, ACCEPT, plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
+  return { materialAllocation, cutText, reviseScope, reviseScopeInfo, reviseScopeOptions, reviseFeedback, clarifyEstimate, clarifyRules, planText, applyClarify, CLARIFY, fileStatus, checkUpload, uploadError, materialsNote, materialShare, charsText, MATERIALS, ACCEPT, plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
 });

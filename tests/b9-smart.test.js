@@ -45,7 +45,7 @@ test('B9a: materials are in the estimate and the project; the confirmation says 
   assert.equal(withMat.project.steps[1].materialsMaxChars, 20000);
   assert.match(withMat.project.steps[1].prompt, /对照资料核实引用的内容和出处/);
   assert.ok(withMat.project.standards.includes('引用上传资料时注明出处文件名'));
-  assert.match(withMat.materialsNote, /^资料：2 个文件，能读到的文字共 4\.5 万字。每个岗位都会拿到资料摘录。资料比较长：起草时带上前 3 万字，审核时带上前 2 万字，截取的地方会注明“已截取前 N 字”。有 1 个文件读不到文字/);
+  assert.match(withMat.materialsNote, /^资料：2 个文件，能读到的文字共 4\.5 万字。资料比较长，岗位只用得上一部分：「资料」起草时只用前 30000 字，第 30001 字之后没被使用；审核时只用前 20000 字，第 20001 字之后没被使用。没被使用的部分岗位看不到[\s\S]*有 1 个文件读不到文字/);
   assert.equal(base.materialsNote, ''); assert.equal(base.project.materials.mode, 'none');
   // the engine reserves by bytes: the first step's reservation fits the confirmed cap
   const rate = Plan.cnyRate(PAID[0]), firstBound = ((1800 + 30000 * 3 + 2 * 200 + 200 + 256) * rate.input + 2048 * rate.output) / 1e6;
@@ -84,6 +84,10 @@ test('B9a engine: each role gets its share of a long file, cut disclosed as "已
   assert.match(steps[1], /资料太长，已截取前 20000 字，原文共 35000 字/); assert.doesNotMatch(steps[1], /乙/);
   for (const s of steps) assert.match(s, /引用以上资料中的内容时，请在相应句子后注明出处文件名，例如（出处：长资料\.txt）/);
   assert.deepEqual(done.steps.map(s => s.materials[0].includedChars), [30000, 20000], 'evidence records what each role received');
+  // QA-B9 P2-②: what the page tells the user is exactly what the engine used
+  const files = (await S.call('GET', `/api/v2/projects/${project.projectId}/files`)).json.files, a = Plan.materialAllocation(files)[0];
+  assert.deepEqual([a.draft, a.review], done.steps.map(s => s.materials[0].includedChars));
+  assert.equal(Plan.cutText(a), '起草时只用前 30000 字，第 30001 字之后没被使用；审核时只用前 20000 字，第 20001 字之后没被使用');
   // a project without materialsMaxChars keeps its old behaviour (field absent, run budget applies)
   const plain = (await S.call('POST', '/api/v2/projects', { name: 'x', description: 'x', roles: [{ roleId: 'a', name: 'a', connectionId: id }], steps: [{ stepId: 's', roleId: 'a', title: 's' }] })).json.project;
   assert.equal('materialsMaxChars' in plain.steps[0], false);
@@ -382,4 +386,17 @@ test('QA-B9 P2-①: revision scope is conservative - pictures and sentences insi
   assert.deepEqual(Plan.reviseScopeOptions('删除第2页'), ['删除第 2 页（整页），其它部分逐字保留', '只改第 2 页的内容（页数不变），其它部分逐字保留', '按意见修改；意见没有提到的部分尽量保持原样']);
   assert.deepEqual(Plan.reviseScopeOptions('整体再活泼些'), ['按意见修改；意见没有提到的部分尽量保持原样']);
   assert.match(Plan.reviseFeedback({ message: '删除第2页', scope: '只改第 2 页的内容（页数不变），其它部分逐字保留' }), /修改范围：只改第 2 页的内容（页数不变）/, 'the scope the user picked is what the model gets');
+});
+
+test('QA-B9 P2-②: the user is told, per file, which part of long materials is not used (same order and budgets as the engine)', () => {
+  const f = (filename, chars, status = 'ok') => ({ filename, kind: 'docx', extraction: { status, chars } });
+  const alloc = Plan.materialAllocation([f('a.docx', 25000), f('pic.png', 0, 'metadata_only'), f('b.docx', 9000), f('c.docx', 100)]);
+  assert.deepEqual(alloc.map(x => [x.draft, x.review]), [[25000, 20000], [0, 0], [5000, 0], [0, 0]]);
+  assert.equal(Plan.cutText(alloc[0]), '起草时全部用上；审核时只用前 20000 字，第 20001 字之后没被使用');
+  assert.equal(Plan.cutText(alloc[2]), '起草时只用前 5000 字，第 5001 字之后没被使用；审核时没用上（前面的资料已经占满）');
+  assert.equal(Plan.cutText(alloc[3]), '起草时没用上（前面的资料已经占满）；审核时没用上（前面的资料已经占满）');
+  const note = Plan.materialsNote(Plan.materialShare([f('a.docx', 77000)]));
+  assert.match(note, /共 7\.7 万字。资料比较长，岗位只用得上一部分：「a\.docx」起草时只用前 30000 字，第 30001 字之后没被使用/);
+  assert.doesNotMatch(note, /每个岗位都会拿到/, 'no claim that every role gets the materials when they are cut');
+  assert.match(Plan.materialsNote(Plan.materialShare([f('x.docx', 100)])), /每个岗位都会拿到全部资料内容/);
 });
