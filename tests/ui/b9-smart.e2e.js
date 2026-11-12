@@ -15,12 +15,14 @@ const results = [];
 const ok = name => { results.push(name); console.log('PASS', name); };
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 (async () => {
-  const bodies = [];
+  const bodies = [], clars = [];
+  const CLAR = JSON.stringify({ understanding: '我理解你要的是一份季度复盘总结，重点讲满意度和销量。', questions: [{ question: '主要给谁看？', options: ['领导', '团队内部'] }, { question: '要多长？', options: ['一页', '三页'] }], plan: { draft: '根据资料写出三页初稿', review: '核对数字和出处并定稿' } });
   const mock = http.createServer((req, res) => {
     let body = ''; req.on('data', c => body += c); req.on('end', () => {
       const j = JSON.parse(body || '{}');
-      if (j.max_tokens > 32) bodies.push(JSON.stringify(j.messages || ''));
-      const reply = j.max_tokens <= 32 ? '好' : '根据资料，本季度客户满意度 92%（出处：report.docx）。华东销量 120（出处：sales.xlsx）。';
+      const all = JSON.stringify(j.messages || ''), isClar = all.includes('你是任务助理');
+      if (j.max_tokens > 32) (isClar ? clars : bodies).push(all);
+      const reply = j.max_tokens <= 32 ? '好' : isClar ? (all.includes('MOCK_BAD') ? '好的！请问你要给谁看？' : CLAR) : '根据资料，本季度客户满意度 92%（出处：report.docx）。华东销量 120（出处：sales.xlsx）。';
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n');
     });
@@ -104,8 +106,17 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 
     /* ---- start: confirm shows the materials; every role gets them ---- */
     await page.fill('#s-goal', '根据上传的资料写一份季度复盘总结');
+    assert.equal(await page.innerText('#s-clar-note'), '点开始后，会先读懂需求、问你几个问题（本机模型，不花钱），确认后才正式开始。');
     await page.click('#s-go'); await page.waitForSelector('#s-confirm[open]');
     const dlg = await page.innerText('#s-confirm');
+    /* B9b: the dialog first says what was understood, asks (model questions), shows the plan */
+    assert.equal(clars.length, 1); assert.match(clars[0], /\[资料\] report\.docx（共 148 字）/, 'the clarification reads the start of the materials');
+    assert.equal(await page.innerText('#s-clar-understanding'), '一份季度复盘总结，重点讲满意度和销量。');
+    assert.match(dlg, /1\. 主要给谁看？[\s\S]*领导[\s\S]*团队内部[\s\S]*其它[\s\S]*2\. 要多长？/);
+    assert.equal(await page.innerText('#s-clar-plan'), '计划：起草员：根据资料写出三页初稿 → 审核员：核对数字和出处并定稿。');
+    assert.match(dlg, /理解需求用的是本机模型，不花钱。/);
+    await page.check('input[name=s-clar-q0][value="领导"]');
+    await page.check('input[name=s-clar-q1][value="__other"]'); await page.fill('#s-clar-other-1', '两页半');
     assert.match(dlg, /资料：3 个文件，能读到的文字共 \d+ 字。每个岗位都会拿到资料摘录。/);
     noEnglish(dlg, ['local-writer'], 'confirm dialog'); // the model's own ID is a name
     await shot(page, '2-confirm');
@@ -121,6 +132,8 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
       assert.match(b, /引用以上资料中的内容时，请在相应句子后注明出处文件名/, who + ' is asked to cite the source file');
     }
     assert.match(bodies[1], /对照资料核实引用的内容和出处/);
+    for (const b of bodies) { assert.match(b, /对需求的理解：我理解你要的是一份季度复盘总结/); assert.match(b, /问：主要给谁看？\\n答：领导\\n问：要多长？\\n答：两页半/); }
+    assert.match(bodies[0], /本步重点：根据资料写出三页初稿/); assert.match(bodies[1], /本步重点：核对数字和出处并定稿/);
     assert.match(bodies[1], /根据资料，本季度客户满意度 92%/, 'reviewer also gets the previous role output');
     const run = (await app.call('GET', '/api/v2/runs/' + new URL(page.url()).searchParams.get('run'))).json.run;
     assert.equal(run.projectId, draftId, 'the task is the draft that holds the materials');
@@ -130,11 +143,36 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     noEnglish(await page.innerText('#s-progress'), ['report.docx', 'sales.xlsx', 'local-writer'], 'progress page');
     await shot(page, '3-result');
     ok('MOCK request bodies of BOTH roles contain the docx and xlsx content plus the cite-the-source instruction; the run uses the draft task');
+    ok('B9b: understanding, model questions with clickable options + 其它, plain plan; the answers reach both roles\' prompts');
 
     /* ---- a new task starts empty ---- */
     await page.click('#s-new'); await page.waitForSelector('#simple:not([hidden])');
     assert.equal(await page.locator('#s-file-list li').count(), 0);
     ok('＋ 新建任务 starts with an empty materials list');
+
+    /* ---- B9b 跳过：按理解来做 ---- */
+    await page.fill('#s-goal', '写一份门店周报'); await page.click('#s-go'); await page.waitForSelector('#s-confirm[open]');
+    await page.click('#s-clar-skip'); assert.equal(await page.isVisible('#s-clar-questions'), false);
+    const n0 = bodies.length; await page.click('#s-confirm-ok');
+    for (let i = 0; i < 200 && bodies.length - n0 < 2; i++) await page.waitForTimeout(50);
+    await page.waitForFunction(() => !document.querySelector('#s-result').hidden, null, { timeout: 20000 });
+    assert.equal(bodies.length - n0, 2);
+    for (const b of bodies.slice(n0)) { assert.match(b, /用户选择跳过提问：按以上理解来做/); assert.doesNotMatch(b, /问：主要给谁看/); }
+    ok('B9b 跳过，按你的理解来: the run starts and the roles are told to follow the understanding');
+
+    /* ---- B9b bad JSON from the model -> rule-based questions; same requirement is not asked twice ---- */
+    await page.click('#s-new'); await page.waitForSelector('#simple:not([hidden])');
+    await page.fill('#s-goal', 'MOCK_BAD 写一份放假通知'); const c0 = clars.length;
+    await page.click('#s-go'); await page.waitForSelector('#s-confirm[open]');
+    assert.equal(clars.length - c0, 1);
+    assert.equal(await page.innerText('#s-clar-cost'), '模型这次的回答不合格，已改用按规则列出的问题；');
+    assert.match(await page.innerText('#s-clar-understanding'), /^：MOCK_BAD 写一份放假通知。成果是一份Word 文档。$|^MOCK_BAD 写一份放假通知。成果是一份Word 文档。$/);
+    assert.match(await page.innerText('#s-clar-questions'), /篇幅大概多长？[\s\S]*主要给谁看？/);
+    await shot(page, '4-rules');
+    await page.click('#s-confirm-cancel');
+    await page.click('#s-go'); await page.waitForSelector('#s-confirm[open]'); await page.click('#s-confirm-cancel');
+    assert.equal(clars.length - c0, 1, 'no second paid call for the same requirement');
+    ok('B9b: a bad JSON reply falls back to rule-based questions (no dead end); re-opening does not call again');
     assert.deepEqual(pageErrors, []);
 
     /* ---- B8 front user: uploads to their own task, the materials reach the roles too ---- */

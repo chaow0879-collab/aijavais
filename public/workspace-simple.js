@@ -133,6 +133,73 @@
   function showAuto() {
     const p = window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value || '写一份文字成果', output: output(), capCny: S.capCny, picks: S.picks, materials: doneFiles() });
     $('s-budget-auto').textContent = !p.ok ? '自动：添加模型后会自动估算' : p.chosen.free ? '自动：本机模型，不花钱' : '自动：约 ¥' + p.suggestedCny.toFixed(2) + '（建议金额）';
+    // B9b：点开始之前就说清楚：会先花多少钱读懂需求、提问，确认后才正式开始
+    const est = p.ok ? window.SmartPlan.clarifyEstimate({ model: p.roles[0].model, goal: $('s-goal').value, deadline: $('s-deadline').value, materials: doneFiles() }) : null;
+    $('s-clar-note').textContent = !p.ok ? '' : !est ? '点开始后，会先根据你的需求列出几个问题和计划，确认后才正式开始。'
+      : est.free ? '点开始后，会先读懂需求、问你几个问题（本机模型，不花钱），确认后才正式开始。'
+      : '点开始后，会先花不超过 ¥' + est.maxCny.toFixed(2) + ' 读懂需求、问你几个问题，确认后才正式开始。';
+  }
+  /* ---------- B9b 先问清楚再动手：一次便宜的调用（服务端走 system_usage 预留和结算），失败或没有模型就用规则版 ---------- */
+  const yuanText = usd => { const c = window.SmartPlan.spentCny(usd); return c > 0 && c < 0.01 ? '不到 ¥0.01' : '约 ¥' + c.toFixed(2); };
+  async function clarifyStep(first) {
+    const goal = $('s-goal').value.trim(), deadline = $('s-deadline').value.trim(), mats = doneFiles();
+    const sig = JSON.stringify([goal, output(), deadline, mats.map(f => f.fileId), first.roles[0].model.connectionId]);
+    if (S.clar && S.clar.sig === sig) return S.clar; // 同样的需求不重复花钱
+    const rules = window.SmartPlan.clarifyRules({ goal, output: output(), deadline, materials: mats });
+    const est = window.SmartPlan.clarifyEstimate({ model: first.roles[0].model, goal, deadline, materials: mats });
+    let clar = null, note = '', spentUsd = 0;
+    if (!est) note = '这次是按规则列出的问题，没有调用模型。';
+    else {
+      $('s-busy').textContent = '正在读懂你的需求…';
+      try {
+        // 慢的时候不让用户干等：20 秒没回来就用规则版（服务端照样按实际结算、记账）
+        const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
+        const res = await fetch('/api/v2/intake/clarify', { method: 'POST', credentials: 'same-origin', signal: ctl.signal, headers: { accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify({ goal, output: OUT[output()].label, deadline, connectionId: first.roles[0].model.connectionId, approvePaid: est.approvePaid, maxCost: est.maxCostUsd, ...(S.draft ? { projectId: S.draft.projectId } : {}) }) });
+        if (res.status === 401) { location.assign('/login.html?next=/workspace.html&expired=1'); throw Error('请重新登录'); }
+        const data = await res.json().catch(() => ({})); clearTimeout(timer);
+        const u = data.usage || {};
+        spentUsd = u.cost === null || u.cost === undefined ? (data.requestSent ? Number(u.costUpperBound) || est.maxCostUsd : 0) : Number(u.cost) || 0;
+        const spent = est.free ? '（本机模型，不花钱）' : data.requestSent ? '这一步花了' + (u.cost === null || u.cost === undefined ? '不超过 ¥' + est.maxCny.toFixed(2) : yuanText(u.cost)) + '（已计入）。' : '';
+        if (data.clarify && (data.ok || data.code === 'usage_unsettled')) { clar = data.clarify; note = est.free ? '理解需求用的是本机模型，不花钱。' : '理解需求' + spent; }
+        else if (data.code === 'monthly_quota_exhausted' || data.code === 'monthly_quota_exceeded') note = '本月额度不够，这次按规则列出问题，没有调用模型。';
+        else note = (data.requestSent ? '模型这次的回答不合格，已改用按规则列出的问题；' + (est.free ? '' : spent) : '这次没能调用模型，已改用按规则列出的问题，没有花钱。');
+      } catch (e) {
+        if (e.message === '请重新登录') throw e;
+        // 超时：请求可能已经发出，费用以记账为准（不超过上限）
+        note = e.name === 'AbortError' ? '模型这次回答太慢，已改用按规则列出的问题' + (est.free ? '。' : '；这一步的费用不超过 ¥' + est.maxCny.toFixed(2) + '（已计入）。') : '暂时连不上，已改用按规则列出的问题，没有花钱。';
+        if (e.name === 'AbortError' && !est.free) spentUsd = est.maxCostUsd;
+      }
+      finally { $('s-busy').textContent = ''; }
+      if (!est.free && spentUsd > 0) await loadModels().catch(() => {}); // 使用者：刷新本月剩余额度
+    }
+    S.clar = { sig, clar: clar || rules, note, spentUsd };
+    return S.clar;
+  }
+  /* 确认框顶部：我理解你要的是…… / 最多 3 个问题（可点选项 + 其它 + 跳过）/ 人话计划 */
+  function renderClarify(body, p, c) {
+    const box = el('section', { className: 'clar', id: 's-clarify' }, [el('h3', { text: '我理解你要的是' }), el('p', { id: 's-clar-understanding', text: c.clar.understanding.replace(/^我理解你要的是[：:，,]?/, '') })]);
+    const qs = el('div', { id: 's-clar-questions' });
+    c.clar.questions.forEach((q, i) => {
+      const other = el('input', { className: 'other', id: 's-clar-other-' + i, maxLength: 200, placeholder: '其它，请写一下', hidden: true });
+      const chips = el('div', { className: 'chips', role: 'radiogroup' }, [...q.options, '其它'].map((o, k) => el('label', {}, [el('input', { type: 'radio', name: 's-clar-q' + i, value: k === q.options.length ? '__other' : o,
+        onchange: () => { other.hidden = k !== q.options.length; if (!other.hidden) other.focus(); } }), o])));
+      qs.append(el('div', { className: 'q', text: (i + 1) + '. ' + q.question }), chips, other);
+    });
+    if (c.clar.questions.length) {
+      S.clarSkipped = false;
+      const skip = el('button', { type: 'button', className: 'small skip', id: 's-clar-skip', text: '跳过，按你的理解来', onclick: () => {
+        S.clarSkipped = !S.clarSkipped; qs.hidden = S.clarSkipped; skip.textContent = S.clarSkipped ? '我还是想回答问题' : '跳过，按你的理解来'; } });
+      box.append(el('h3', { text: '开始前想确认几件事（不选就按常见做法）' }), qs, skip);
+    } else S.clarSkipped = false;
+    box.append(el('p', { id: 's-clar-plan', text: '计划：' + window.SmartPlan.planText(p, c.clar) + '。' }));
+    if (c.note) box.append(el('p', { className: 'hint', id: 's-clar-cost', text: c.note }));
+    body.append(box);
+  }
+  function clarifyAnswers() {
+    const c = S.clar && S.clar.clar; if (!c) return { answers: [], skipped: false };
+    return { skipped: !!S.clarSkipped, answers: c.questions.map((q, i) => { const v = document.querySelector('input[name=s-clar-q' + i + ']:checked')?.value || '';
+      return v === '__other' ? ($('s-clar-other-' + i)?.value || '').trim().slice(0, 200) : v; }) };
   }
   /* 填的金额比建议金额低：一句人话 + 两个按钮，用户选了“就用这个金额”才继续 */
   function budgetCheck(p) {
@@ -173,6 +240,7 @@
   function confirm(p) {
     return new Promise(resolve => {
       const dlg = $('s-confirm'), body = $('s-confirm-body'); body.replaceChildren();
+      if (p.clarify && !p.isRework) renderClarify(body, p, p.clarify);
       const opts = p.options.saving ? [p.options.quality, p.options.saving] : [p.options.quality];
       if (opts.length > 1) {
         body.append(el('p', { text: '按现在的分配，预计会超过单次上限 ¥' + p.capCny.toFixed(2) + '。请选一个：' }));
@@ -183,13 +251,13 @@
       if (p.materialsNote && !p.isRework) body.append(el('p', { className: 'hint', id: 's-confirm-materials', text: p.materialsNote }));
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
       if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: estNote(p.estimatedNote) }));
-      body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : '¥0.00') + '（估算，以厂商账单为准）。' }));
+      body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : spentText(p.clarify ? p.clarify.spentUsd : 0)) + '（估算，以厂商账单为准）。' }));
       if (S.me && S.me.kind === 'user') body.append(el('p', { className: 'hint', id: 's-confirm-quota', text: '你本月额度还剩 ¥' + (Number(S.me.month.remainingCny) || 0).toFixed(2) + '（每月上限 ¥' + (Number(S.me.month.capCny) || 0).toFixed(2) + '，由管理员设置）。' }));
       // QA-B8-02: the rework sentence belongs to a rework only; a user's models are already tested, so no connection-check sentence
       if (p.isRework) body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' }));
       else if (!(S.me && S.me.kind === 'user')) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
       $('s-confirm-title').textContent = p.isRework ? '确认修改' : '确认开始';
-      const done = ok => { dlg.close(); resolve(ok ? (document.querySelector('input[name=s-choice]:checked')?.value || 'quality') : null); };
+      const done = ok => { if (ok && p.clarify && !p.isRework) S.clarAnswers = clarifyAnswers(); dlg.close(); resolve(ok ? (document.querySelector('input[name=s-choice]:checked')?.value || 'quality') : null); };
       $('s-confirm-ok').onclick = () => done(true); $('s-confirm-cancel').onclick = () => done(false);
       dlg.addEventListener('cancel', () => resolve(null), { once: true });
       dlg.showModal();
@@ -215,10 +283,13 @@
     // (only when no option of the dialog fits; if the 省钱 option fits, the dialog still lets the user pick it)
     const q0 = quotaProblem(first), saving = first.options && first.options.saving;
     if (q0 && !(saving && !quotaProblem({ ...first, chosen: saving }))) return showError($('s-error'), { text: q0, fix: null });
-    const choice = await confirm(first);
+    let clar;
+    try { clar = await clarifyStep(first); } catch { return; } // 只有登录过期会到这里（已跳转）
+    const choice = await confirm({ ...first, clarify: clar });
     if (!choice) return;
     S.choice = choice;
     const p = makePlan(choice);
+    p.project = window.SmartPlan.applyClarify(p.project, clar.clar, S.clarAnswers); // 澄清答案并入项目说明
     const q1 = quotaProblem(p);
     if (q1) return showError($('s-error'), { text: q1, fix: null });
     S.busy = true; $('s-go').disabled = true;
@@ -239,7 +310,7 @@
       $('s-busy').textContent = '正在开始执行…';
       const run = (await api('/api/v2/projects/' + encodeURIComponent(project.projectId) + '/runs', 'POST', p.approval)).run;
       S.runId = run.runId; S.projectId = project.projectId; S.format = p.format; S.outputLabel = p.outputLabel;
-      clearDraft();
+      clearDraft(); S.clar = null;
       showProgress(p);
       window.AIJWorkspace?.refreshProjects();
     } catch (e) {

@@ -23,7 +23,7 @@ const PASS = 'user-password-123';
       const j = JSON.parse(body || '{}');
       const reply = j.max_tokens <= 32 ? '好' : '周末促销方案：一、活动主题；二、优惠内容；三、宣传渠道；四、预算与分工。内容完整，可以直接使用。';
       const send = () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n'); };
-      if (hold && j.max_tokens > 32) held.push(send); else send(); // AUD-C159-01 case keeps a rework round running
+      if (hold && j.max_tokens > 32 && !JSON.stringify(j.messages || '').includes('你是任务助理')) held.push(send); else send(); // B9b: the pre-start clarification is not held // AUD-C159-01 case keeps a rework round running
     });
   });
   await new Promise(r => mock.listen(0, '127.0.0.1', r));
@@ -149,6 +149,8 @@ const PASS = 'user-password-123';
     const db = new DatabaseSync(path.join(app.dir, 'projects.sqlite')); db.exec('PRAGMA busy_timeout=5000');
     db.prepare("UPDATE runs SET created_at=?, doc=json_set(doc,'$.createdAt',?) WHERE id=?").run(lastMonth, lastMonth, oldRun);
     db.prepare("UPDATE usage_ledger SET created_at=?, doc=json_set(doc,'$.createdAt',?) WHERE run_id=?").run(lastMonth, lastMonth, oldRun);
+    // B9b: the task's pre-start clarification (system_usage, purpose clarify) happened together with it
+    db.prepare("UPDATE system_usage SET created_at=?, doc=json_set(doc,'$.createdAt',?) WHERE json_extract(doc,'$.purpose')='clarify'").run(lastMonth, lastMonth);
     db.close();
     const wangSpent = async () => (await app.call('GET', '/api/v2/users')).json.users.find(u => u.username === 'xiaowang').month.spentCny;
     assert.equal(await wangSpent(), 0, 'last month\'s billing is not this month\'s');

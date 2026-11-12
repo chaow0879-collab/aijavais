@@ -89,3 +89,85 @@ test('B9a engine: each role gets its share of a long file, cut disclosed as "已
   assert.equal('materialsMaxChars' in plain.steps[0], false);
   assert.equal((await S.call('POST', '/api/v2/projects', { ...p.project, steps: [{ ...p.project.steps[0], materialsMaxChars: 10 }] })).status, 400, 'below 1000 is refused');
 });
+
+/* ---------------- B9b: 先问清楚再动手 ---------------- */
+const CLAR_JSON = JSON.stringify({ understanding: '我理解你要的是一份季度复盘总结，重点是满意度和销量。', questions: [{ question: '主要给谁看？', options: ['领导', '团队内部', '领导'] }, { question: '要多长？', options: ['一页', '三页'] }, { question: '只有一个选项', options: ['x'] }, { question: '第四个问题', options: ['a', 'b'] }], plan: { draft: '根据资料写出三页初稿', review: '核对数字和出处并定稿' } });
+test('B9b: clarification reply is validated strictly (JSON object, at most 3 questions with 2-4 options, bounded text)', () => {
+  const { validateClarify } = require('../lib/clarify');
+  const v = validateClarify('```json\n' + CLAR_JSON + '\n```').clarify;
+  assert.deepEqual(v.questions.map(q => q.question), ['主要给谁看？', '要多长？'], 'single-option question dropped, no 4th question');
+  assert.deepEqual(v.questions[0].options, ['领导', '团队内部'], 'duplicates removed');
+  assert.equal(v.plan.draft, '根据资料写出三页初稿');
+  for (const bad of ['好的，我来问几个问题', '[]', '{"questions":[]}', '']) assert.throws(() => validateClarify(bad), e => e.code === 'invalid_draft', bad);
+  assert.equal(validateClarify(JSON.stringify({ understanding: '<img src=x onerror=alert(1)> 我理解' })).clarify.understanding, '<img src=x onerror=alert(1)> 我理解', 'kept as plain text; the page renders it with textContent');
+});
+test('B9b: rule-based questions, the plan in plain words, answers merged into the project and every step', () => {
+  const r = Plan.clarifyRules({ goal: '做一份新品介绍', output: 'ppt', materials: [{}] });
+  assert.match(r.understanding, /^我理解你要的是：做一份新品介绍。成果是一份PPT 演示，会参考你上传的 1 个文件。$/);
+  assert.deepEqual(r.questions.map(q => q.question), ['大概要几页？', '主要给谁看？', '语气偏向哪种？']);
+  assert.ok(r.questions.every(q => q.options.length >= 2 && q.options.length <= 4));
+  assert.equal(Plan.clarifyRules({ goal: '给领导写一份 3 页的正式汇报', output: 'word' }).questions.length, 0, 'nothing asked that the goal already says');
+  const p = Plan.plan({ models: PAID, goal: '写季度总结', capCny: 5 });
+  assert.equal(Plan.planText(p, r), '起草员：阅读资料，写出完整初稿 → 审核员：检查错误和遗漏，修订定稿');
+  const merged = Plan.applyClarify(p.project, r, { answers: ['8 页左右', '', '自己写的语气'] });
+  assert.match(merged.description, /开始前的确认：\n对需求的理解：我理解你要的是：做一份新品介绍[\s\S]*问：大概要几页？\n答：8 页左右\n问：主要给谁看？\n答：（没有回答，按常见做法处理）\n问：语气偏向哪种？\n答：自己写的语气$/);
+  assert.match(merged.steps[0].prompt, /本步重点：阅读资料，写出完整初稿$/); assert.match(merged.steps[1].prompt, /本步重点：检查错误和遗漏，修订定稿$/);
+  assert.match(Plan.applyClarify(p.project, r, { skipped: true }).description, /用户选择跳过提问：按以上理解来做/);
+  assert.doesNotMatch(Plan.applyClarify(p.project, r, { skipped: true }).description, /\n问：/);
+  // the cap is shown before the click; a model too expensive for this step is not used (rules instead)
+  const est = Plan.clarifyEstimate({ model: PAID[0], goal: '写季度总结' });
+  assert.ok(est.maxCny >= 0.01 && est.maxCostUsd <= Plan.CLARIFY.maxUsd && est.approvePaid);
+  assert.equal(Plan.clarifyEstimate({ model: { ...PAID[0], price: { inputPerMillion: 5000, outputPerMillion: 20000, currency: 'CNY' } }, goal: 'x' }), null);
+  assert.deepEqual(Plan.clarifyEstimate({ model: { modelId: 'm', pricingMode: 'local' }, goal: 'x' }), { free: true, maxCny: 0, maxCostUsd: 0, approvePaid: false });
+});
+test('B9b API: one budgeted call through system_usage (purpose clarify); approval required; bad JSON -> 422 for rules; user quota and isolation', async t => {
+  const prompts = [];
+  const mock = http.createServer((req, res) => {
+    let body = ''; req.on('data', c => body += c); req.on('end', () => {
+      const input = JSON.parse(body), all = input.messages.map(m => m.content).join('\n'); prompts.push(all);
+      const reply = input.max_tokens <= 32 ? '好' : /MOCK_BAD/.test(all) ? '好的，我先问几个问题：你要给谁看？' : CLAR_JSON;
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 400, completion_tokens: 100 } }) + '\n\ndata: [DONE]\n\n');
+    });
+  });
+  await new Promise(r => mock.listen(0, '127.0.0.1', r));
+  const mp = mock.address().port;
+  const S = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mp } });
+  t.after(async () => { await S.stop(); await new Promise(r => mock.close(r)); });
+  const paid = (await S.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'priced-writer', pricingMode: 'paid_api', capabilities: ['writing', 'reasoning'], price: { currency: 'CNY', inputPerMillion: 1, outputPerMillion: 1 } })).json.connection.connectionId;
+  assert.equal((await S.call('POST', '/api/models/' + paid + '/test', { approvePaid: true })).json.ok, true);
+  const n0 = prompts.length, ask = (call, b) => call('POST', '/api/v2/intake/clarify', { goal: '写一份季度复盘总结', output: 'Word 文档', connectionId: paid, ...b });
+  // no explicit approval, or a cap above 0.1 USD: refused before any model request
+  assert.equal((await ask(S.call, {})).json.code, 'paid_approval_required');
+  assert.equal((await ask(S.call, { approvePaid: true, maxCost: 0.5 })).status, 400);
+  assert.equal(prompts.length, n0, 'nothing sent without approval');
+  const proj = (await S.call('POST', '/api/v2/projects', { name: '草稿', description: '草稿', roles: [{ roleId: 'd', name: '起草员' }], steps: [{ stepId: 's', roleId: 'd', title: 's' }] })).json.project;
+  await S.call('POST', `/api/v2/projects/${proj.projectId}/files`, { filename: '纪要.txt', contentBase64: Buffer.from('下季度重点：会员复购，目标 35%。').toString('base64') });
+  const good = await ask(S.call, { approvePaid: true, maxCost: 0.002, projectId: proj.projectId });
+  assert.equal(good.status, 200, good.text);
+  assert.equal(good.json.clarify.questions.length, 2); assert.equal(good.json.requestSent, true); assert.equal(good.json.billingStatus, 'settled');
+  assert.match(prompts.at(-1), /你是任务助理/); assert.match(prompts.at(-1), /\[资料\] 纪要\.txt（共 \d+ 字）\n下季度重点：会员复购/);
+  const cost = 500 / 1e6 / 7.5; assert.ok(Math.abs(good.json.usage.cost - cost) < 1e-12, 'provider usage x server price: ' + good.json.usage.cost);
+  const row = (await S.call('GET', '/api/v2/usage/system')).json.usage.find(u => u.ledgerId === good.json.ledgerId);
+  assert.equal(row.purpose, 'clarify'); assert.equal(row.kind, 'intake_draft'); assert.equal(row.status, 'completed');
+  // a client-supplied price is ignored: the server budgets with its own rate
+  const low = await ask(S.call, { approvePaid: true, maxCost: 0.002, price: { inputPerMillion: 0, outputPerMillion: 0, currency: 'USD' } });
+  assert.ok(low.json.usage.cost > 0);
+  const bad = await ask(S.call, { goal: 'MOCK_BAD 写一份总结', approvePaid: true, maxCost: 0.002 });
+  assert.equal(bad.status, 422); assert.equal(bad.json.code, 'invalid_draft'); assert.equal(bad.json.requestSent, true); assert.ok(bad.json.usage.cost > 0, 'a bad reply is still billed and recorded');
+  // front user: counted in the monthly spend; another user's draft cannot be read
+  const PASS = 'user-password-123';
+  await S.call('POST', '/api/v2/users', { username: 'dora', password: PASS, monthlyCapCny: 1 });
+  const ck = (await S.call('POST', '/api/auth/user-login', { username: 'dora', password: PASS }, { cookie: false })).headers['set-cookie'][0].split(';')[0];
+  const D = (m, u, b) => S.call(m, u, b, { cookie: ck });
+  assert.equal((await ask(D, { approvePaid: true, maxCost: 0.002, projectId: proj.projectId })).status, 404, 'not her project');
+  const before = (await D('GET', '/api/v2/me')).json.me.month.spentCny;
+  const mine = await ask(D, { approvePaid: true, maxCost: 0.002 });
+  assert.equal(mine.status, 200, mine.text);
+  assert.ok((await D('GET', '/api/v2/me')).json.me.month.spentCny > before, 'the clarification counts in her month');
+  const users = (await S.call('GET', '/api/v2/users')).json.users;
+  await S.call('PUT', '/api/v2/users/' + users.find(u => u.username === 'dora').userId, { monthlyCapCny: 0 });
+  const n1 = prompts.length;
+  assert.equal((await ask(D, { approvePaid: true, maxCost: 0.002 })).json.code, 'monthly_quota_exhausted');
+  assert.equal(prompts.length, n1, 'no call over the quota');
+});

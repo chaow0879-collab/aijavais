@@ -272,6 +272,51 @@
     if (unread) t += '有 ' + unread + ' 个文件读不到文字（图片或扫描件），岗位只知道它存在，不会编造其中内容。';
     return t;
   }
+  /* ---------- B9b 先问清楚再动手 ---------- */
+  /* 一次便宜的调用的上限（人民币）：按服务端预留的同一口径（输入字节 + 256，输出 800，思考型平台再加一半）×1.2 向上取到分。
+   * 服务端：资料最多给开头 3000 字，每个文件一行名字；上限不超过 0.1 美元。 */
+  const CLARIFY = Object.freeze({ systemBytes: 2200, out: 800, excerptChars: 3000, perFileBytes: 600, maxUsd: 0.1 });
+  function clarifyEstimate({ model, goal = '', deadline = '', materials = [] } = {}) {
+    if (!model) return null;
+    if (isLocal(model)) return { free: true, maxCny: 0, maxCostUsd: 0, approvePaid: false };
+    const r = cnyRate(model); if (!r) return null;
+    const files = (materials || []).length;
+    const inBytes = CLARIFY.systemBytes + bytes(goal) + bytes(deadline) + 300 + (files ? CLARIFY.excerptChars * 3 + files * CLARIFY.perFileBytes : 0) + 256;
+    const out = CLARIFY.out + (thinkingHost(model) ? CLARIFY.out / 2 : 0);
+    const bound = (inBytes * r.input + out * r.output) / 1e6;
+    const maxCny = Math.max(0.01, yuan(bound * 1.2));
+    if (maxCny / FX > CLARIFY.maxUsd) return null; // 太贵的模型不用来做这一步，直接用规则版
+    return { free: false, maxCny, maxCostUsd: Math.ceil(maxCny / FX * 1e6) / 1e6, approvePaid: true };
+  }
+  const has = (re, t) => re.test(String(t || ''));
+  /* 规则版（没有可用模型、模型回答不合格时用）：只问需求里没写清楚的事，最多 3 个 */
+  function clarifyRules({ goal = '', output = 'word', deadline = '', materials = [] } = {}) {
+    const out = OUTPUTS[output] || OUTPUTS.text, g = String(goal).trim(), files = (materials || []).length, qs = [];
+    if (output === 'ppt' && !pageCount(g)) qs.push({ question: '大概要几页？', options: ['5 页左右', '8 页左右', '10 页以上'] });
+    if ((output === 'word' || output === 'text') && !has(/\d+\s*(字|页)|篇幅|简短|简要|详细|一页/, g)) qs.push({ question: '篇幅大概多长？', options: ['一页左右，简明扼要', '3–5 页', '越详细越好'] });
+    if ((output === 'excel' || output === 'analysis') && !has(/趋势|对比|排名|异常|占比|汇总/, g)) qs.push({ question: '最关心哪方面？', options: ['总量和趋势', '分类对比', '异常和问题'] });
+    if (!has(/给|面向|汇报|客户|老板|领导|团队|同事|学生|用户|读者|观众/, g)) qs.push({ question: '主要给谁看？', options: ['领导或老板', '客户', '团队内部', '公众'] });
+    if (qs.length < 3 && !has(/正式|轻松|活泼|严谨|口语|幽默/, g)) qs.push({ question: '语气偏向哪种？', options: ['正式严谨', '轻松易懂'] });
+    const understanding = '我理解你要的是：' + (g.length > 80 ? g.slice(0, 80) + '…' : g).replace(/[。.]$/, '') + '。成果是一份' + out.label +
+      (files ? '，会参考你上传的 ' + files + ' 个文件' : '') + (String(deadline).trim() ? '，希望' + String(deadline).trim() + '完成' : '') + '。';
+    return { understanding, questions: qs.slice(0, 3), plan: { draft: files ? '阅读资料，写出完整初稿' : '写出完整初稿', review: '检查错误和遗漏，修订定稿' }, source: 'rules' };
+  }
+  /* 人话版计划：起草员：…… → 审核员：…… */
+  function planText(plan, clar) {
+    const roles = (plan && plan.roles) || [], p = (clar && clar.plan) || {};
+    return roles.map((r, i) => r.spec.name + '：' + ((i === 0 ? p.draft : p.review) || r.spec.duty)).join(' → ');
+  }
+  /* 用户确认后，把理解、问答（或“跳过”）并入项目说明；每个岗位的提示词都带着项目说明 */
+  function applyClarify(project, clar, { answers = [], skipped = false } = {}) {
+    if (!project || !clar) return project;
+    const qa = skipped ? '\n用户选择跳过提问：按以上理解来做，没写清楚的地方按常见做法处理。'
+      : (clar.questions || []).map((q, i) => '\n问：' + q.question + '\n答：' + (String(answers[i] || '').trim() || '（没有回答，按常见做法处理）')).join('');
+    const steps = (project.steps || []).map((st, i) => {
+      const focus = i === 0 ? clar.plan && clar.plan.draft : clar.plan && clar.plan.review;
+      return focus ? { ...st, prompt: st.prompt + '\n本步重点：' + focus } : st;
+    });
+    return { ...project, description: project.description + '\n\n开始前的确认：\n对需求的理解：' + clar.understanding + qa, steps };
+  }
   const spentCny = usd => Math.round((Number(usd) || 0) * FX * 100) / 100;
   function explain(err, ctx = {}) {
     const code = err && err.code, msg = String(err && err.message || '');
@@ -292,5 +337,5 @@
     if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null };
     return { text: '启动没有成功。', fix: { action: 'retry', label: '再试一次' }, detail: msg };
   }
-  return { fileStatus, checkUpload, uploadError, materialsNote, materialShare, charsText, MATERIALS, ACCEPT, plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
+  return { clarifyEstimate, clarifyRules, planText, applyClarify, CLARIFY, fileStatus, checkUpload, uploadError, materialsNote, materialShare, charsText, MATERIALS, ACCEPT, plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
 });

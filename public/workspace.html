@@ -40,6 +40,9 @@
     .drop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;cursor:pointer;color:var(--dim);margin:4px 0 6px}.drop:hover,.drop:focus,.drop.over{border-color:var(--accent);color:var(--text);outline:none}
     .drop strong{color:var(--accent)}.files{list-style:none;padding:0;margin:4px 0 10px}.files li{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;border:1px solid var(--line);border-radius:8px;margin:4px 0;background:#0d1a29}
     .files .fname{font-weight:600;word-break:break-all}.files .fstate{font-size:13px;color:var(--accent)}.files .fstate.warn{color:var(--warn)}.files .fstate.bad{color:var(--bad)}.files .fstate.busy{color:var(--dim)}.files button{width:auto;margin-left:auto}
+    /* B9b 开始前的确认（理解 / 问题 / 计划） */
+    .clar{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:0 0 10px;background:#0d1a29}.clar h3{margin:0 0 6px;font-size:15px}.clar .q{margin:10px 0 4px;font-weight:600}
+    .clar .chips label{padding:4px 12px}.clar .other{width:200px;display:inline-block;margin:4px 0 0}.clar .skip{width:auto;margin-top:8px}
     .final{white-space:pre-wrap;background:#0d1a29;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;overflow:auto}
   </style>
   <script src="/role.js"></script>
@@ -89,6 +92,7 @@
       <div id="s-error" class="alert" role="alert" hidden></div>
       <p id="s-busy" class="hint" role="status" aria-live="polite"></p>
       <div class="toolbar"><button id="s-go" type="button" class="primary big">一键智能配置并开始</button><button id="s-preview" type="button">先看看配置</button></div>
+      <p id="s-clar-note" class="hint"></p>
     </section>
     <section id="s-progress" class="card simple-only" hidden aria-labelledby="s-progress-title">
       <nav class="runnav" aria-label="任务切换"><a id="s-home" href="/workspace.html">← 返回我的任务</a><button id="s-prev" type="button" class="small" hidden>上一个运行中的任务</button><button id="s-next" type="button" class="small" hidden>下一个运行中的任务</button></nav>
