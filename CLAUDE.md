@@ -96,7 +96,7 @@ Skill 是版本化 prompt/tool/check 配方，不能执行任意脚本。工具�
 
 接力优先级：真实供应商协议回归（需负责人授权额度）→ 专业工具/文件读取与专业能力测试 → 更多 UI 异常路径 → 性能与保留策略 → 企业多用户/持久队列。如需自主工具选择，先设计有界授权及预算状态机，不直接执行模型返回的 shell。
 
-工作单元2使用 `lib/budget.js` 共享授权/预留/结算策略；`lib/intake-draft.js`只提一次模型草案，使用system_usage单行预留和结算。`public/project-intake/ai-draft.js`保留规则向导并提供编辑/确认保存。不得把生成草案当执行或绕过预算。新增浏览器命令`npm run test:intake`。接口、12类测试和待验证边界见`docs/AI-DRAFT.md`。
+工作单元2使用 `lib/budget.js` 共享授权/预留/结算策略；`lib/intake-draft.js`只提一次模型草案，使用system_usage单行预留和结算。`public/project-intake/ai-draft.js`保留规则向导并提供编辑/确认保存。不得把生成草案当执行或绕过预算。新增浏览器命令`npm run test:intake`。接口、12类测试和待验证边界见`docs/ARCHITECTURE.md`。
 
 
 第十轮安全约束：草案请求按owner+kind+requestId永久占位，摘要绑定规范化参数与模型目标。claim和费用预留同事务；网络前必须提交dispatching；一次ledgerId仅结算一次。启动恢复claimed可证明未调用记0；dispatching和v3无证据预留按未知费用null保留上界，不重放。旧ID迁移为通配墓碑，不能清理后复用。管理员只读异常查询`GET /api/v2/usage/system/exceptions`，能力中心显示警示。无人工改账写接口。
