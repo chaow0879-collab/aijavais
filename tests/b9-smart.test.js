@@ -283,3 +283,43 @@ test('AUD-FEB8-01: per-user draft limit; storage counted per owner; abandoned dr
   assert.ok(!after.includes(adminPlaceholder), 'an abandoned new-task placeholder draft expired');
   assert.equal(after.length, before - 20, 'exactly the 18 old user drafts and the 2 old placeholder drafts');
 });
+
+/* ---------------- AUD-8CDD-01: the admin's exception ledger shows users' unknown-cost clarification rows ---------------- */
+test('AUD-8CDD-01: a user clarification left with unknown cost appears in the admin exception view (with username); users cannot read it', async t => {
+  const hung = [];
+  const mock = http.createServer((req, res) => {
+    let body = ''; req.on('data', c => body += c); req.on('end', () => {
+      const input = JSON.parse(body), all = input.messages.map(m => m.content).join('\n');
+      const send = () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: input.max_tokens <= 32 ? '好' : CLAR_JSON } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 40, completion_tokens: 10 } }) + '\n\ndata: [DONE]\n\n'); };
+      if (/MOCK_HANG/.test(all)) hung.push(send); else send();
+    });
+  });
+  await new Promise(r => mock.listen(0, '127.0.0.1', r));
+  const mp = mock.address().port;
+  const S = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mp } });
+  t.after(async () => { hung.splice(0).forEach(f => { try { f(); } catch { /* closed */ } }); await S.stop(); await new Promise(r => mock.close(r)); });
+  const paid = (await S.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'priced-writer', pricingMode: 'paid_api', capabilities: ['writing'], price: { currency: 'CNY', inputPerMillion: 1, outputPerMillion: 1 } })).json.connection.connectionId;
+  assert.equal((await S.call('POST', '/api/models/' + paid + '/test', { approvePaid: true })).json.ok, true);
+  const PASS = 'user-password-123';
+  await S.call('POST', '/api/v2/users', { username: 'fay', password: PASS, monthlyCapCny: 5 });
+  const ck = (await S.call('POST', '/api/auth/user-login', { username: 'fay', password: PASS }, { cookie: false })).headers['set-cookie'][0].split(';')[0];
+  // the user's page gives up (client disconnect) while the provider still hangs: the row stays with an unknown cost
+  const ctl = new AbortController();
+  const req = fetch(`http://127.0.0.1:${S.port}/api/v2/intake/clarify`, { method: 'POST', signal: ctl.signal, headers: { cookie: ck, 'content-type': 'application/json', origin: `http://127.0.0.1:${S.port}` },
+    body: JSON.stringify({ goal: 'MOCK_HANG 写一份总结', output: 'Word 文档', connectionId: paid, approvePaid: true, maxCost: 0.002 }) }).catch(e => e);
+  for (let i = 0; i < 100 && !hung.length; i++) await H.sleep(20);
+  assert.equal(hung.length, 1, 'the request reached the provider'); ctl.abort(); await req; await H.sleep(600);
+  const view = await S.call('GET', '/api/v2/usage/system/exceptions');
+  assert.equal(view.status, 200);
+  const row = view.json.exceptions.find(e => e.username === 'fay');
+  assert.ok(row, 'the admin sees the user\'s row: ' + view.text.slice(0, 300));
+  assert.deepEqual([row.ownerKind, row.purpose, row.cost, row.needsReconciliation], ['user', 'clarify', null, true]);
+  assert.ok(row.costUpperBound > 0);
+  assert.equal(JSON.stringify(view.json).includes('MOCK_HANG'), false, 'no prompt text in the view');
+  const ready = await S.call('GET', '/api/v2/readiness');
+  assert.ok(ready.json.accounting.exceptions.some(e => e.username === 'fay'), 'the capability center warning counts it too');
+  // a front user cannot read the exception ledger (admin back end)
+  assert.equal((await S.call('GET', '/api/v2/usage/system/exceptions', undefined, { cookie: ck })).status, 403);
+  // the month still counts it at its upper bound
+  assert.ok((await S.call('GET', '/api/v2/me', undefined, { cookie: ck })).json.me.month.spentCny > 0);
+});

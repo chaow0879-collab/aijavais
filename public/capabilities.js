@@ -63,7 +63,7 @@
         const bound = entry.costUpperBound ?? entry.reservedCost;
         accounting.append(node('div', { class: 'cap' }, [
           node('strong', { text: '请求 ' + (entry.requestId || '历史记录无请求ID') }),
-          node('p', { class: 'hint', text: '账本 ' + entry.ledgerId + ' · ' + (entry.modelId || entry.connectionId || '模型未知') }),
+          node('p', { class: 'hint', text: '账本 ' + entry.ledgerId + ' · ' + (entry.modelId || entry.connectionId || '模型未知') + ' · ' + (entry.purpose === 'clarify' ? '开始前的理解需求' : '团队草案') + ' · ' + (entry.ownerKind === 'user' ? '使用者 ' + entry.username : '管理员') }), // AUD-8CDD-01
           node('p', { class: 'hint', text: utc + ' · ' + (entry.requestState || entry.status || '待核对') }),
           node('p', { text: cost + '；预留上界：' + (bound === null || bound === undefined ? '未知' : bound + ' USD') + '（非厂商账单）' })
         ]));
