@@ -1,0 +1,79 @@
+{
+ "first": {
+  "status": "review_required",
+  "maxReworks": 3
+ },
+ "no_approval": {
+  "status": 402,
+  "code": "paid_approval_required",
+  "calls": 0
+ },
+ "approvePaid_false": {
+  "status": 402,
+  "code": "paid_approval_required",
+  "calls": 0
+ },
+ "concurrent": {
+  "statuses": [
+   "200:running",
+   "409:state_conflict"
+  ],
+  "callsWhileHeld": 1
+ },
+ "round2": {
+  "status": "review_required",
+  "round": 2,
+  "prevInPrompt": true,
+  "messageInPrompt": true,
+  "scope": true
+ },
+ "underestimate": {
+  "start": 200,
+  "status": "failed",
+  "err": "\"Cost budget cannot cover this call; no request sent\"",
+  "calls": 0,
+  "bigLen": 20043,
+  "round": 4
+ },
+ "versions": {
+  "n": 3,
+  "round": 4,
+  "maxReworks": 3,
+  "left": 0,
+  "msgs": [
+   null,
+   "只改第 3 页的标题",
+   "结尾更有力"
+  ],
+  "current": [
+   false,
+   false,
+   true
+  ],
+  "distinct": 3
+ },
+ "after_failed": {
+  "status": 409,
+  "code": "state_conflict",
+  "calls": 0
+ },
+ "export_old": {
+  "status": 200,
+  "hasOld": true,
+  "hasCurrent": true
+ },
+ "export_nonfinal": 404,
+ "export_badtype": 404,
+ "idor": {
+  "b_versions_of_a": 404,
+  "b_export_a_run": 404,
+  "b_own_run_with_a_artifact": 404,
+  "b_review_a": 404
+ },
+ "display": {
+  "versions": 403,
+  "anon": 401,
+  "state_leak": false
+ },
+ "msg_long": 400
+}
