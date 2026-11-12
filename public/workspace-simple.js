@@ -153,7 +153,10 @@
       : '点开始后，会先花不超过 ¥' + est.maxCny.toFixed(2) + ' 读懂需求、问你几个问题，确认后才正式开始。';
   }
   /* ---------- B9b 先问清楚再动手：一次便宜的调用（服务端走 system_usage 预留和结算），失败或没有模型就用规则版 ---------- */
-  const yuanText = usd => { const c = window.SmartPlan.spentCny(usd); return c > 0 && c < 0.01 ? '不到 ¥0.01' : '约 ¥' + c.toFixed(2); };
+  const yuanText = usd => { const raw = (Number(usd) || 0) * window.SmartPlan.FX, c = window.SmartPlan.spentCny(usd); return raw > 0 && c < 0.01 ? '不到 ¥0.01' : '约 ¥' + c.toFixed(2); };
+  // 使用者的本月额度按分向上取整计入（和服务器一致），框里如实说
+  const quotaFen = usd => Math.max(0, Math.ceil((Number(usd) || 0) * window.SmartPlan.FX * 100 - 1e-6)) / 100;
+  const isQuotaUser = () => !!(S.me && S.me.kind === 'user');
   async function clarifyStep(first) {
     const goal = $('s-goal').value.trim(), deadline = $('s-deadline').value.trim(), mats = doneFiles();
     const sig = JSON.stringify([goal, output(), deadline, mats.map(f => f.fileId), first.roles[0].model.connectionId]);
@@ -161,7 +164,10 @@
     const rules = window.SmartPlan.clarifyRules({ goal, output: output(), deadline, materials: mats });
     const est = window.SmartPlan.clarifyEstimate({ model: first.roles[0].model, goal, deadline, materials: mats });
     let clar = null, note = '', spentUsd = 0;
+    // QA-B9 P2-③：使用者的本月额度要先保证正式任务够用；不够同时付“读懂需求”的上限时，直接用规则版，不调用模型、不占额度
+    const left = isQuotaUser() ? Number(S.me.month.remainingCny) || 0 : Infinity, runNeed = first.chosen && !first.chosen.free ? Number(first.chosen.maxCny) || 0 : 0;
     if (!est) note = '这次是按规则列出的问题，没有调用模型。';
+    else if (!est.free && left - runNeed < est.maxCny - 1e-9) note = '本月额度要先留给正式任务，这次按规则列出问题，没有调用模型，没有花钱。';
     else {
       $('s-busy').textContent = '正在读懂你的需求…';
       try {
@@ -173,7 +179,9 @@
         const data = await res.json().catch(() => ({})); clearTimeout(timer);
         const u = data.usage || {};
         spentUsd = u.cost === null || u.cost === undefined ? (data.requestSent ? Number(u.costUpperBound) || est.maxCostUsd : 0) : Number(u.cost) || 0;
-        const spent = est.free ? '（本机模型，不花钱）' : data.requestSent ? '这一步花了' + (u.cost === null || u.cost === undefined ? '不超过 ¥' + est.maxCny.toFixed(2) : yuanText(u.cost)) + '（已计入）。' : '';
+        const known = !(u.cost === null || u.cost === undefined);
+        const spent = est.free ? '（本机模型，不花钱）' : data.requestSent ? '这一步花了' + (known ? yuanText(u.cost) : '不超过 ¥' + est.maxCny.toFixed(2)) + '（已计入' +
+          (isQuotaUser() ? '，本月额度按 ¥' + (known ? quotaFen(u.cost) : est.maxCny).toFixed(2) + ' 计' : '') + '）。' : '';
         if (data.clarify && (data.ok || data.code === 'usage_unsettled')) { clar = data.clarify; note = est.free ? '理解需求用的是本机模型，不花钱。' : '理解需求' + spent; }
         else if (data.code === 'monthly_quota_exhausted' || data.code === 'monthly_quota_exceeded') note = '本月额度不够，这次按规则列出问题，没有调用模型。';
         else note = (data.requestSent ? '模型这次的回答不合格，已改用按规则列出的问题；' + (est.free ? '' : spent) : '这次没能调用模型，已改用按规则列出的问题，没有花钱。');
@@ -264,7 +272,7 @@
       if (p.materialsNote && !p.isRework) body.append(el('p', { className: 'hint', id: 's-confirm-materials', text: p.materialsNote }));
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
       if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: estNote(p.estimatedNote) }));
-      body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : spentText(p.clarify ? p.clarify.spentUsd : 0)) + '（估算，以厂商账单为准）。' }));
+      body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花' + (p.isRework ? '约 ' + spentText(S.spentUsd) : yuanText(p.clarify ? p.clarify.spentUsd : 0)) + '（估算，以厂商账单为准）。' }));
       if (S.me && S.me.kind === 'user') body.append(el('p', { className: 'hint', id: 's-confirm-quota', text: '你本月额度还剩 ¥' + (Number(S.me.month.remainingCny) || 0).toFixed(2) + '（每月上限 ¥' + (Number(S.me.month.capCny) || 0).toFixed(2) + '，由管理员设置）。' }));
       // QA-B8-02: the rework sentence belongs to a rework only; a user's models are already tested, so no connection-check sentence
       if (p.isRework && p.scopeOptions) { // QA-B9 P2-①：如实显示判断出的修改范围，可以改选

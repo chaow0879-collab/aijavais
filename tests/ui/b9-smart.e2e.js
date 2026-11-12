@@ -43,6 +43,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     assert.doesNotMatch(t, /[A-Za-z]{2,}/, where + ' has English: ' + (t.match(/.{0,20}[A-Za-z]{2,}.{0,20}/) || [''])[0]);
     assert.doesNotMatch(t, /[{[]\s*"/, where + ' has JSON');
   };
+  let PASS;
   const fileState = (page, name) => page.$eval('#s-file-list', (ul, n) => { const li = [...ul.children].find(x => x.querySelector('.fname').textContent === n); return li ? li.querySelector('.fstate').textContent : null; }, name);
   try {
     const add = await app.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'local-writer', displayName: '本地写手', pricingMode: 'local', capabilities: ['writing', 'reasoning'] });
@@ -217,7 +218,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     assert.deepEqual(pageErrors, []);
 
     /* ---- B8 front user: uploads to their own task, the materials reach the roles too ---- */
-    const PASS = 'user-password-123';
+    PASS = 'user-password-123';
     assert.equal((await app.call('POST', '/api/v2/users', { username: 'xiaozhang', password: PASS, monthlyCapCny: 5 })).status, 201);
     const uctx = await browser.newContext({ viewport: { width: 1280, height: 900 } }), up = await uctx.newPage();
     await up.goto(base + '/login.html'); await up.fill('#un', 'xiaozhang'); await up.fill('#upw', PASS); await up.click('#userBtn');
@@ -258,6 +259,36 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     await lp.goto(base + '/login.html'); await lp.fill('#un', 'xiaoli'); await lp.fill('#upw', PASS); await lp.click('#userBtn'); await lp.waitForURL(/\/workspace\.html/);
     assert.equal(await lp.evaluate(async id => (await fetch('/api/v2/projects/' + id + '/files')).status, userDraft), 404);
     ok('user account: uploads materials to their own task, roles receive them; another user gets 404 on those files');
+
+    /* ---- QA-B9 P2-③: a user's month is kept for the real task; amounts are honest ---- */
+    const paidAdd = await app.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'priced-writer', pricingMode: 'paid_api', capabilities: ['writing', 'reasoning'], price: { currency: 'CNY', inputPerMillion: 1, outputPerMillion: 1 } });
+    const paidId = paidAdd.json.connection.connectionId;
+    assert.equal((await app.call('POST', '/api/models/' + paidId + '/test', { approvePaid: true })).json.ok, true);
+    await app.call('POST', '/api/models/' + add.json.connection.connectionId + '/disable', {});
+    const userPage = async (name, cap) => {
+      assert.equal((await app.call('POST', '/api/v2/users', { username: name, password: PASS, monthlyCapCny: cap })).status, 201);
+      const c = await browser.newContext({ viewport: { width: 1280, height: 900 } }), pg = await c.newPage();
+      await pg.goto(base + '/login.html'); await pg.fill('#un', name); await pg.fill('#upw', PASS); await pg.click('#userBtn');
+      await pg.waitForURL(/\/workspace\.html/); await pg.waitForFunction(() => document.body.dataset.role === 'user');
+      await pg.click('#aij-new'); await pg.waitForSelector('#s-drop'); return pg;
+    };
+    const tight = await userPage('xiaoqian', 0.1), c1 = clars.length;
+    await tight.fill('#s-goal', '写一份社区活动通知'); await tight.click('#s-go'); await tight.waitForSelector('#s-confirm[open]');
+    assert.equal(clars.length, c1, 'no clarification call when the month cannot cover both');
+    assert.equal(await tight.innerText('#s-clar-cost'), '本月额度要先留给正式任务，这次按规则列出问题，没有调用模型，没有花钱。');
+    assert.match(await tight.innerText('#s-clar-questions'), /主要给谁看？/, 'rule-based questions instead');
+    assert.match(await tight.innerText('#s-confirm'), /你本月额度还剩 ¥0\.10/);
+    await tight.click('#s-confirm-ok'); await tight.waitForSelector('#s-progress:not([hidden])');
+    assert.equal(await tight.isVisible('#s-error'), false, 'the run is not blocked by the clarification');
+    const roomy = await userPage('xiaosun', 5), c2 = clars.length;
+    await roomy.fill('#s-goal', '写一份社区活动通知'); await roomy.click('#s-go'); await roomy.waitForSelector('#s-confirm[open]');
+    assert.equal(clars.length - c2, 1);
+    const cost = await roomy.innerText('#s-clar-cost'), cdl = await roomy.innerText('#s-confirm');
+    assert.equal(cost, '理解需求这一步花了不到 ¥0.01（已计入，本月额度按 ¥0.01 计）。');
+    assert.doesNotMatch(cdl, /约 ¥0\.00/); assert.match(cdl, /这个任务累计已花不到 ¥0\.01/);
+    assert.match(cdl, /你本月额度还剩 ¥4\.99/, 'the shown quota matches what the server counted');
+    await roomy.click('#s-confirm-cancel');
+    ok('QA-B9 P2-③: a user whose month only covers the task gets rule questions and the run starts; a paid clarification shows 不到 ¥0.01 and the ¥0.01 it counts');
     console.log('\nB9 BROWSER CHECKS PASSED:', results.length);
   } finally {
     await browser.close(); await app.stop(); mock.close();
