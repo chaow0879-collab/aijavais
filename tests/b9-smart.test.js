@@ -323,3 +323,46 @@ test('AUD-8CDD-01: a user clarification left with unknown cost appears in the ad
   // the month still counts it at its upper bound
   assert.ok((await S.call('GET', '/api/v2/me', undefined, { cookie: ck })).json.me.month.spentCny > 0);
 });
+
+/* ---------------- AUD-717C-01: the draft and storage limits hold under concurrent requests ---------------- */
+test('AUD-717C-01: 25 concurrent draft creations make exactly 20; concurrent PDF uploads never pass 256 MB; refused ones write nothing', async t => {
+  const S = await H.boot({});
+  t.after(() => S.stop());
+  const PASS = 'user-password-123';
+  await S.call('POST', '/api/v2/users', { username: 'gina', password: PASS, monthlyCapCny: 5 });
+  const ck = (await S.call('POST', '/api/auth/user-login', { username: 'gina', password: PASS }, { cookie: false })).headers['set-cookie'][0].split(';')[0];
+  const G = (m, u, b) => S.call(m, u, b, { cookie: ck });
+  const draft = { name: '新任务（正在准备资料）', description: '还没开始的新任务，正在上传资料。', roles: [{ roleId: 'drafter', name: '起草员' }], steps: [{ stepId: 'draft', roleId: 'drafter', title: '写出初稿' }] };
+  // slow request bodies: every request is in flight before any of them is written
+  const net = require('node:net'), slowPost = (path, obj) => new Promise((resolve, reject) => {
+    const body = Buffer.from(JSON.stringify(obj)), sock = net.connect(S.port, '127.0.0.1');
+    let raw = ''; sock.on('data', d => raw += d); sock.on('error', reject);
+    sock.on('end', () => resolve({ status: Number((/^HTTP\/1\.1 (\d+)/.exec(raw) || [])[1]), text: (b => b.slice(b.indexOf('{'), b.lastIndexOf('}') + 1))(raw.slice(raw.indexOf('\r\n\r\n') + 4)) })); // the JSON object of a (possibly chunked) body
+    sock.write(`POST ${path} HTTP/1.1\r\nHost: 127.0.0.1:${S.port}\r\nOrigin: http://127.0.0.1:${S.port}\r\nCookie: ${ck}\r\nContent-Type: application/json\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n`);
+    sock.write(body.subarray(0, 10)); setTimeout(() => sock.write(body.subarray(10)), 300);
+  });
+  const made = await Promise.all(Array.from({ length: 25 }, () => slowPost('/api/v2/projects', draft)));
+  assert.equal(made.filter(r => r.status === 201).length, 20, made.map(r => r.status).join(','));
+  assert.ok(made.filter(r => r.status !== 201).every(r => r.status === 429 && /draft_limit/.test(r.text)));
+  assert.equal((await G('GET', '/api/v2/projects')).json.projects.length, 20, 'nothing extra written');
+  // storage: fill the user's materials to 256 MB - 30 KB, then upload 5 PDFs (12 KB each) at once: at most 2 fit
+  const [pid, fillPid] = made.filter(r => r.status === 201).slice(0, 2).map(r => JSON.parse(r.text).project.projectId); // filler in another draft (a project alone is capped at 64 MB)
+  const fs = require('node:fs'), path = require('node:path'), X = require('../lib/file-extract');
+  if (!X.pdfAvailable()) return t.skip('pdftotext not installed (the race needs an asynchronous extractor)');
+  const pdf = fs.readFileSync(path.join(__dirname, 'fixtures', 'files', 'brief.pdf'));
+  await S.kill();
+  const { DatabaseSync } = require('node:sqlite'), db = new DatabaseSync(path.join(S.dir, 'projects.sqlite'));
+  const filler = 256 * 1024 * 1024 - 30 * 1024;
+  db.prepare("INSERT INTO project_files VALUES('fil_000000000000000000000001',?,?,?,?,zeroblob(?),'')").run(fillPid, Date.now(), '0'.repeat(64), JSON.stringify({ fileId: 'fil_000000000000000000000001', projectId: fillPid, filename: '填充.txt', kind: 'text', bytes: filler, extraction: { status: 'ok', chars: 0 } }), filler);
+  db.close();
+  const S2 = await H.boot({ dir: S.dir }); t.after(() => S2.kill());
+  const ck2 = (await S2.call('POST', '/api/auth/user-login', { username: 'gina', password: PASS }, { cookie: false })).headers['set-cookie'][0].split(';')[0];
+  const up = await Promise.all(Array.from({ length: 5 }, (_, i) => S2.call('POST', `/api/v2/projects/${pid}/files`, { filename: `b${i}.pdf`, contentBase64: pdf.toString('base64') }, { cookie: ck2 })));
+  const ok = up.filter(r => r.status === 201).length;
+  assert.equal(ok, Math.floor(30 * 1024 / pdf.length), up.map(r => r.status).join(','));
+  assert.ok(up.filter(r => r.status !== 201).every(r => r.status === 413 && r.json.code === 'storage_limit'));
+  const db2 = new DatabaseSync(path.join(S.dir, 'projects.sqlite'), { readOnly: true });
+  const total = Number(db2.prepare('SELECT SUM(length(content)) b FROM project_files f JOIN projects p ON p.id=f.project_id WHERE p.owner_id=(SELECT id FROM users WHERE username=?)').get('gina').b);
+  db2.close();
+  assert.ok(total <= 256 * 1024 * 1024, 'stored ' + total + ' bytes');
+});
