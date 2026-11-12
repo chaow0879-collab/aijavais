@@ -99,7 +99,7 @@ MCP 支持 stdio（管理员配置文件）与远程 Streamable HTTP（网页添
 
 ## 动态团队草案（工作单元2）
 
-`lib/budget.js`是ProjectEngine与IntakeDraftService共用的模型授权/预留/结算策略，持久化由各调用方负责。`POST /api/v2/intake/ai-draft`只调用一次已测模型，严格白名单JSON后返回可编辑项目数据；它没有工具权限，也不创建项目。system_usage先持久预留再更新同一行，未知远程费用null、保守budgetCost另列。前端单独批准调用，编辑后另行确认保存；执行仍由工作台另行授权。schema v4增加持久幂等状态表；claim+预留、单次结算分别事务提交，网络前先提交dispatching；启动在DATA锁下保守恢复、不重放。旧版所有可识别ID有通配墓碑，历史账单完整保留。管理员只读异常查询与能力中心提示，详见LEDGER-RECOVERY.md和AI-DRAFT.md。
+`lib/budget.js`是ProjectEngine与IntakeDraftService共用的模型授权/预留/结算策略，持久化由各调用方负责。`POST /api/v2/intake/ai-draft`只调用一次已测模型，严格白名单JSON后返回可编辑项目数据；它没有工具权限，也不创建项目。system_usage先持久预留再更新同一行，未知远程费用null、保守budgetCost另列。前端单独批准调用，编辑后另行确认保存；执行仍由工作台另行授权。schema v4增加持久幂等状态表；claim+预留、单次结算分别事务提交，网络前先提交dispatching；启动在DATA锁下保守恢复、不重放。旧版所有可识别ID有通配墓碑，历史账单完整保留。管理员只读异常查询与能力中心提示，详见 DEPLOYMENT.md 中“#6 + #8 持久请求与异常账本设计”一节和本文“工作单元2：动态AI团队草案”一节（原 LEDGER-RECOVERY.md、AI-DRAFT.md）。
 
 ---
 
@@ -118,7 +118,7 @@ MCP 支持 stdio（管理员配置文件）与远程 Streamable HTTP（网页添
 - `reserveCall`：按UTF-8输入字节+256、输出上限保守预留；不够则不发送请求，目标变化也会阻断。
 - `settleCall`：完整厂商用量、部分用量、估算和未知分别处理。未知保守消耗预算；总量、分项或费用超上界会停止。
 
-这些是纯策略函数。ProjectEngine在事务中保存运行账本；草案在schema v4通过model_requests和system_usage原子占位与预留，两处不复制授权或计费规则。状态机及迁移见[LEDGER-RECOVERY](LEDGER-RECOVERY.md)。
+这些是纯策略函数。ProjectEngine在事务中保存运行账本；草案在schema v4通过model_requests和system_usage原子占位与预留，两处不复制授权或计费规则。状态机及迁移见[LEDGER-RECOVERY](DEPLOYMENT.md)。
 
 ### 接口
 

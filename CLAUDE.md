@@ -101,4 +101,4 @@ Skill 是版本化 prompt/tool/check 配方，不能执行任意脚本。工具�
 
 第十轮安全约束：草案请求按owner+kind+requestId永久占位，摘要绑定规范化参数与模型目标。claim和费用预留同事务；网络前必须提交dispatching；一次ledgerId仅结算一次。启动恢复claimed可证明未调用记0；dispatching和v3无证据预留按未知费用null保留上界，不重放。旧ID迁移为通配墓碑，不能清理后复用。管理员只读异常查询`GET /api/v2/usage/system/exceptions`，能力中心显示警示。无人工改账写接口。
 
-本轮不修#7取消底层Promise生命周期或#9。`abortable/close`行为仍有独立待整改P1，不将此交付当全部安全门禁通过。恢复算法仅启动时在DATA锁下调用，不得针对活跃请求手动调用恢复。迁移后有新请求时，不可丢失v4墓碑回滚旧备份再开放服务。完整状态机、迁移/回滚和核对步骤见[LEDGER-RECOVERY](docs/LEDGER-RECOVERY.md)。
+本轮不修#7取消底层Promise生命周期或#9。`abortable/close`行为仍有独立待整改P1，不将此交付当全部安全门禁通过。恢复算法仅启动时在DATA锁下调用，不得针对活跃请求手动调用恢复。迁移后有新请求时，不可丢失v4墓碑回滚旧备份再开放服务。完整状态机、迁移/回滚和核对步骤见[LEDGER-RECOVERY](docs/DEPLOYMENT.md)。

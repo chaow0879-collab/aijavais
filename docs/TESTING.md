@@ -34,7 +34,7 @@ npm run test:workspace
 | `tests/regression-guard.test.js` | M5 | 旧P1测试存在性/断言数、生产代码环境钩子白名单 |
 | `npm run test:industry`（`tests/ui/industry.e2e.js`） | M5 | Chromium三行业人工审批流程 |
 
-重跑说明与产物见 [TESTING 中的“INDUSTRY-MOCK-RUNBOOK”一节](TESTING.md)；备份运维见 [BACKUP-OPERATIONS.md](BACKUP-OPERATIONS.md)。全部为本地Mock，真实厂商/生产 NOT_RUN。
+重跑说明与产物见 [TESTING 中的“INDUSTRY-MOCK-RUNBOOK”一节](TESTING.md)；备份运维见 [DEPLOYMENT 中的“BACKUP-OPERATIONS”一节](DEPLOYMENT.md)。全部为本地Mock，真实厂商/生产 NOT_RUN。
 
 ## 第十轮 #6 + #8 本地验证（Codex，2026-11-05）
 
@@ -47,7 +47,7 @@ npm run test:workspace
 
 关键派发证据：同ID并发总数1；服务成功/失败/未结算各重启后仍1；1001个后续请求后总数1002、重试增量0；SIGKILL claimed/dispatching标记后尚未调用/实际调用三个窗口分别0/0/1，恢复增量0；真实服务器已发送Mock HTTP后强杀，恢复后总数1；草案E2E共4次Mock派发，409重试和只读查询增量0。跨owner同ID为两个独立授权请求，总数2。
 
-真实厂商API/收费账单/生产迁移/生产重启/部署均NOT_RUN；MCP、Office、隔离执行仅既有fixture与临时进程回归，未启用生产代码执行。本轮不是#7或全部P1验收。迁移与回滚门禁见[LEDGER-RECOVERY](LEDGER-RECOVERY.md)。
+真实厂商API/收费账单/生产迁移/生产重启/部署均NOT_RUN；MCP、Office、隔离执行仅既有fixture与临时进程回归，未启用生产代码执行。本轮不是#7或全部P1验收。迁移与回滚门禁见[LEDGER-RECOVERY](DEPLOYMENT.md)。
 
 ## 当前检查点结果（2026-11-05，Claude Code 接力）
 
