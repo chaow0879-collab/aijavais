@@ -34,6 +34,9 @@ const PASS = 'user-password-123';
   const shot = async (page, name) => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, 'b8-' + name + '.png'), fullPage: false }); } };
   const visibleBackendLinks = page => page.evaluate(() => [...document.querySelectorAll('a,button')].filter(n => n.offsetParent !== null || getComputedStyle(n).position === 'fixed')
     .filter(n => /admin|capabilities|project-intake/.test(n.getAttribute('href') || '') || /模型设置|管理中心|能力中心|智能立项|高级设置|管理后台/.test(n.textContent)).map(n => n.textContent.trim() || n.getAttribute('href')));
+  /* QA-B8-01: a user never reads back-end words anywhere on the page (footer, empty list, errors) */
+  const BACKEND_WORDS = /管理中心|智能立项|能力中心|密钥|模型设置|管理后台|高级设置/;
+  const backendWords = async page => (await page.innerText('body')).match(new RegExp(BACKEND_WORDS.source, 'g')) || [];
   try {
     /* ---------------- admin: separate back-end login ---------------- */
     const ac = await browser.newContext({ viewport: { width: 1280, height: 860 } }), ap = await ac.newPage();
@@ -82,12 +85,14 @@ const PASS = 'user-password-123';
     assert.deepEqual(entries, ['我的任务', '＋ 新建任务', '实时大屏', '退出']);
     await up.waitForSelector('#home:not([hidden])');
     assert.deepEqual(await visibleBackendLinks(up), [], 'no back-end entry on the task center');
+    assert.deepEqual(await backendWords(up), [], 'QA-B8-01: no back-end words on the task center');
     await shot(up, '2-user-home');
     ok('user: front login with username; top bar only 我的任务 / ＋ 新建任务 / 实时大屏 / 退出; no back-end entry');
 
     /* user creates a task end to end (free local mock) */
     await up.click('#aij-new'); await up.waitForSelector('#s-go');
     assert.deepEqual(await visibleBackendLinks(up), [], 'no back-end entry on the new-task form');
+    assert.deepEqual(await backendWords(up), [], 'QA-B8-01: no back-end words on the new-task form');
     await up.fill('#s-goal', '给社区咖啡店写一份周末促销方案');
     await up.click('#s-go');
     await up.waitForSelector('#s-confirm[open]');
@@ -95,6 +100,7 @@ const PASS = 'user-password-123';
     await up.click('#s-confirm-ok');
     await up.waitForSelector('#s-result:not([hidden])', { timeout: 30000 });
     assert.deepEqual(await visibleBackendLinks(up), [], 'no back-end entry on the progress page');
+    assert.deepEqual(await backendWords(up), [], 'QA-B8-01: no back-end words on the progress page');
     await shot(up, '3-user-result');
     ok('user: new task → RMB confirmation (with remaining monthly quota) → result, all in the front end');
 
@@ -113,6 +119,8 @@ const PASS = 'user-password-123';
     const lc = await browser.newContext({ viewport: { width: 1280, height: 860 } }), lp = await lc.newPage();
     await lp.goto(base + '/login.html'); await lp.fill('#un', 'xiaoli'); await lp.fill('#upw', PASS); await lp.click('#userBtn');
     await lp.waitForURL(/\/workspace\.html/); await lp.waitForSelector('#home-empty:not([hidden])');
+    await lp.waitForFunction(() => /还没有任务/.test(document.querySelector('#projects')?.textContent || ''));
+    assert.deepEqual(await backendWords(lp), [], 'QA-B8-01: empty task list does not point to 智能立项');
     assert.doesNotMatch(await lp.innerText('body'), /咖啡店/);
     ok('two users: the second user sees an empty task list, not the first user\'s task');
 

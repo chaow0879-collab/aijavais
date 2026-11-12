@@ -211,7 +211,7 @@
   const TASK_STATE={running:'进行中',review:'需要你处理',stopped:'已停下',done:'已完成',draft:'草稿'};
   function renderProjectList() {
     const target=$('projects');target.replaceChildren();
-    if(!state.projects.length)target.append(node('p',{class:'empty',text:'还没有项目。从智能立项开始，或点击新建。'}));
+    if(!state.projects.length)target.append(node('p',{class:'empty',text:document.body.dataset.role==='user'?'还没有任务。点上面的“＋ 新建任务”开始。':'还没有项目。从智能立项开始，或点击新建。'}));// QA-B8-01: users cannot open 智能立项
     for(const project of state.projects){
       const task=(state.tasks||[]).find(t=>t.projectId===project.projectId);
       const open=()=>{if(task&&task.runId&&document.body.dataset.mode!=='advanced'){location.assign('/workspace.html?run='+encodeURIComponent(task.runId));return;}if(document.body.dataset.role==='user'){location.assign('/workspace.html?new=1');return;}return openProject(project.projectId);};

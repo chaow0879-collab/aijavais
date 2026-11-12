@@ -41,8 +41,11 @@
   /* B5-2：普通用户不被赶去管理中心。模型不能用时，在当前页一键换成其它可用模型；
    * 只有一个可用模型都没有时，才提示“请管理员添加模型”。 */
   const pool = () => S.models.filter(m => !S.excluded.has(m.connectionId));
+  /* QA-B8-01：使用者看不到后台、密钥、管理中心这些字；模型的问题统一说“请联系管理员” */
+  const forUser = text => document.body.dataset.role !== 'user' || !/密钥|管理中心|添加一个模型/.test(text) ? text
+    : /还没有可用的模型/.test(text) ? '管理员还没有准备好可用的模型，现在还不能开始任务，请联系管理员。' : '所选的模型现在不能用，请联系管理员检查。';
   function showError(box, info, retry, ctx = {}) {
-    box.replaceChildren(el('div', { text: info.text }));
+    box.replaceChildren(el('div', { text: forUser(info.text) }));
     const fix = info.fix;
     if (fix && fix.action === 'fix_model') {
       const others = window.SmartPlan.usable(pool()).filter(m => m.connectionId !== ctx.connectionId);

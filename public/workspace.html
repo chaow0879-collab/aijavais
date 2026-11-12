@@ -119,7 +119,7 @@
     </section>
     <section id="panel-resources" role="tabpanel" aria-labelledby="tab-resources" hidden><div class="grid"><div class="card"><h2>工具注册表</h2><p class="hint">只展示服务端实际注册的工具。使用前需要加入项目白名单；MCP 工具的连接与调用结果会单独记录。</p><div class="toolbar"><button id="discover-tools" type="button">发现已配置 MCP 工具</button></div><div id="tools-list"></div></div><div class="card"><h2>Skills 执行规范</h2><p class="hint">Skill 将明确的指令和工具权限绑定到执行步骤，不能绕过项目费用和工具限制。</p><div id="skills-list"></div></div></div><details class="card"><summary>注册自定义 Skill（高级）</summary><p class="hint">先查看现有 Skill 的结构；提交后由服务端验证，不会自动执行。</p><label for="skill-json">Skill JSON</label><textarea id="skill-json" rows="8" spellcheck="false">{"skillId":"custom-review","name":"证据审核","version":"1.0.0","description":"逐项检查结论与交付标准","steps":[{"type":"prompt","text":"逐项检查结论与交付标准，并列出可核查证据。"},{"type":"check","check":"nonempty"}]}</textarea><div class="toolbar"><button id="save-skill" type="button">注册 Skill</button></div></details></section>
     </div>
-    <footer>AIJAVAIS · 实际状态以服务端记录为准 · 密钥只在管理中心配置</footer>
+    <footer>AIJAVAIS · 实际状态以服务端记录为准<span class="admin-only"> · 密钥只在管理中心配置</span></footer>
   </main>
 </div>
 </body></html>
