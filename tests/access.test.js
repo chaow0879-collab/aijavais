@@ -143,10 +143,17 @@ test('未登录：所有页面跳登录页，所有工作数据接口 401，SSE 
   const S = await H.boot({ login: false });
   t.after(S.stop);
   const anon = (m, u, b, o = {}) => H.call(S.port, m, u, b, { cookie: false, ...o });
-  for (const u of ['/', '/panel.html', '/admin.html', '/admin']) {
+  for (const u of ['/', '/panel.html', '/workspace.html']) {
     const r = await anon('GET', u);
     assert.equal(r.status, 302, u); assert.match(r.headers.location, /^\/login\.html\?next=/);
   }
+  // B8: back-end pages send the visitor to the separate admin login page
+  for (const u of ['/admin.html', '/admin', '/capabilities.html', '/project-intake.html']) {
+    const r = await anon('GET', u);
+    assert.equal(r.status, 302, u); assert.match(r.headers.location, /^\/admin-login\.html\?next=/);
+  }
+  assert.equal((await anon('GET', '/admin-login.html')).status, 200);
+  assert.equal((await anon('GET', '/admin/login')).headers.location, '/admin-login.html');
   assert.equal((await anon('GET', '/audio/sw421k.mp3')).status, 401);
   assert.equal((await anon('GET', '/login.html')).status, 200);
   for (const [m, u] of [['GET', '/api/state'], ['GET', '/api/config'], ['GET', '/api/models'], ['GET', '/api/runs'], ['GET', '/api/teams'], ['POST', '/api/run'], ['GET', '/api/runs/abc/artifacts'], ['POST', '/api/models/discover'], ['GET', '/api/ingest-tokens'], ['POST', '/api/demo'], ['POST', '/api/event']]) {

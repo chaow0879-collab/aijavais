@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- AIJAVAIS 登录页。视觉沿用 HALOFLUX（Copyright (c) 2026 Ryder191，PolyForm Noncommercial 1.0.0）的配色风格。 -->
+<!-- AIJAVAIS 前台登录页（B8：使用者账号，用户名 + 密码；管理员走 /admin-login.html）。视觉沿用 HALOFLUX（Copyright (c) 2026 Ryder191，PolyForm Noncommercial 1.0.0）的配色风格。 -->
 <html lang="zh-CN">
 <head>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%2398e0cf' stroke-width='3'/%3E%3C/svg%3E">
@@ -21,66 +21,45 @@ button{width:100%;margin-top:18px;font:inherit;font-weight:700;background:#cfd2d
 button:disabled{opacity:.5;cursor:default}
 .msg{min-height:20px;margin-top:12px;font-size:12px}
 .bad{color:var(--red)}.ok{color:var(--teal)}.warn{color:var(--gold)}
-.note{color:var(--dim);font-size:11px;margin-top:14px}
+.note{color:var(--dim);font-size:11px;margin-top:14px}.note a{color:var(--teal)}
 .hidden{display:none}
 </style>
 </head>
 <body>
 <div class="box">
   <h1>AIJAVAIS</h1>
-  <div class="sub" id="sub">个人 AI 团队工作平台</div>
+  <div class="sub" id="sub">登录后在这里新建任务、查看进度、下载成果</div>
 
-  <form id="loginForm" class="hidden" autocomplete="on">
-    <label for="pw">管理员密码</label>
-    <input id="pw" type="password" autocomplete="current-password" required autofocus>
-    <button id="loginBtn" type="submit">登录</button>
-  </form>
-
-  <form id="setupForm" class="hidden" autocomplete="off">
-    <p class="warn" style="font-size:12px;margin:0">首次使用：请设置管理员密码。</p>
-    <label for="code">一次性设置码（请向管理员获取）</label>
-    <details class="note"><summary>我是管理员，设置码在哪？</summary>服务器启动窗口会显示设置码，也保存在服务器数据目录的 <code>setup-code.txt</code> 文件里。</details>
-    <input id="code" placeholder="XXXX-XXXX-XXXX" required>
-    <label for="np">新密码（至少 10 个字符）</label>
-    <input id="np" type="password" autocomplete="new-password" required minlength="10">
-    <label for="np2">再输入一次</label>
-    <input id="np2" type="password" autocomplete="new-password" required minlength="10">
-    <button id="setupBtn" type="submit">设置密码并登录</button>
+  <form id="userForm" autocomplete="on">
+    <label for="un">用户名</label>
+    <input id="un" autocomplete="username" required autofocus maxlength="32">
+    <label for="upw">密码</label>
+    <input id="upw" type="password" autocomplete="current-password" required maxlength="200">
+    <button id="userBtn" type="submit">登录</button>
   </form>
 
   <div class="msg" id="msg"></div>
   <p class="note" id="httpsNote"></p>
-  <details class="note"><summary>忘记密码？</summary>请管理员在服务器本机运行 <code>node tools/reset-password.js --yes</code>，再用新的设置码重新设置。</details>
+  <p class="note">忘记密码或还没有账号？请联系管理员。</p>
+  <p class="note">管理员请到 <a href="/admin-login.html" id="to-admin">管理后台登录</a>。</p>
 </div>
 <script>
 const $ = s => document.querySelector(s);
 const next = (() => { const n = new URLSearchParams(location.search).get('next') || '/workspace.html'; return /^\/(?!\/)[\w./-]*$/.test(n) ? n : '/workspace.html'; })();
 const msg = (t, c = 'bad') => { $('#msg').className = 'msg ' + c; $('#msg').textContent = t; };
-async function post(url, body) {
-  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), credentials: 'same-origin' });
-  return { ok: r.ok, j: await r.json().catch(() => ({})) };
-}
 (async () => {
   const s = await fetch('/api/auth/status', { credentials: 'same-origin' }).then(r => r.json()).catch(() => null);
   if (!s) return msg('无法连接服务器');
-  if (s.loggedIn && s.kind === 'admin') return location.replace(next);
+  if (s.loggedIn && (s.kind === 'user' || s.kind === 'admin')) return location.replace(next);
+  if (!s.setup) msg('系统还没有完成初始设置，请管理员先到管理后台设置密码。', 'warn');
   if (!s.https && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') $('#httpsNote').innerHTML = '<span class="bad">当前连接未加密（HTTP），密码可能被同一网络中的人截获。公网使用请启用 HTTPS。</span>';
-  $(s.setup ? '#loginForm' : '#setupForm').classList.remove('hidden');
-  (s.setup ? $('#pw') : $('#code')).focus();
 })();
-$('#loginForm').addEventListener('submit', async e => {
-  e.preventDefault(); $('#loginBtn').disabled = true; msg('');
-  const { ok, j } = await post('/api/auth/login', { password: $('#pw').value });
-  $('#loginBtn').disabled = false;
-  if (ok) { msg('登录成功', 'ok'); location.replace(next); } else { msg(j.error || '登录失败'); $('#pw').select(); }
-});
-$('#setupForm').addEventListener('submit', async e => {
-  e.preventDefault(); msg('');
-  if ($('#np').value !== $('#np2').value) return msg('两次输入的密码不一致');
-  $('#setupBtn').disabled = true;
-  const { ok, j } = await post('/api/auth/setup', { code: $('#code').value, password: $('#np').value });
-  $('#setupBtn').disabled = false;
-  if (ok) { msg('已设置，正在进入…', 'ok'); location.replace(next); } else msg(j.error || '设置失败');
+$('#userForm').addEventListener('submit', async e => {
+  e.preventDefault(); $('#userBtn').disabled = true; msg('');
+  const r = await fetch('/api/auth/user-login', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ username: $('#un').value, password: $('#upw').value }) });
+  const j = await r.json().catch(() => ({}));
+  $('#userBtn').disabled = false;
+  if (r.ok) { msg('登录成功', 'ok'); location.replace(next); } else { msg(j.error || '登录失败'); $('#upw').select(); }
 });
 </script>
 </body>

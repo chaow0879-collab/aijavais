@@ -114,6 +114,7 @@ if (process.env.ADMIN_TOKEN) console.log('  注意：ADMIN_TOKEN 已不再生效
 const access = ACC.createAccess({
   auth, trustProxy: TRUST_PROXY, localIngest: process.env.AIJ_LOCAL_INGEST === '1',
   ingestTokens: () => (ENV_INGEST ? [ENV_INGEST, ...cfg.ingestTokens] : cfg.ingestTokens),
+  userActive: userId => !!(v2 && v2.users.active(userId)), // B8: a disabled/deleted user is logged out on the next request
 });
 /* ------------------------------------------------------------------ 模型注册中心（lib/models.js） */
 const readJson = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
@@ -764,6 +765,8 @@ async function discoverModels(b) {
 const slug = s => (String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ai').slice(0, 24);
 
 v2 = createV2Api({ dir: DATA, models, teams, callModel,
+  onUserRevoke: (userId, reason) => { auth.revokeUser(userId, reason); dropRevokedStreams(); },
+  frontSettings: () => ({ simpleRunCapCny: cfg.settings.simpleRunCapCny }),
   emit: event => {
     const line = 'data: ' + JSON.stringify({ ...event, type: 'v2' }) + '\n\n';
     // Project/tool payloads are administrator-only. The existing visual adapter
@@ -810,7 +813,18 @@ async function api(req, res, url) {
   /* ---------------- 公开接口：只有登录状态、首次设置、登录 ---------------- */
   if (p === '/api/auth/status' && m === 'GET') {
     const w = access.identify(req);
-    return json(res, 200, { setup: auth.isSetup(), loggedIn: w.kind === 'admin' || w.kind === 'display', kind: w.kind === 'admin' || w.kind === 'display' ? w.kind : null, https: isHttps(req), production: PROD });
+    const known = ['admin', 'display', 'user'].includes(w.kind);
+    return json(res, 200, { setup: auth.isSetup(), loggedIn: known, kind: known ? w.kind : null, ...(w.kind === 'user' ? { username: v2.users.get(w.userId)?.username || '' } : {}), https: isHttps(req), production: PROD });
+  }
+  /* B8 前台登录：使用者用户名 + 密码（与管理员登录分开；同一套失败限流） */
+  if (p === '/api/auth/user-login' && m === 'POST') {
+    if (loginLocked(ip)) return json(res, 429, { error: '尝试次数过多，请 15 分钟后再试' });
+    const b = await readBody(req, 4096);
+    const u = await v2.users.authenticate(b.username, b.password);
+    if (!u) { loginFailed(ip); auth.audit('user_login_failed', meta); return json(res, 401, { error: '用户名或密码不正确，或者账号已停用' }); }
+    const { token, session } = auth.createSession('user', { ...meta, userId: u.userId });
+    res.setHeader('set-cookie', sessionCookie(req, token, Math.floor((session.expiresAt - Date.now()) / 1000)));
+    return json(res, 200, { ok: true, kind: 'user', username: u.username });
   }
   if ((p === '/api/auth/setup' || p === '/api/auth/login') && m === 'POST') {
     if (loginLocked(ip)) return json(res, 429, { error: '尝试次数过多，请 15 分钟后再试' });
@@ -843,7 +857,7 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true, eventId: r.eventId, ...(r.duplicate ? { duplicate: true } : {}) });
   }
   if (who.kind === 'ingest' || who.kind === 'local') return json(res, 403, { error: '上报凭证只能用于 POST /api/event' });
-  if (who.kind !== 'admin' && who.kind !== 'display') return json(res, 401, { error: '请先登录', login: '/login.html' });
+  if (who.kind !== 'admin' && who.kind !== 'display' && who.kind !== 'user') return json(res, 401, { error: '请先登录', login: '/login.html' });
 
   /* ---------------- 已登录：大屏观看会话只能看事件流与状态 ---------------- */
   if (p === '/api/auth/logout' && m === 'POST') {
@@ -861,6 +875,11 @@ async function api(req, res, url) {
     clients.add(res);
     req.on('close', () => clients.delete(res));
     return;
+  }
+  /* B8: a front-end user reaches only the owner-checked /api/v2 front routes; every other interface is the admin back end */
+  if (who.kind === 'user') {
+    if (p.startsWith('/api/v2/') && await v2.handle(req, res, url, { readBody, json, user: PERM.userFromPrincipal(who) })) return;
+    return json(res, 403, { error: '这是管理后台功能，使用者账号不能访问', code: 'admin_only' });
   }
   if (who.kind !== 'admin') return json(res, 403, { error: '大屏观看会话不能访问工作台数据' });
   const user = PERM.userFromPrincipal(who);
@@ -1179,7 +1198,11 @@ async function api(req, res, url) {
   return json(res, 404, { error: '未知接口' });
 }
 
-const PUBLIC_PAGES = new Set(['/login.html']);
+const PUBLIC_PAGES = new Set(['/login.html', '/admin-login.html']);
+/* B8: the only pages a front-end user may open; every other page (admin.html, capabilities, intake wizard, old workbench) is the back end */
+const USER_PAGES = new Set(['/workspace.html', '/panel.html']);
+const BACKEND_ASSETS = ['/capabilities.js', '/project-intake/', '/haloflux-workbench-r52/'];
+const isBackendPath = pth => (/\.html$/.test(pth) && !USER_PAGES.has(pth) && !PUBLIC_PAGES.has(pth)) || BACKEND_ASSETS.some(x => x.endsWith('/') ? pth.startsWith(x) : pth === x);
 function serveStatic(req, res, url) {
   const ip = access.clientIp(req);
   /* 大屏观看链接：一次性令牌换只读会话 Cookie，并去掉地址栏里的令牌 */
@@ -1195,14 +1218,18 @@ function serveStatic(req, res, url) {
   let pth = url.pathname;
   /* B5-1: an administrator's home is "my tasks" (workspace task center); a read-only display session and
    * the login redirect keep the HALOFLUX screen at /, which stays reachable at /panel.html for everyone allowed. */
-  if (pth === '/' && access.identify(req).kind === 'admin') { res.writeHead(302, { location: '/workspace.html', 'cache-control': 'no-store' }); return res.end(); }
+  if (pth === '/' && ['admin', 'user'].includes(access.identify(req).kind)) { res.writeHead(302, { location: '/workspace.html', 'cache-control': 'no-store' }); return res.end(); }
+  if (pth === '/admin/login' || pth === '/admin/login/') { res.writeHead(302, { location: '/admin-login.html' + url.search, 'cache-control': 'no-store' }); return res.end(); }
   if (pth === '/') pth = '/panel.html';
   if (pth === '/admin') pth = '/admin.html';
   if (!PUBLIC_PAGES.has(pth)) {
     const who = access.identify(req);
-    const ok = pth === '/admin.html' ? who.kind === 'admin' : (who.kind === 'admin' || who.kind === 'display');
+    /* B8: back-end pages and their scripts answer 403 to a front-end user (logged in, but not allowed) */
+    if (who.kind === 'user' && isBackendPath(pth)) { res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('这是管理后台，使用者账号不能访问'); }
+    const ok = pth === '/admin.html' ? who.kind === 'admin' : (who.kind === 'admin' || who.kind === 'display' || who.kind === 'user');
     if (!ok) {
-      if (/\.html$/.test(pth)) { res.writeHead(302, { location: '/login.html?next=' + encodeURIComponent(pth === '/panel.html' ? '/' : pth), 'cache-control': 'no-store' }); return res.end(); }
+      const backend = pth === '/admin.html' || isBackendPath(pth);
+      if (/\.html$/.test(pth)) { res.writeHead(302, { location: (backend ? '/admin-login.html' : '/login.html') + '?next=' + encodeURIComponent(pth === '/panel.html' ? '/' : pth), 'cache-control': 'no-store' }); return res.end(); }
       res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('请先登录');
     }
   }
