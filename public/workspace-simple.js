@@ -110,8 +110,9 @@
       if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: p.estimatedNote }));
       body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : '¥0.00') + '（估算，以厂商账单为准）。' }));
       if (S.me && S.me.kind === 'user') body.append(el('p', { className: 'hint', id: 's-confirm-quota', text: '你本月额度还剩 ¥' + (Number(S.me.month.remainingCny) || 0).toFixed(2) + '（每月上限 ¥' + (Number(S.me.month.capCny) || 0).toFixed(2) + '，由管理员设置）。' }));
-      if (!p.isRework && !(S.me && S.me.kind === 'user')) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
-      else body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' }));
+      // QA-B8-02: the rework sentence belongs to a rework only; a user's models are already tested, so no connection-check sentence
+      if (p.isRework) body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' }));
+      else if (!(S.me && S.me.kind === 'user')) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
       $('s-confirm-title').textContent = p.isRework ? '确认修改' : '确认开始';
       const done = ok => { dlg.close(); resolve(ok ? (document.querySelector('input[name=s-choice]:checked')?.value || 'quality') : null); };
       $('s-confirm-ok').onclick = () => done(true); $('s-confirm-cancel').onclick = () => done(false);

@@ -97,6 +97,7 @@ const PASS = 'user-password-123';
     await up.click('#s-go');
     await up.waitForSelector('#s-confirm[open]');
     assert.match(await up.innerText('#s-confirm'), /你本月额度还剩 ¥5\.00（每月上限 ¥5\.00，由管理员设置）/);
+    assert.doesNotMatch(await up.innerText('#s-confirm'), /只重做/, 'QA-B8-02: no rework sentence when confirming a new task');
     await up.click('#s-confirm-ok');
     await up.waitForSelector('#s-result:not([hidden])', { timeout: 30000 });
     assert.deepEqual(await visibleBackendLinks(up), [], 'no back-end entry on the progress page');
@@ -143,6 +144,7 @@ const PASS = 'user-password-123';
     await up.click('#s-rework'); await up.fill('#s-rework-text', '再精炼一些，突出会员福利'); await up.click('#s-rework-go');
     await up.waitForSelector('#s-confirm[open]');
     assert.match(await up.innerText('#s-confirm'), /你本月额度还剩 ¥5\.00/);
+    assert.match(await up.innerText('#s-confirm'), /只重做“审核并定稿”这一步/, 'the rework confirmation keeps its own sentence');
     await up.click('#s-confirm-ok');
     let reworkRun;
     for (let i = 0; i < 100; i++) { reworkRun = (await app.call('GET', '/api/v2/runs/' + oldRun)).json.run; if (reworkRun.round === 2 && reworkRun.executionActive) break; await new Promise(r => setTimeout(r, 50)); }
