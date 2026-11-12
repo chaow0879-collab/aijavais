@@ -9,6 +9,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
+const { DatabaseSync } = require('node:sqlite');
 const H = require('../helpers');
 
 const SHOTS = process.env.UI_SHOTS || null;
@@ -16,12 +17,13 @@ const results = [];
 const ok = name => { results.push(name); console.log('PASS', name); };
 const PASS = 'user-password-123';
 (async () => {
+  let hold = false; const held = [];
   const mock = http.createServer((req, res) => {
     let body = ''; req.on('data', c => body += c); req.on('end', () => {
       const j = JSON.parse(body || '{}');
       const reply = j.max_tokens <= 32 ? '好' : '周末促销方案：一、活动主题；二、优惠内容；三、宣传渠道；四、预算与分工。内容完整，可以直接使用。';
-      res.writeHead(200, { 'content-type': 'text/event-stream' });
-      res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n');
+      const send = () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n'); };
+      if (hold && j.max_tokens > 32) held.push(send); else send(); // AUD-C159-01 case keeps a rework round running
     });
   });
   await new Promise(r => mock.listen(0, '127.0.0.1', r));
@@ -114,6 +116,42 @@ const PASS = 'user-password-123';
     assert.doesNotMatch(await lp.innerText('body'), /咖啡店/);
     ok('two users: the second user sees an empty task list, not the first user\'s task');
 
+    /* AUD-C159-01: a paid run created (and billed) last month, reworked now, counts in this month:
+     * the new-task confirmation shows the remaining quota reduced by the rework round's approved ceiling */
+    await app.call('POST', '/api/models/' + localId + '/disable', {}); await app.call('POST', '/api/models/' + paidId + '/enable', {});
+    await up.goto(base + '/workspace.html?new=1'); await up.waitForSelector('#s-go');
+    await up.fill('#s-goal', '写一份会员招募文案'); await up.click('#s-go');
+    await up.waitForSelector('#s-confirm[open]'); await up.click('#s-confirm-ok');
+    await up.waitForSelector('#s-result:not([hidden])', { timeout: 30000 });
+    const oldRun = (await app.call('GET', '/api/v2/tasks')).json.tasks.find(x => x.name === '写一份会员招募文案').runId;
+    const lastMonth = require('../../lib/users').monthStart(Date.now()) - 10 * 86400e3;
+    const db = new DatabaseSync(path.join(app.dir, 'projects.sqlite')); db.exec('PRAGMA busy_timeout=5000');
+    db.prepare("UPDATE runs SET created_at=?, doc=json_set(doc,'$.createdAt',?) WHERE id=?").run(lastMonth, lastMonth, oldRun);
+    db.prepare("UPDATE usage_ledger SET created_at=?, doc=json_set(doc,'$.createdAt',?) WHERE run_id=?").run(lastMonth, lastMonth, oldRun);
+    db.close();
+    const wangSpent = async () => (await app.call('GET', '/api/v2/users')).json.users.find(u => u.username === 'xiaowang').month.spentCny;
+    assert.equal(await wangSpent(), 0, 'last month\'s billing is not this month\'s');
+    hold = true;
+    await up.click('#s-rework'); await up.fill('#s-rework-text', '再精炼一些，突出会员福利'); await up.click('#s-rework-go');
+    await up.waitForSelector('#s-confirm[open]');
+    assert.match(await up.innerText('#s-confirm'), /你本月额度还剩 ¥5\.00/);
+    await up.click('#s-confirm-ok');
+    let reworkRun;
+    for (let i = 0; i < 100; i++) { reworkRun = (await app.call('GET', '/api/v2/runs/' + oldRun)).json.run; if (reworkRun.round === 2 && reworkRun.executionActive) break; await new Promise(r => setTimeout(r, 50)); }
+    assert.equal(reworkRun.round, 2);
+    const ceiling = Math.ceil(reworkRun.approval.maxCost * 7.5 * 100 - 1e-6) / 100, spentNow = await wangSpent();
+    assert.ok(ceiling > 0); assert.equal(spentNow, ceiling, 'the running rework round counts its whole approved ceiling this month');
+    await up.goto(base + '/workspace.html?new=1'); await up.waitForSelector('#s-go');
+    await up.fill('#s-goal', '再写一份新品试吃活动方案'); await up.click('#s-go');
+    await up.waitForSelector('#s-confirm[open], #s-error:not([hidden])');
+    const left = (5 - ceiling).toFixed(2);
+    assert.match(await up.isVisible('#s-confirm[open]') ? await up.innerText('#s-confirm') : await up.innerText('#s-error'), new RegExp('¥' + left.replace('.', '\\.')));
+    await shot(up, '4a-user-rework-quota');
+    if (await up.isVisible('#s-confirm[open]')) await up.click('#s-confirm-cancel');
+    hold = false; held.splice(0).forEach(f => f());
+    for (let i = 0; i < 100; i++) { const r = (await app.call('GET', '/api/v2/runs/' + oldRun)).json.run; if (!r.executionActive && r.status !== 'running') break; await new Promise(r2 => setTimeout(r2, 50)); }
+    ok('AUD-C159-01: reworking last month\'s run counts this month; the new-task page shows ¥' + left + ' left, not ¥5.00');
+
     /* cap used up: only the priced model is available, cap set to the amount already spent (¥0) */
     await app.call('POST', '/api/models/' + localId + '/disable', {}); await app.call('POST', '/api/models/' + paidId + '/enable', {});
     const users = (await app.call('GET', '/api/v2/users')).json.users, wang = users.find(u => u.username === 'xiaowang');
@@ -150,5 +188,5 @@ const PASS = 'user-password-123';
     await browser.close(); await app.stop(); mock.close();
   }
   console.log(`\nB8 前后台分离 e2e: ${results.length} checks passed`);
-  if (results.length !== 9) { console.error('expected 9 checks'); process.exit(1); }
+  if (results.length !== 10) { console.error('expected 10 checks'); process.exit(1); }
 })().catch(e => { console.error(e); process.exit(1); });

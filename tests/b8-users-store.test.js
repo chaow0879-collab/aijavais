@@ -82,37 +82,77 @@ test('B8 users: scrypt only (no plaintext), unique names, disable, reset passwor
   assert.equal((await users.authenticate('alice', 'another-password-2')).username, 'alice');
 });
 
+/* Ledger rows are what the engine writes on every settled call (and on restart for unknown usage). */
+const usd = cny => cny / 7.5;
+function spendRun(store, project, { cny = 0, approvalCny = 0, active = false } = {}) {
+  const run = store.createRun(project, { approval: { maxCost: usd(approvalCny) }, usage: { cost: usd(cny), reservedCost: 0 }, executionActive: active });
+  if (cny) store.recordUsage(run.runId, { cost: usd(cny), costSource: 'provider_usage_x_user_rates', currency: 'USD' });
+  if (!active) store.updateRun(run.runId, { status: 'review_required', executionActive: false });
+  return run;
+}
+/* move a run and its ledger rows to an earlier time (the run was created and billed last month) */
+function backdate(store, runId, at) {
+  store.db.prepare("UPDATE runs SET created_at=?, doc=json_set(doc,'$.createdAt',?) WHERE id=?").run(at, at, runId);
+  store.db.prepare("UPDATE usage_ledger SET created_at=?, doc=json_set(doc,'$.createdAt',?) WHERE run_id=?").run(at, at, runId);
+}
+/* what ProjectEngine.review does when a rework round starts: a new approval, roundStartCost = cost so far */
+function startRework(store, runId, approvalCny) {
+  const run = store.getRun(runId);
+  store.updateRun(runId, { status: 'running', executionActive: true, round: run.round + 1, approval: { maxCost: usd(approvalCny) }, usage: { ...run.usage, roundStartCost: run.usage.cost, reservedCost: 0 } });
+}
+
 test('B8 monthly cap: conservative spend (active runs count their whole ceiling), plain-language refusal, Beijing calendar month', async t => {
   const dir = tmp(t), store = new ProjectStore({ dir }); t.after(() => store.close());
-  let clock = Date.UTC(2026, 10, 15, 4); // 2026-11-15 12:00 Beijing
+  let clock = Date.now();
   const users = createUsers({ store, now: () => clock });
   const u = await users.create({ username: 'bob', password: 'good-password-1', monthlyCapCny: 10 });
   const other = await users.create({ username: 'carol', password: 'good-password-1', monthlyCapCny: 10 });
   assert.equal(monthStart(Date.UTC(2026, 10, 30, 16, 30)), Date.UTC(2026, 10, 30, 16), '2026-12-01 00:30 Beijing is already December');
   const p = store.createProject({ name: 'b', description: 'b' }, { ownerId: u.userId });
   const q = store.createProject({ name: 'c', description: 'c' }, { ownerId: other.userId });
-  const usd = cny => cny / 7.5;
-  // finished run: recorded cost only
-  const r1 = store.createRun(p, { approval: { maxCost: usd(5) }, usage: { cost: usd(3), reservedCost: 0 } });
-  store.updateRun(r1.runId, { status: 'approved', executionActive: false });
-  // another user's spend never counts
-  const r3 = store.createRun(q, { approval: { maxCost: usd(9) }, usage: { cost: usd(9), reservedCost: 0 } });
-  store.updateRun(r3.runId, { status: 'approved', executionActive: false });
+  spendRun(store, p, { cny: 3, approvalCny: 5 });                 // finished: its recorded cost only
+  spendRun(store, q, { cny: 9, approvalCny: 9 });                 // another user's spend never counts
   assert.equal(users.spend(u.userId).spentFen, 300);
   assert.doesNotThrow(() => users.assertQuota(u.userId, usd(7)));
   assert.throws(() => users.assertQuota(u.userId, usd(7.01)), e => e.code === 'monthly_quota_insufficient' && /本月额度只剩 ¥7\.00/.test(e.message) && !/[A-Za-z]/.test(e.message));
   // active run counts its full authorized ceiling, not the little it has spent so far
-  const r2 = store.createRun(p, { approval: { maxCost: usd(7) }, usage: { cost: usd(0.5), reservedCost: 0 }, executionActive: true });
+  const r2 = spendRun(store, p, { cny: 0.5, approvalCny: 7, active: true });
   assert.equal(store.getRun(r2.runId).status, 'running');
   assert.equal(users.spend(u.userId).spentFen, 1000);
   assert.throws(() => users.assertQuota(u.userId, usd(0.01)), e => e.code === 'monthly_quota_exhausted' && e.message === '本月额度已用完，请联系管理员' && e.status === 402);
   // when it finishes, only what it really recorded stays
-  store.updateRun(r2.runId, { status: 'awaiting_review', executionActive: false });
+  store.updateRun(r2.runId, { status: 'review_required', executionActive: false });
   assert.equal(users.spend(u.userId).spentFen, 350);
-  // admin raises the cap / next month starts fresh
   users.update(u.userId, { monthlyCapCny: 3.5 });
   assert.throws(() => users.assertQuota(u.userId, usd(0.01)), e => e.code === 'monthly_quota_exhausted');
-  clock = Date.UTC(2026, 10, 30, 16, 1); // 2026-12-01 00:01 Beijing
-  assert.equal(users.spend(u.userId).spentFen, 0);
+  clock = monthStart(Date.now()) + 40 * 86400e3; // a time in next month (Beijing)
+  assert.equal(users.spend(u.userId).spentFen, 0, 'next month starts fresh');
   assert.equal(usdToFen(0.0001), 1, 'spend is rounded up, never down');
 });
+
+test('B8 monthly cap AUD-C159-01: reworking a run created last month counts in this month (round ceiling, then its recorded cost)', async t => {
+  const dir = tmp(t), store = new ProjectStore({ dir }); t.after(() => store.close());
+  const users = createUsers({ store });
+  const u = await users.create({ username: 'dave', password: 'good-password-1', monthlyCapCny: 2 });
+  const p = store.createProject({ name: 'd', description: 'd' }, { ownerId: u.userId });
+  const lastMonth = monthStart(Date.now()) - 10 * 86400e3;
+  const old = spendRun(store, p, { cny: 1.5, approvalCny: 1.6 });
+  backdate(store, old.runId, lastMonth);
+  assert.equal(users.spend(u.userId).spentFen, 0, 'last month\'s billing is not this month\'s');
+  // the audit's counterexample: rework ¥1.875 on the old run, then a new run ¥1.875 -> must be refused (cap ¥2)
+  users.assertQuota(u.userId, usd(1.875));
+  startRework(store, old.runId, 1.875);
+  assert.equal(users.spend(u.userId).spentFen, 188, 'the rework round counts its whole approved ceiling this month');
+  assert.throws(() => users.assertQuota(u.userId, usd(1.875)), e => e.code === 'monthly_quota_insufficient' && /^本月额度只剩 ¥0\.12/.test(e.message));
+  // the rework round spends ¥0.4 this month and settles: only that stays
+  const run = store.getRun(old.runId);
+  store.recordUsage(old.runId, { cost: usd(0.4), costSource: 'provider_usage_x_user_rates', currency: 'USD' });
+  store.updateRun(old.runId, { status: 'review_required', executionActive: false, usage: { ...run.usage, cost: run.usage.cost + usd(0.4) } });
+  assert.equal(users.spend(u.userId).spentFen, 40);
+  // a round still running across the month boundary: what it already recorded last month is last month's,
+  // the rest of its ceiling counts now
+  const cross = spendRun(store, p, { cny: 0.3, approvalCny: 1, active: true });
+  backdate(store, cross.runId, lastMonth);
+  assert.equal(users.spend(u.userId).spentFen, 40 + 70);
+});
+

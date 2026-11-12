@@ -152,3 +152,57 @@ test('B8: two account types, 403 on the back end, per-user isolation, monthly CN
     assert.equal((await admin(m, u)).status, 200, 'admin ' + m + ' ' + u);
   }
 });
+
+test('B8 AUD-C159-01: reworking last month\'s run counts in this month; a concurrent rework + new run cannot pass the cap together', async t => {
+  const { DatabaseSync } = require('node:sqlite');
+  const path = require('node:path');
+  const { monthStart } = require('../lib/users');
+  const M = mockModel();
+  await new Promise(r => M.server.listen(0, '127.0.0.1', r)); t.after(() => M.server.close());
+  const mp = M.server.address().port;
+  const S = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mp } }); t.after(S.stop);
+  const admin = S.call;
+  const paid = (await admin('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'priced-writer', pricingMode: 'paid_api', capabilities: ['writing'], price: { currency: 'CNY', inputPerMillion: 1, outputPerMillion: 1 } })).json.connection.connectionId;
+  assert.equal((await admin('POST', '/api/models/' + paid + '/test', { approvePaid: true })).json.ok, true);
+  const carol = (await admin('POST', '/api/v2/users', { username: 'carol', password: PASS, monthlyCapCny: 2 })).json.user;
+  const ck = (await S.call('POST', '/api/auth/user-login', { username: 'carol', password: PASS }, { cookie: false })).headers['set-cookie'][0].split(';')[0];
+  const C = (m, u, b) => S.call(m, u, b, { cookie: ck });
+  const usd = cny => cny / 7.5, body = cny => ({ approvePaid: true, maxCost: usd(cny), maxTokens: 20000 });
+  const p = (await C('POST', '/api/v2/projects', { ...project('carol-paid', paid), maxReworks: 2 })).json.project;
+  const first = await C('POST', '/api/v2/projects/' + p.projectId + '/runs', body(1.6));
+  assert.equal(first.status, 202, first.text);
+  const old = await waitRun(C, first.json.run.runId);
+  assert.equal(old.status, 'review_required');
+  // the run and its billing happened last month
+  const lastMonth = monthStart(Date.now()) - 10 * 86400e3;
+  const db = new DatabaseSync(path.join(S.dir, 'projects.sqlite'));
+  db.exec('PRAGMA busy_timeout=5000');
+  db.prepare("UPDATE runs SET created_at=?, doc=json_set(doc,'$.createdAt',?) WHERE id=?").run(lastMonth, lastMonth, old.runId);
+  db.prepare("UPDATE usage_ledger SET created_at=?, doc=json_set(doc,'$.createdAt',?) WHERE run_id=?").run(lastMonth, lastMonth, old.runId);
+  db.close();
+  assert.equal((await C('GET', '/api/v2/me')).json.me.month.spentCny, 0, 'last month\'s billing is not this month\'s');
+  // audit counterexample, concurrent: rework ¥1.875 on the old run + a new run ¥1.875 under a ¥2 cap
+  M.hold(true);
+  const [rw, nr] = await Promise.all([
+    C('POST', '/api/v2/runs/' + old.runId + '/review', { decision: 'rework', feedback: '再改改', ...body(1.875) }),
+    C('POST', '/api/v2/projects/' + p.projectId + '/runs', body(1.875))]);
+  assert.deepEqual([rw.status, nr.status].map(s => s === 402 ? 402 : 'ok').sort(), [402, 'ok'].sort(), 'exactly one of them passes: ' + rw.status + '/' + nr.status);
+  const refused = rw.status === 402 ? rw : nr;
+  assert.equal(refused.json.code, 'monthly_quota_insufficient'); assert.match(refused.json.error, /^本月额度只剩 ¥0\.12/);
+  assert.equal((await C('GET', '/api/v2/me')).json.me.month.spentCny, 1.88, 'the running round counts its whole approved ceiling this month');
+  if (rw.status !== 402) {
+    // the rework is running: a new run is refused too
+    const again = await C('POST', '/api/v2/projects/' + p.projectId + '/runs', body(0.2));
+    assert.equal(again.status, 402); assert.match(again.json.error, /^本月额度只剩 ¥0\.12/);
+  } else {
+    // the new run is running: the rework is refused on its own as well
+    const again = await C('POST', '/api/v2/runs/' + old.runId + '/review', { decision: 'rework', feedback: '再改改', ...body(0.2) });
+    assert.equal(again.status, 402); assert.match(again.json.error, /^本月额度只剩 ¥0\.12/);
+  }
+  M.release(); M.hold(false);
+  const settled = await waitRun(C, (rw.status !== 402 ? rw.json.run : nr.json.run).runId);
+  const spent = (await C('GET', '/api/v2/me')).json.me.month.spentCny;
+  assert.ok(spent > 0 && spent < 1.88, 'after it settles only the cost recorded this month stays: ' + spent);
+  assert.equal((await admin('GET', '/api/v2/users')).json.users.find(u => u.userId === carol.userId).month.spentCny, spent);
+  void settled;
+});
