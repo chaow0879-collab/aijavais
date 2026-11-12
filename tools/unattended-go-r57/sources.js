@@ -2,6 +2,7 @@
 const {execFileSync}=require('node:child_process'),path=require('node:path'),M=require('./sources.json');
 const root=path.resolve(__dirname,'../..'),git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 const POST_R57=Object.freeze({base:'049a3376a2d08042fcac1833b324bc87b0137ba1',changes:Object.freeze({
+  "docs/auth-front-back-split.md":{from:null,to:"100644 blob 39c9b6cb7dabad59c73bbf99f5880d56f8a30ce5",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
   "tests/ui/b8-split.e2e.js":{from:null,to:"100644 blob ac31bbabdfef30eb87747e6901cf98a0a4eced7c",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
   "tests/b8-split.test.js":{from:null,to:"100644 blob b79997f2173b8ca6dea8bda6f9ec173ebaa39bb9",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
   "public/role.js":{from:null,to:"100644 blob 22e722bf326ee80ff1ea7ce64a9c09bf37042a46",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
