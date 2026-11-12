@@ -319,21 +319,54 @@
     return { ...project, description: project.description + '\n\n开始前的确认：\n对需求的理解：' + clar.understanding + qa, steps };
   }
   /* ---------- B9c 对话式修改：判断要改的范围，带上之前的对话，只改相关部分 ---------- */
-  const CNUM = s => /^\d+$/.test(s) ? Number(s) : ({ 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 })[s] || null;
-  function reviseScope(message) {
-    const m = String(message || ''), page = /第\s*(\d{1,2}|[一二两三四五六七八九十])\s*(页|张|部分|节|段|条|章)/.exec(m);
-    if (/(加|增加|新增|补|插入)\s*(一|1|两|2|几)?\s*(页|张)/.test(m)) return '在合适的位置新增内容页，已有的页面逐字保留' + (page ? '（位置参考：第 ' + CNUM(page[1]) + ' ' + page[2] + '）' : '');
-    if (page && /(删|去掉|不要)/.test(m)) return '删除第 ' + CNUM(page[1]) + ' ' + page[2] + '，其它部分逐字保留';
-    if (page) return '只改第 ' + CNUM(page[1]) + ' ' + page[2] + '，其它部分逐字保留';
+  const CN = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+  const CNUM = t => { t = String(t).trim(); if (/^\d+$/.test(t)) return Number(t); if (CN[t]) return CN[t];
+    const m = /^([一二两三四五六七八九])?十([一二三四五六七八九])?$/.exec(t); return m ? (m[1] ? CN[m[1]] : 1) * 10 + (m[2] ? CN[m[2]] : 0) : null; };
+  const NUM = '(?:\\d{1,2}|[一二两三四五六七八九十]{1,3})';
+  /* QA-B9 P2-①：所有页码都认（第3页和第5页、第3、4页、第3到5页）；按出现顺序去重 */
+  function pagesIn(m) {
+    const out = [], re = new RegExp('第\\s*(' + NUM + '(?:\\s*(?:、|,|，|和|与|及|跟|-|—|~|到|至)\\s*第?\\s*' + NUM + ')*)\\s*(页|张)', 'g');
+    let x;
+    while ((x = re.exec(m))) {
+      const parts = x[1].split(/\s*(、|,|，|和|与|及|跟|-|—|~|到|至)\s*第?\s*/);
+      for (let i = 0; i < parts.length; i += 2) {
+        const n = CNUM(parts[i]); if (!n) continue;
+        if (i > 0 && /^(-|—|~|到|至)$/.test(parts[i - 1])) { const a = CNUM(parts[i - 2]); for (let k = a + 1; k < n && k - a < 30; k++) out.push(k); }
+        out.push(n);
+      }
+    }
+    return [...new Set(out)].filter(n => n >= 1 && n <= 99);
+  }
+  const pageList = ps => ps.join('、');
+  const WHOLE = '(?=$|[。，,.！!？?；;\\s]|整页|这一?页|吧|了)'; // 页码后面紧跟结束/标点：说的是整页，不是页里的东西
+  /* 判断要改的范围；拿不准时更保守（只改提到的页，不增删页），确认框里还可以改选 */
+  function reviseScopeInfo(message) {
+    const m = String(message || ''), pages = pagesIn(m);
+    // 删整页：只在明确说“删除/删掉/去掉/不要 第N页”且后面没有“的…/里…/最后一句”等时
+    const del = new RegExp('(删除|删掉|删去|去掉|拿掉|不要)\\s*(?:这|那)?\\s*第\\s*' + NUM + '(?:\\s*(?:、|和|与|及|到|至|-)\\s*第?\\s*' + NUM + ')*\\s*(页|张)' + WHOLE).test(m)
+      || new RegExp('把\\s*第\\s*' + NUM + '(?:\\s*(?:、|和|与|及|到|至|-)\\s*第?\\s*' + NUM + ')*\\s*(页|张)\\s*(整页)?\\s*(删除|删掉|删去|去掉|拿掉)' + WHOLE).test(m);
+    if (pages.length && del) return { kind: 'delete', pages, text: '删除第 ' + pageList(pages) + ' 页（整页），其它部分逐字保留' };
+    // 新增页：“加一页/新增两页/补一张幻灯片”；“加一张图/表/照片”是往页里加东西，不是加页
+    const add = /(加|增加|新增|插入|补充?|多)\s*(一|1|两|2|几|三|3)?\s*(页|张(?=幻灯片|PPT|ppt|演示|$|[。，,.！!？?；;\s]))/.test(m);
+    if (add) return { kind: 'add', pages, text: '在合适的位置新增内容页，已有的页面逐字保留' + (pages.length ? '（位置参考：第 ' + pageList(pages) + ' 页）' : '') };
+    if (pages.length) return { kind: 'pages', pages, text: '只改第 ' + pageList(pages) + ' 页的内容（页数不变），其它部分逐字保留' };
     const part = /(标题|开头|开场|结尾|结论|总结|摘要|封面|目录|表格|第一段|最后一段)/.exec(m);
-    if (part) return '只改“' + part[1] + '”相关的部分，其它部分逐字保留';
-    return '按意见修改；意见没有提到的部分尽量保持原样';
+    if (part) return { kind: 'part', pages, text: '只改“' + part[1] + '”相关的部分，其它部分逐字保留' };
+    return { kind: 'all', pages, text: '按意见修改；意见没有提到的部分尽量保持原样' };
+  }
+  function reviseScope(message) { return reviseScopeInfo(message).text; }
+  /* 确认框里可改选的范围：判断出的放第一个，再给更保守 / 更宽的选择 */
+  function reviseScopeOptions(message) {
+    const info = reviseScopeInfo(message), opts = [info.text];
+    if (info.pages.length && info.kind !== 'pages') opts.push('只改第 ' + pageList(info.pages) + ' 页的内容（页数不变），其它部分逐字保留');
+    if (info.kind !== 'all') opts.push('按意见修改；意见没有提到的部分尽量保持原样');
+    return [...new Set(opts)];
   }
   /* 发给审核岗位的修改说明：本次意见 + 范围 + 之前的修改对话（让模型知道已经改过什么） */
-  function reviseFeedback({ message, history = [] } = {}) {
+  function reviseFeedback({ message, history = [], scope } = {}) {
     const text = String(message || '').trim();
     const past = (history || []).map(h => String(h || '').trim()).filter(Boolean).slice(-5);
-    return '修改意见：' + text + '\n修改范围：' + reviseScope(text) +
+    return '修改意见：' + text + '\n修改范围：' + (scope || reviseScope(text)) +
       (past.length ? '\n之前已经按这些意见改过（已体现在上一版里，不要撤销）：\n' + past.map((h, i) => (i + 1) + '. ' + h).join('\n') : '') +
       '\n请在上一版成果的基础上修改，只输出修改后的完整成果，格式与上一版相同，不要附加说明。';
   }
@@ -358,5 +391,5 @@
     if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null };
     return { text: '启动没有成功。', fix: { action: 'retry', label: '再试一次' }, detail: msg };
   }
-  return { reviseScope, reviseFeedback, clarifyEstimate, clarifyRules, planText, applyClarify, CLARIFY, fileStatus, checkUpload, uploadError, materialsNote, materialShare, charsText, MATERIALS, ACCEPT, plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
+  return { reviseScope, reviseScopeInfo, reviseScopeOptions, reviseFeedback, clarifyEstimate, clarifyRules, planText, applyClarify, CLARIFY, fileStatus, checkUpload, uploadError, materialsNote, materialShare, charsText, MATERIALS, ACCEPT, plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
 });

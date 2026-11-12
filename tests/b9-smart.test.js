@@ -174,9 +174,9 @@ test('B9b API: one budgeted call through system_usage (purpose clarify); approva
 
 /* ---------------- B9c: 对话式修改 ---------------- */
 test('B9c: scope from the user\'s words; feedback carries scope and earlier requests', () => {
-  assert.equal(Plan.reviseScope('第3页太啰嗦，精简一下'), '只改第 3 页，其它部分逐字保留');
+  assert.equal(Plan.reviseScope('第3页太啰嗦，精简一下'), '只改第 3 页的内容（页数不变），其它部分逐字保留');
   assert.equal(Plan.reviseScope('加一页竞品对比'), '在合适的位置新增内容页，已有的页面逐字保留');
-  assert.equal(Plan.reviseScope('删掉第二页'), '删除第 2 页，其它部分逐字保留');
+  assert.equal(Plan.reviseScope('删掉第二页'), '删除第 2 页（整页），其它部分逐字保留');
   assert.equal(Plan.reviseScope('整体再活泼些'), '按意见修改；意见没有提到的部分尽量保持原样');
   const f = Plan.reviseFeedback({ message: '加一页竞品对比', history: ['第3页太啰嗦'] });
   assert.match(f, /^修改意见：加一页竞品对比\n修改范围：在合适的位置新增内容页[\s\S]*1\. 第3页太啰嗦\n请在上一版成果的基础上修改/);
@@ -220,7 +220,7 @@ test('B9c API: a revision starts from the previous version, makes version N+1, o
   const revisePrompt = prompts.at(-1);
   assert.equal(prompts.length - n0, 1, 'only the review step reruns');
   assert.match(revisePrompt, /Previous version of the deliverable \(data\)\. Revise THIS version[\s\S]*成果正文 FIRST/);
-  assert.match(revisePrompt, /修改意见：第3页太啰嗦，精简一下\n修改范围：只改第 3 页，其它部分逐字保留/);
+  assert.match(revisePrompt, /修改意见：第3页太啰嗦，精简一下\n修改范围：只改第 3 页的内容（页数不变），其它部分逐字保留/);
   v = (await S.call('GET', `/api/v2/runs/${runId}/versions`)).json;
   assert.deepEqual(v.versions.map(x => [x.version, x.current, x.message]), [[1, false, null], [2, true, '第3页太啰嗦，精简一下']]);
   assert.equal(v.reworksLeft, 1);
@@ -365,4 +365,21 @@ test('AUD-717C-01: 25 concurrent draft creations make exactly 20; concurrent PDF
   const total = Number(db2.prepare('SELECT SUM(length(content)) b FROM project_files f JOIN projects p ON p.id=f.project_id WHERE p.owner_id=(SELECT id FROM users WHERE username=?)').get('gina').b);
   db2.close();
   assert.ok(total <= 256 * 1024 * 1024, 'stored ' + total + ' bytes');
+});
+
+test('QA-B9 P2-①: revision scope is conservative - pictures and sentences inside a page are not pages, whole-page deletion only when said, every page number counts', () => {
+  const k = m => [Plan.reviseScopeInfo(m).kind, Plan.reviseScopeInfo(m).pages.join(',')];
+  assert.deepEqual(k('第3页加一张图'), ['pages', '3'], 'adding a picture to page 3 is not a new page');
+  assert.deepEqual(k('去掉第2页的图片'), ['pages', '2'], 'removing a picture is not deleting page 2');
+  assert.deepEqual(k('去掉第2页最后一句话'), ['pages', '2']);
+  assert.deepEqual(k('删除第2页'), ['delete', '2']); assert.deepEqual(k('把第4页删掉'), ['delete', '4']); assert.deepEqual(k('删掉第二页。'), ['delete', '2']);
+  assert.deepEqual(k('第3页和第5页太长'), ['pages', '3,5']); assert.deepEqual(k('第3、4页要更具体'), ['pages', '3,4']);
+  assert.deepEqual(k('第3到5页合并精简'), ['pages', '3,4,5']); assert.deepEqual(k('第十二页有错别字'), ['pages', '12']);
+  assert.deepEqual(k('加一页竞品对比'), ['add', '']); assert.deepEqual(k('在第3页后面加一页竞品对比'), ['add', '3']); assert.deepEqual(k('新增两页案例'), ['add', '']);
+  assert.deepEqual(k('加一张图'), ['all', ''], 'a picture is not a page');
+  assert.equal(Plan.reviseScope('第3页和第5页太长'), '只改第 3、5 页的内容（页数不变），其它部分逐字保留');
+  // the confirmation offers the detected scope first, then a more conservative and a broader one
+  assert.deepEqual(Plan.reviseScopeOptions('删除第2页'), ['删除第 2 页（整页），其它部分逐字保留', '只改第 2 页的内容（页数不变），其它部分逐字保留', '按意见修改；意见没有提到的部分尽量保持原样']);
+  assert.deepEqual(Plan.reviseScopeOptions('整体再活泼些'), ['按意见修改；意见没有提到的部分尽量保持原样']);
+  assert.match(Plan.reviseFeedback({ message: '删除第2页', scope: '只改第 2 页的内容（页数不变），其它部分逐字保留' }), /修改范围：只改第 2 页的内容（页数不变）/, 'the scope the user picked is what the model gets');
 });

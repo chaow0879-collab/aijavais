@@ -151,7 +151,9 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     assert.equal(await page.innerText('#s-chat-left'), '这个任务还可以修改 3 次。');
     await page.fill('#s-rework-text', '第3页太啰嗦，精简一下'); await page.click('#s-rework-go'); await page.waitForSelector('#s-confirm[open]');
     const rdlg = await page.innerText('#s-confirm');
-    assert.match(rdlg, /确认修改/); assert.match(rdlg, /会在上一版的基础上修改（只改第 3 页，其它部分逐字保留），改完是新的一版，旧版本保留/);
+    assert.match(rdlg, /确认修改/); assert.match(rdlg, /会在上一版的基础上修改，改完是新的一版，旧版本保留/);
+    assert.match(await page.innerText('#s-scope'), /^只改第 3 页的内容（页数不变），其它部分逐字保留\s*按意见修改；意见没有提到的部分尽量保持原样$/);
+    assert.equal(await page.isChecked('#s-scope input >> nth=0'), true, 'the detected scope is preselected');
     assert.match(rdlg, /确认后这个任务还可以再修改 2 次/);
     const k0 = bodies.length; await page.click('#s-confirm-cancel'); await page.waitForTimeout(500);
     assert.equal(bodies.length, k0, 'cancelled: no model call without a new confirmation');

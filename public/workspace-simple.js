@@ -263,11 +263,14 @@
       body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : spentText(p.clarify ? p.clarify.spentUsd : 0)) + '（估算，以厂商账单为准）。' }));
       if (S.me && S.me.kind === 'user') body.append(el('p', { className: 'hint', id: 's-confirm-quota', text: '你本月额度还剩 ¥' + (Number(S.me.month.remainingCny) || 0).toFixed(2) + '（每月上限 ¥' + (Number(S.me.month.capCny) || 0).toFixed(2) + '，由管理员设置）。' }));
       // QA-B8-02: the rework sentence belongs to a rework only; a user's models are already tested, so no connection-check sentence
-      if (p.isRework) body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' + (p.scopeText ? '会在上一版的基础上修改（' + p.scopeText + '），改完是新的一版，旧版本保留。' : '') }),
+      if (p.isRework && p.scopeOptions) { // QA-B9 P2-①：如实显示判断出的修改范围，可以改选
+        body.append(el('p', { className: 'q', text: '修改范围（判断不对可以改选）：' }), el('div', { id: 's-scope' }, p.scopeOptions.map((o, i) => el('label', { className: 'choice' }, [el('input', { type: 'radio', name: 's-scope', value: o, checked: i === 0 }), el('span', { text: o })]))));
+      }
+      if (p.isRework) body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' + (p.scopeOptions ? '会在上一版的基础上修改，改完是新的一版，旧版本保留。' : '') }),
         ...(S.reworksLeft > 0 ? [el('p', { className: 'hint', id: 's-confirm-left', text: '确认后这个任务还可以再修改 ' + (S.reworksLeft - 1) + ' 次。' })] : []));
       else if (!(S.me && S.me.kind === 'user')) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
       $('s-confirm-title').textContent = p.isRework ? '确认修改' : '确认开始';
-      const done = ok => { if (ok && p.clarify && !p.isRework) S.clarAnswers = clarifyAnswers(); dlg.close(); resolve(ok ? (document.querySelector('input[name=s-choice]:checked')?.value || 'quality') : null); };
+      const done = ok => { if (ok && p.clarify && !p.isRework) S.clarAnswers = clarifyAnswers(); if (ok && p.scopeOptions) S.scopeChoice = document.querySelector('input[name=s-scope]:checked')?.value || p.scopeOptions[0]; dlg.close(); resolve(ok ? (document.querySelector('input[name=s-choice]:checked')?.value || 'quality') : null); };
       $('s-confirm-ok').onclick = () => done(true); $('s-confirm-cancel').onclick = () => done(false);
       dlg.addEventListener('cancel', () => resolve(null), { once: true });
       dlg.showModal();
@@ -418,11 +421,11 @@
     if (!r.ok) return showError($('s-run-error'), r.problems[0], rework);
     if (!(S.reworksLeft > 0) && S.versions) return showError($('s-run-error'), { text: '已经修改到这个任务的上限，不能再改了；可以下载现在的版本，或新建一个任务。', fix: null });
     // B9c：系统判断要改的范围，带上之前的修改对话；在上一版的基础上只改相关部分（引擎把上一版交给审核岗位）
-    r.approval.feedback = window.SmartPlan.reviseFeedback({ message: said, history: (S.versions || []).map(v => v.message).filter(Boolean) });
     r.approval.message = said;
-    r.scopeText = window.SmartPlan.reviseScope(said);
+    r.scopeOptions = window.SmartPlan.reviseScopeOptions(said);
     const qr = quotaProblem(r); if (qr) return showError($('s-run-error'), { text: qr, fix: null }); // QA-B8 P3-5
     if (!(await confirm({ ...r, isRework: true }))) return;
+    if (r.scopeOptions) r.approval.feedback = window.SmartPlan.reviseFeedback({ message: said, history: (S.versions || []).map(v => v.message).filter(Boolean), scope: S.scopeChoice });
     $('s-result').hidden = true; $('s-run-error').hidden = true; $('s-state').textContent = '正在按你的意见修改…';
     try {
       await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/review', 'POST', r.approval);
