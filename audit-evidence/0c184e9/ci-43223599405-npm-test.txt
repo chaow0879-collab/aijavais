@@ -1,0 +1,7 @@
+ℹ tests 372
+ℹ suites 0
+ℹ pass 370
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
