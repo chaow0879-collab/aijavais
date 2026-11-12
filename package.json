@@ -20,7 +20,8 @@
     "test:release-delivery": "AIJ_RELEASE_VALIDATION=1 node --test tests/claude-delivery-checks.test.js tests/claude-delivery-http.test.js",
     "test:delivery-ui": "node tests/ui/claude-delivery.e2e.js",
     "test:b5": "node tests/ui/b5-home.e2e.js",
-    "test:b8": "node tests/ui/b8-split.e2e.js"
+    "test:b8": "node tests/ui/b8-split.e2e.js",
+    "test:b9": "node tests/ui/b9-smart.e2e.js"
   },
   "engines": {
     "node": ">=24.0.0"

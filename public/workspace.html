@@ -36,6 +36,10 @@
     @media (max-width:720px){.shell{display:block}.shell aside{display:none}}
     dialog{max-width:560px;background:var(--card);color:var(--text);border:1px solid var(--accent);border-radius:12px;padding:20px}dialog::backdrop{background:#000a}
     .choice{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:10px;margin:8px 0;cursor:pointer}.choice input{width:auto;margin-top:5px}
+    /* B9a 资料上传区 */
+    .drop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;cursor:pointer;color:var(--dim);margin:4px 0 6px}.drop:hover,.drop:focus,.drop.over{border-color:var(--accent);color:var(--text);outline:none}
+    .drop strong{color:var(--accent)}.files{list-style:none;padding:0;margin:4px 0 10px}.files li{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;border:1px solid var(--line);border-radius:8px;margin:4px 0;background:#0d1a29}
+    .files .fname{font-weight:600;word-break:break-all}.files .fstate{font-size:13px;color:var(--accent)}.files .fstate.warn{color:var(--warn)}.files .fstate.bad{color:var(--bad)}.files .fstate.busy{color:var(--dim)}.files button{width:auto;margin-left:auto}
     .final{white-space:pre-wrap;background:#0d1a29;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;overflow:auto}
   </style>
   <script src="/role.js"></script>
@@ -71,6 +75,10 @@
       <div class="row-head"><h2 id="s-title">新建任务</h2><button id="s-advanced" type="button" class="small admin-only">高级设置</button></div>
       <div id="ws-guide" class="guide" hidden><span class="user-only">管理员还没有准备好可用的模型，现在还不能开始任务，请联系管理员。</span><span class="admin-only"><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里，说说想做什么，点“一键智能配置并开始”。</span></div>
       <label for="s-goal">想做什么</label><textarea id="s-goal" rows="3" maxlength="4000" placeholder="例如：给社区咖啡店写一份周末促销方案"></textarea>
+      <label for="s-files">原始资料（可选）</label>
+      <div id="s-drop" class="drop" role="button" tabindex="0" aria-describedby="s-files-hint"><strong>把文件拖到这里</strong>，或者点这里选择文件（可以一次选多个）<input id="s-files" type="file" multiple hidden accept=".docx,.xlsx,.pptx,.pdf,.txt,.md,.markdown,.csv,.tsv,.json,.png,.jpg,.jpeg,.gif,.webp,.doc,.xls,.ppt"></div>
+      <p id="s-files-hint" class="hint">支持 Word、Excel、PPT、PDF、TXT、MD、CSV 和图片；单个文件不超过 8 MB，每个任务最多 50 个。每个岗位都会拿到资料内容。</p>
+      <ul id="s-file-list" class="files" aria-live="polite"></ul>
       <label>想要什么成果</label><div class="chips" id="s-output" role="radiogroup" aria-label="想要什么成果"></div>
       <label for="s-deadline">什么时候要（可选）</label><input id="s-deadline" maxlength="60" placeholder="例如：本周五前">
       <label for="s-budget-cny">最多花多少钱（可选）</label>

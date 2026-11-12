@@ -21,7 +21,7 @@ const check = (name, fn) => checks.push([name, fn]);
 // Vendor brand names are proper nouns (QA-B7-02 ruling); the HALOFLUX line is the upstream licence attribution
 // that must be preserved (CLAUDE.md), so it is allowed verbatim and nothing else from it.
 const BRANDS = ['Based on HALOFLUX by Ryder191 (modified)', 'Anthropic', 'Claude', 'OpenAI', 'ChatGPT', 'Google', 'Gemini', 'Kimi', 'GLM', 'SiliconFlow', 'Ollama', 'DeepSeek', 'HALOFLUX'];
-const ALLOW = ['AIJAVAIS', 'Word', 'Excel', 'PPT', ...BRANDS, ...LIST];
+const ALLOW = ['AIJAVAIS', 'Word', 'Excel', 'PPT', 'PDF', 'TXT', 'CSV', /* B9a: file-format names in the upload hint */ ...BRANDS, ...LIST];
 function englishLeft(text) {
   let t = String(text);
   for (const w of [...ALLOW].sort((a, b) => b.length - a.length)) t = t.split(w).join(' ');

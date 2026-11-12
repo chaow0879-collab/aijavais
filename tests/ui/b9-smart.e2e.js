@@ -1,0 +1,170 @@
+'use strict';
+/* B9 in real Chromium against the real server + SQLite and a LOCAL MOCK model (no paid API).
+ * B9a 资料上传：新建任务页拖拽/点击上传、多选；人话状态（页数/字数/表格张数/图片/扫描件）；可删除；超限用人话说明；
+ *     资料真的交给每个岗位：MOCK 收到的请求体里有 docx 和 xlsx 的内容和“注明出处”的要求；页面上没有英文和 JSON。 */
+const assert = require('node:assert/strict');
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const { chromium } = require('playwright');
+const H = require('../helpers');
+const FIX = path.join(__dirname, '..', 'fixtures', 'files');
+
+const SHOTS = process.env.UI_SHOTS || null;
+const results = [];
+const ok = name => { results.push(name); console.log('PASS', name); };
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+(async () => {
+  const bodies = [];
+  const mock = http.createServer((req, res) => {
+    let body = ''; req.on('data', c => body += c); req.on('end', () => {
+      const j = JSON.parse(body || '{}');
+      if (j.max_tokens > 32) bodies.push(JSON.stringify(j.messages || ''));
+      const reply = j.max_tokens <= 32 ? '好' : '根据资料，本季度客户满意度 92%（出处：report.docx）。华东销量 120（出处：sales.xlsx）。';
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n');
+    });
+  });
+  await new Promise(r => mock.listen(0, '127.0.0.1', r));
+  const mp = mock.address().port;
+  const app = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mp } });
+  const base = 'http://localhost:' + app.port;
+  const browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}) });
+  const shot = async (page, name) => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, 'b9-' + name + '.png'), fullPage: true }); } };
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } }); const ck = H.cookies.get(app.port).split('=');
+  await ctx.addCookies([{ name: ck[0], value: ck.slice(1).join('='), domain: 'localhost', path: '/' }]);
+  // 页面上不应出现英文单词或 JSON（文件名是用户自己的，产品名缩写 Word/Excel/PPT/PDF 等是格式名）
+  const ALLOWED = /\b(Word|Excel|PPT|PDF|TXT|MD|CSV|MB|UTF)\b/g;
+  const noEnglish = (text, names, where) => {
+    let t = text; for (const n of names) t = t.split(n).join('');
+    t = t.replace(ALLOWED, '');
+    assert.doesNotMatch(t, /[A-Za-z]{2,}/, where + ' has English: ' + (t.match(/.{0,20}[A-Za-z]{2,}.{0,20}/) || [''])[0]);
+    assert.doesNotMatch(t, /[{[]\s*"/, where + ' has JSON');
+  };
+  const fileState = (page, name) => page.$eval('#s-file-list', (ul, n) => { const li = [...ul.children].find(x => x.querySelector('.fname').textContent === n); return li ? li.querySelector('.fstate').textContent : null; }, name);
+  try {
+    const add = await app.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'local-writer', displayName: '本地写手', pricingMode: 'local', capabilities: ['writing', 'reasoning'] });
+    assert.equal(add.status, 200, add.text);
+    assert.equal((await app.call('POST', '/api/models/' + add.json.connection.connectionId + '/test', {})).json.ok, true);
+
+    const page = await ctx.newPage();
+    const pageErrors = []; page.on('pageerror', e => pageErrors.push(e.message));
+    await page.goto(base + '/workspace.html?new=1'); await page.waitForSelector('#s-drop');
+    assert.match(await page.innerText('#s-files-hint'), /Word、Excel、PPT、PDF、TXT、MD、CSV 和图片；单个文件不超过 8 MB/);
+    await page.fill('#s-goal', '根据上传的资料写一份季度复盘总结');
+
+    /* ---- click-to-choose, multi-select: docx + xlsx + png ---- */
+    const chooser = page.waitForEvent('filechooser'); await page.click('#s-drop'); const fc = await chooser;
+    assert.equal(fc.isMultiple(), true, 'multi-select');
+    const buf = (name, mimeType) => ({ name, mimeType, buffer: fs.readFileSync(path.join(FIX, name)) });
+    await fc.setFiles([buf('report.docx', 'application/octet-stream'), buf('sales.xlsx', 'application/octet-stream'), { name: '门店照片.png', mimeType: 'image/png', buffer: PNG }]);
+    await page.waitForFunction(() => document.querySelectorAll('#s-file-list li').length === 3 && !document.querySelector('#s-file-list li.file-busy'), null, { timeout: 15000 });
+    assert.equal(await fileState(page, 'report.docx'), '已读取 148 字');
+    assert.equal(await fileState(page, 'sales.xlsx'), '表格 2 张，已读取 178 字');
+    assert.equal(await fileState(page, '门店照片.png'), '图片已保存（当前模型不会看图）');
+    ok('click to choose, multi-select: docx / xlsx / image each show a plain status (字数、表格张数、图片不会看)');
+
+    /* ---- drag and drop a markdown note ---- */
+    await page.evaluate(() => {
+      const dt = new DataTransfer(); dt.items.add(new File(['# 会议纪要\n下季度重点：会员复购，目标 35%。'], '会议纪要.md', { type: 'text/markdown' }));
+      const zone = document.getElementById('s-drop');
+      zone.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
+      zone.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    });
+    await page.waitForFunction(() => /已读取/.test([...document.querySelectorAll('#s-file-list li')].find(li => li.textContent.includes('会议纪要.md'))?.textContent || ''), null, { timeout: 10000 });
+    ok('drag and drop uploads too');
+
+    /* ---- limits and unsupported types in plain words, nothing sent to the server ---- */
+    const big = Buffer.alloc(8 * 1024 * 1024 + 10, 0x61);
+    await page.setInputFiles('#s-files', [{ name: '超大.txt', mimeType: 'text/plain', buffer: big }, { name: '旧合同.doc', mimeType: 'application/msword', buffer: Buffer.from('x') }, { name: '程序.exe', mimeType: 'application/octet-stream', buffer: Buffer.from('MZ') }]);
+    await page.waitForFunction(() => document.querySelectorAll('#s-file-list li').length === 7);
+    assert.match(await fileState(page, '超大.txt'), /^「超大\.txt」有 8 MB，超过了单个文件 8 MB 的上限，请压缩或拆分后再传。$/);
+    assert.equal(await fileState(page, '旧合同.doc'), '「旧合同.doc」是旧版 Word 格式，请先另存为 .docx 再上传。');
+    assert.match(await fileState(page, '程序.exe'), /这种文件暂时读不了。可以上传 Word、Excel、PPT、PDF、TXT、MD、CSV 和图片/);
+    // a file whose content does not match its extension: the server's Chinese reason is shown, not a code
+    await page.setInputFiles('#s-files', [{ name: '假文档.docx', mimeType: 'application/octet-stream', buffer: Buffer.from('not a zip') }]);
+    await page.waitForFunction(() => /没有上传成功/.test(document.querySelector('#s-file-list').textContent));
+    assert.match(await fileState(page, '假文档.docx'), /^「假文档\.docx」没有上传成功：文件内容和它的类型对不上（可能改过扩展名，或者文件已损坏），请用原来的软件重新另存后再传。$/);
+    await shot(page, '1-files');
+    noEnglish(await page.innerText('#simple'), ['report.docx', 'sales.xlsx', '门店照片.png', '会议纪要.md', '超大.txt', '旧合同.doc', '程序.exe', '假文档.docx', '.docx', '.doc'], 'new-task page');
+    ok('size limit, old Office formats, unsupported and mismatched files are explained in plain Chinese');
+
+    /* ---- delete: image removed on the server, error rows removed locally ---- */
+    const draftId = await page.evaluate(() => sessionStorage.getItem('aij.b9.draft'));
+    assert.match(draftId, /^[\w-]+$/);
+    const del = async name => page.click(`#s-file-list li:has(.fname:text-is("${name}")) button`);
+    for (const n of ['门店照片.png', '超大.txt', '旧合同.doc', '程序.exe', '假文档.docx']) { await del(n); await page.waitForFunction(x => ![...document.querySelectorAll('#s-file-list .fname')].some(s => s.textContent === x), n); }
+    const onServer = (await app.call('GET', '/api/v2/projects/' + draftId + '/files')).json.files.map(f => f.filename).sort();
+    assert.deepEqual(onServer, ['report.docx', 'sales.xlsx', '会议纪要.md'].sort());
+    ok('删除 removes the file from the task (server) and error rows from the list');
+
+    /* ---- reload keeps the not-yet-started draft's materials ---- */
+    await page.reload(); await page.waitForFunction(() => document.querySelectorAll('#s-file-list li.file-done').length === 3, null, { timeout: 10000 });
+    ok('reloading the new-task page restores the uploaded materials');
+
+    /* ---- start: confirm shows the materials; every role gets them ---- */
+    await page.fill('#s-goal', '根据上传的资料写一份季度复盘总结');
+    await page.click('#s-go'); await page.waitForSelector('#s-confirm[open]');
+    const dlg = await page.innerText('#s-confirm');
+    assert.match(dlg, /资料：3 个文件，能读到的文字共 \d+ 字。每个岗位都会拿到资料摘录。/);
+    noEnglish(dlg, ['local-writer'], 'confirm dialog'); // the model's own ID is a name
+    await shot(page, '2-confirm');
+    await page.click('#s-confirm-ok');
+    await page.waitForSelector('#s-progress:not([hidden])');
+    await page.waitForFunction(() => !document.querySelector('#s-result').hidden, null, { timeout: 20000 });
+    assert.equal(bodies.length, 2, 'draft + review: ' + bodies.length);
+    for (const [i, b] of bodies.entries()) {
+      const who = i ? 'reviewer' : 'drafter';
+      assert.match(b, /客户满意度 92%/, who + ' gets the docx text'); assert.match(b, /华东\\t120/, who + ' gets the xlsx cells');
+      assert.match(b, /会员复购，目标 35%/, who + ' gets the dropped note');
+      assert.match(b, /\[资料\] report\.docx/); assert.match(b, /\[资料\] sales\.xlsx/);
+      assert.match(b, /引用以上资料中的内容时，请在相应句子后注明出处文件名/, who + ' is asked to cite the source file');
+    }
+    assert.match(bodies[1], /对照资料核实引用的内容和出处/);
+    assert.match(bodies[1], /根据资料，本季度客户满意度 92%/, 'reviewer also gets the previous role output');
+    const run = (await app.call('GET', '/api/v2/runs/' + new URL(page.url()).searchParams.get('run'))).json.run;
+    assert.equal(run.projectId, draftId, 'the task is the draft that holds the materials');
+    assert.equal(run.materials.length, 3);
+    assert.equal(await page.evaluate(() => sessionStorage.getItem('aij.b9.draft')), null, 'draft forgotten after start');
+    assert.match(await page.innerText('#s-final'), /出处：report\.docx/);
+    noEnglish(await page.innerText('#s-progress'), ['report.docx', 'sales.xlsx', 'local-writer'], 'progress page');
+    await shot(page, '3-result');
+    ok('MOCK request bodies of BOTH roles contain the docx and xlsx content plus the cite-the-source instruction; the run uses the draft task');
+
+    /* ---- a new task starts empty ---- */
+    await page.click('#s-new'); await page.waitForSelector('#simple:not([hidden])');
+    assert.equal(await page.locator('#s-file-list li').count(), 0);
+    ok('＋ 新建任务 starts with an empty materials list');
+    assert.deepEqual(pageErrors, []);
+
+    /* ---- B8 front user: uploads to their own task, the materials reach the roles too ---- */
+    const PASS = 'user-password-123';
+    assert.equal((await app.call('POST', '/api/v2/users', { username: 'xiaozhang', password: PASS, monthlyCapCny: 5 })).status, 201);
+    const uctx = await browser.newContext({ viewport: { width: 1280, height: 900 } }), up = await uctx.newPage();
+    await up.goto(base + '/login.html'); await up.fill('#un', 'xiaozhang'); await up.fill('#upw', PASS); await up.click('#userBtn');
+    await up.waitForURL(/\/workspace\.html/); await up.waitForFunction(() => document.body.dataset.role === 'user');
+    await up.click('#aij-new'); await up.waitForSelector('#s-drop');
+    await up.fill('#s-goal', '根据资料写一页销售小结');
+    await up.setInputFiles('#s-files', [{ name: 'sales.xlsx', mimeType: 'application/octet-stream', buffer: fs.readFileSync(path.join(FIX, 'sales.xlsx')) }]);
+    await up.waitForFunction(() => /表格 2 张/.test(document.querySelector('#s-file-list').textContent), null, { timeout: 10000 });
+    const userDraft = await up.evaluate(() => sessionStorage.getItem('aij.b9.draft'));
+    const before = bodies.length;
+    await up.click('#s-go'); await up.waitForSelector('#s-confirm[open]');
+    assert.match(await up.innerText('#s-confirm'), /资料：1 个文件/);
+    await up.click('#s-confirm-ok'); await up.waitForSelector('#s-progress:not([hidden])');
+    await up.waitForFunction(() => !document.querySelector('#s-result').hidden, null, { timeout: 20000 });
+    assert.equal(bodies.length - before, 2);
+    for (const b of bodies.slice(before)) assert.match(b, /华东\\t120/);
+    noEnglish(await up.innerText('#s-progress'), ['sales.xlsx', 'report.docx'], 'user progress page');
+    // the user's draft is theirs only: another account cannot read its files
+    const stranger = await app.call('POST', '/api/v2/users', { username: 'xiaoli', password: PASS, monthlyCapCny: 5 });
+    assert.equal(stranger.status, 201);
+    const lc = await browser.newContext(), lp = await lc.newPage();
+    await lp.goto(base + '/login.html'); await lp.fill('#un', 'xiaoli'); await lp.fill('#upw', PASS); await lp.click('#userBtn'); await lp.waitForURL(/\/workspace\.html/);
+    assert.equal(await lp.evaluate(async id => (await fetch('/api/v2/projects/' + id + '/files')).status, userDraft), 404);
+    ok('user account: uploads materials to their own task, roles receive them; another user gets 404 on those files');
+    console.log('\nB9 BROWSER CHECKS PASSED:', results.length);
+  } finally {
+    await browser.close(); await app.stop(); mock.close();
+  }
+})().catch(e => { console.error(e); process.exit(1); });

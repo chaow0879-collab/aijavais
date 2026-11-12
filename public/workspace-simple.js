@@ -18,6 +18,75 @@
     return data;
   }
   const output = () => document.querySelector('input[name=s-output]:checked')?.value || 'word';
+  /* ---------- B9a 原始资料：拖拽/点击上传，多选；复用 /api/v2/projects/:id/files 与 lib/file-extract.js ----------
+   * 第一次加资料时先建一个“草稿”任务来存放文件；点开始时用同一个任务（PUT 写入完整配置），资料原样交给每个岗位。 */
+  const DRAFT_KEY = 'aij.b9.draft';
+  S.files = []; S.draft = null; S.queue = Promise.resolve(); S.draftReq = null; S.maxFileBytes = 8 * 1024 * 1024;
+  let fileSeq = 0;
+  const doneFiles = () => S.files.filter(f => f.state === 'done').map(f => f.file);
+  const remember = id => { try { id ? sessionStorage.setItem(DRAFT_KEY, id) : sessionStorage.removeItem(DRAFT_KEY); } catch { /* 无痕模式：只是刷新后不恢复 */ } };
+  function ensureDraft() {
+    if (S.draft) return Promise.resolve(S.draft);
+    S.draftReq = S.draftReq || api('/api/v2/projects', 'POST', { name: '新任务（正在准备资料）', description: '还没开始的新任务，正在上传资料。',
+      roles: [{ roleId: 'drafter', name: '起草员', duty: '根据需求写出完整初稿' }], steps: [{ stepId: 'draft', roleId: 'drafter', title: '写出初稿' }], materials: { mode: 'all' } })
+      .then(d => { S.draft = { projectId: d.project.projectId, version: d.project.version }; remember(S.draft.projectId); return S.draft; })
+      .finally(() => { S.draftReq = null; });
+    return S.draftReq;
+  }
+  const fileBase64 = file => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1] || ''); r.onerror = () => reject(Error('无法读取这个文件')); r.readAsDataURL(file); });
+  function asEntry(file) { const st = window.SmartPlan.fileStatus(file); return { key: ++fileSeq, name: file.filename, state: 'done', file, text: st.text, warn: !st.ok }; }
+  function renderFiles() {
+    $('s-file-list').replaceChildren(...S.files.map(f => el('li', { className: 'file-' + f.state }, [
+      el('span', { className: 'fname', text: f.name }),
+      el('span', { className: 'fstate ' + (f.state === 'busy' ? 'busy' : f.state === 'error' ? 'bad' : f.warn ? 'warn' : ''), text: f.text }),
+      el('button', { type: 'button', className: 'small', text: f.state === 'error' ? '移除' : '删除', disabled: f.state === 'busy', title: '删除 ' + f.name, onclick: () => removeFile(f) })])));
+  }
+  async function removeFile(f) {
+    if (f.state === 'done') {
+      try { await api('/api/v2/projects/' + encodeURIComponent(S.draft.projectId) + '/files/' + encodeURIComponent(f.file.fileId), 'DELETE'); }
+      catch { f.text = '删除没有成功，请再试一次'; f.warn = true; renderFiles(); return; }
+    }
+    S.files = S.files.filter(x => x !== f); renderFiles(); materialsChanged();
+  }
+  async function upload(entry, file) {
+    try {
+      const d = await ensureDraft();
+      const data = await api('/api/v2/projects/' + encodeURIComponent(d.projectId) + '/files', 'POST', { filename: file.name, contentBase64: await fileBase64(file) });
+      Object.assign(entry, asEntry(data.file), { key: entry.key });
+    } catch (e) { entry.state = 'error'; entry.text = window.SmartPlan.uploadError(e, file.name); }
+    renderFiles(); materialsChanged();
+  }
+  function addFiles(list) {
+    for (const file of Array.from(list || [])) {
+      const bad = window.SmartPlan.checkUpload(file, { maxFileBytes: S.maxFileBytes });
+      const entry = { key: ++fileSeq, name: file.name, state: bad ? 'error' : 'busy', text: bad || '正在读取…' };
+      S.files.push(entry);
+      if (!bad) S.queue = S.queue.then(() => upload(entry, file));
+    }
+    renderFiles();
+  }
+  function materialsChanged() { if (!$('s-plan').hidden) preview(true); showAuto(); }
+  function clearDraft() { S.draft = null; S.files = []; remember(null); renderFiles(); }
+  /* 用一个已有任务的资料（调整团队、刷新页面后恢复草稿） */
+  async function useProjectFiles(projectId, { onlyDraft = false } = {}) {
+    const d = await api('/api/v2/projects/' + encodeURIComponent(projectId));
+    if (onlyDraft && (d.runs || []).length) return false;
+    const files = (await api('/api/v2/projects/' + encodeURIComponent(projectId) + '/files')).files || [];
+    if (!files.length && !onlyDraft) return false;
+    S.draft = { projectId, version: d.project.version }; S.files = files.map(asEntry); remember(projectId); renderFiles(); materialsChanged();
+    return true;
+  }
+  function bindDrop() {
+    const zone = $('s-drop'), input = $('s-files');
+    zone.addEventListener('click', e => { if (e.target !== input) input.click(); });
+    zone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+    input.addEventListener('change', () => { addFiles(input.files); input.value = ''; });
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('over'); addFiles(e.dataTransfer && e.dataTransfer.files); });
+    // 文件没拖准时，浏览器不要直接打开它
+    for (const t of ['dragover', 'drop']) addEventListener(t, e => { if (!zone.contains(e.target)) e.preventDefault(); });
+  }
   function build() {
     $('s-output').replaceChildren(...Object.entries(OUT).map(([k, o]) => el('label', {}, [el('input', { type: 'radio', name: 's-output', value: k, checked: k === 'word' }), o.label])));
     for (const id of ['s-output', 's-goal', 's-deadline']) $(id).addEventListener('input', () => { S.picks = {}; if (!$('s-plan').hidden) preview(true); showAuto(); });
@@ -59,10 +128,10 @@
   /* B5-F2：可选预算（人民币）。空着=自动；填了就按它做上限（不超过管理员的单次上限），引擎门禁不变 */
   const budget = () => $('s-budget-cny').value.trim() === '' ? null : $('s-budget-cny').value.trim(); // validated in SmartPlan.plan (0/负数/文字 -> 提示)
   function makePlan(choice) {
-    return window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value, output: output(), deadline: $('s-deadline').value, capCny: S.capCny, picks: S.picks, choice: choice || S.choice, budgetCny: budget() });
+    return window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value, output: output(), deadline: $('s-deadline').value, capCny: S.capCny, picks: S.picks, choice: choice || S.choice, budgetCny: budget(), materials: doneFiles() });
   }
   function showAuto() {
-    const p = window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value || '写一份文字成果', output: output(), capCny: S.capCny, picks: S.picks });
+    const p = window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value || '写一份文字成果', output: output(), capCny: S.capCny, picks: S.picks, materials: doneFiles() });
     $('s-budget-auto').textContent = !p.ok ? '自动：添加模型后会自动估算' : p.chosen.free ? '自动：本机模型，不花钱' : '自动：约 ¥' + p.suggestedCny.toFixed(2) + '（建议金额）';
   }
   /* 填的金额比建议金额低：一句人话 + 两个按钮，用户选了“就用这个金额”才继续 */
@@ -95,7 +164,7 @@
     if (show) {
       $('s-plan').hidden = !S.plan.ok;
       $('s-plan-team').textContent = S.plan.ok ? '智能分配：' + team(S.plan.summary) : '';
-      $('s-plan-note').textContent = S.plan.ok ? [S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : ''), estNote(S.plan.estimatedNote), skippedText(S.plan)].filter(Boolean).join(' ') : '';
+      $('s-plan-note').textContent = S.plan.ok ? [S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : ''), S.plan.materialsNote, estNote(S.plan.estimatedNote), skippedText(S.plan)].filter(Boolean).join(' ') : '';
       if (S.plan.ok) renderSwap(S.plan);
     }
     return S.plan;
@@ -111,6 +180,7 @@
           el('span', { text: (o.kind === 'quality' ? '效果优先 约¥' + o.estimateCny.toFixed(2) : '省钱 约¥' + o.estimateCny.toFixed(2) + '（效果可能稍差）') + (p.estimatedNote ? '，估计上限 ¥' : '，最多 ¥') + o.maxCny.toFixed(2) + (o.overCap ? '，可能中途停下' : '') + '。' + o.summary })]));
       } else body.append(el('p', { className: 'team', text: p.confirmText }), el('p', { text: '团队：' + team(p.summary) }));
       if (p.budgetCny != null && !p.isRework) body.append(el('p', { className: 'hint', id: 's-confirm-budget', text: p.budgetClipped ? '你填的 ¥' + p.budgetCny.toFixed(2) + ' 超过了单次上限 ¥' + p.capCny.toFixed(2) + '，按 ¥' + p.capCny.toFixed(2) + ' 计算。' : '上限按你填的金额：¥' + p.chosen.maxCny.toFixed(2) + (p.underBudget ? '（比建议金额低，可能做到一半会停下）' : '') + '。' }));
+      if (p.materialsNote && !p.isRework) body.append(el('p', { className: 'hint', id: 's-confirm-materials', text: p.materialsNote }));
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
       if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: estNote(p.estimatedNote) }));
       body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : '¥0.00') + '（估算，以厂商账单为准）。' }));
@@ -136,6 +206,7 @@
   async function go() {
     if (S.busy) return;
     $('s-error').hidden = true;
+    if (S.files.some(f => f.state === 'busy')) { $('s-busy').textContent = '资料还在读取，读完就开始…'; await S.queue; $('s-busy').textContent = ''; }
     await loadModels();
     const first = preview(false);
     if (!first.ok) return showError($('s-error'), first.problems[0], go);
@@ -153,7 +224,10 @@
     S.busy = true; $('s-go').disabled = true;
     try {
       $('s-busy').textContent = '正在创建任务…';
-      const project = (await api('/api/v2/projects', 'POST', p.project)).project;
+      // B9a：有资料时用存放资料的同一个任务（带版本号写入完整配置），否则新建
+      const project = S.draft ? (await api('/api/v2/projects/' + encodeURIComponent(S.draft.projectId), 'PUT', { ...p.project, expectedVersion: S.draft.version })).project
+        : (await api('/api/v2/projects', 'POST', p.project)).project;
+      if (S.draft) S.draft.version = project.version;
       for (const r of p.roles) {
         const m = S.models.find(x => x.connectionId === r.model.connectionId);
         if (m && m.status === 'available') continue;
@@ -165,6 +239,7 @@
       $('s-busy').textContent = '正在开始执行…';
       const run = (await api('/api/v2/projects/' + encodeURIComponent(project.projectId) + '/runs', 'POST', p.approval)).run;
       S.runId = run.runId; S.projectId = project.projectId; S.format = p.format; S.outputLabel = p.outputLabel;
+      clearDraft();
       showProgress(p);
       window.AIJWorkspace?.refreshProjects();
     } catch (e) {
@@ -232,7 +307,9 @@
   async function rework() {
     $('s-run-error').hidden = true;
     await loadModels();
-    const r = window.SmartPlan.rework({ models: S.models, snapshot: S.snapshot, feedback: $('s-rework-text').value, capCny: S.capCny });
+    let materials = [];
+    try { if (S.projectId) materials = (await api('/api/v2/projects/' + encodeURIComponent(S.projectId) + '/files')).files || []; } catch { /* 估算按无资料；引擎仍按实际预留 */ }
+    const r = window.SmartPlan.rework({ models: S.models, snapshot: S.snapshot, feedback: $('s-rework-text').value, capCny: S.capCny, materials });
     if (!r.ok) return showError($('s-run-error'), r.problems[0], rework);
     const qr = quotaProblem(r); if (qr) return showError($('s-run-error'), { text: qr, fix: null }); // QA-B8 P3-5
     if (!(await confirm({ ...r, isRework: true }))) return;
@@ -246,8 +323,9 @@
   }
   /* 调整团队：回到简单表单（同样的需求、同样的团队），用“换一个”调整后重新开始；不进高级设置 */
   function adjust() {
-    const snap = S.snapshot; reset();
+    const snap = S.snapshot, pid = S.projectId; reset();
     if (!snap) return;
+    if (pid) useProjectFiles(pid).catch(() => {}); // 有资料就沿用同一个任务的资料
     $('s-goal').value = String(snap.description || '').split('\n\n想要的成果')[0];
     const label = ((/想要的成果：(.+)/.exec(snap.description || '') || [])[1] || '').split('\n')[0];
     const key = Object.keys(OUT).find(k => OUT[k].label === label); if (key) document.querySelector(`input[name=s-output][value=${key}]`).checked = true;
@@ -256,7 +334,7 @@
     $('s-plan').scrollIntoView({ block: 'center' });
   }
   function reset() {
-    clearInterval(S.timer); S.runId = null; S.picks = {}; S.choice = 'quality';
+    clearInterval(S.timer); S.runId = null; S.picks = {}; S.choice = 'quality'; clearDraft();
     $('home').hidden = true; $('s-progress').hidden = true; $('simple').hidden = false; $('s-error').hidden = true; $('s-plan').hidden = true;
     history.replaceState(null, '', '/workspace.html?new=1');
   }
@@ -358,7 +436,7 @@
   }
   window.AIJSimple = { reset };
   addEventListener('DOMContentLoaded', async () => {
-    build();
+    build(); bindDrop();
     $('s-go').addEventListener('click', go);
     $('s-preview').addEventListener('click', async () => { $('s-error').hidden = true; await loadModels(); const p = preview(true); if (!p.ok) showError($('s-error'), p.problems[0], () => preview(true)); });
     $('s-advanced').addEventListener('click', () => { document.body.dataset.mode = 'advanced'; });
@@ -374,6 +452,9 @@
     const q = new URLSearchParams(location.search), user = await isUser();
     if (q.get('project') && !user) document.body.dataset.mode = 'advanced'; // B8：使用者只有简单模式，没有后台式的高级配置
     try { await loadModels(); showAuto(); } catch { /* 页面其余部分仍可用 */ }
+    // B9a：刷新页面后恢复还没开始的草稿里的资料
+    let kept = null; try { kept = sessionStorage.getItem(DRAFT_KEY); } catch { /* 无痕模式 */ }
+    if (kept && !q.get('run') && !q.get('project')) useProjectFiles(kept, { onlyDraft: true }).then(okd => { if (!okd) remember(null); }).catch(() => remember(null));
     if (q.get('run')) { S.runId = q.get('run'); try { const run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; S.projectId = run.projectId; restoreFormat(run); showProgress(null); } catch { reset(); } }
     else if ((user || !q.get('project')) && q.get('new') !== '1') {
       // B5-F2：默认落点永远是“我的任务”（顶栏“我的任务”在任何页面点了都显示任务列表）；

@@ -13,7 +13,7 @@ require('./teams.test.js');
 require('./acceptance.test.js');
 require('./project-intake.test.js');
 require('./budget.test.js'); require('./reasoning.test.js'); require('./b7-usability.test.js'); require('./b5-home.test.js');
-require('./b8-users-store.test.js'); require('./b8-split.test.js');
+require('./b8-users-store.test.js'); require('./b8-split.test.js'); require('./b9-smart.test.js');
 require('./intake-draft.test.js');
 require('./intake-draft-api.test.js');
 require('./model-request-recovery.test.js');

@@ -26,6 +26,8 @@
   const FX = 7.5;
   const MAX_OUTPUT = 2048;
   const EXPECT = { systemTokens: 600, draftOut: 1500, reviewOut: 1800, systemBytes: 1800 };
+  /* B9a 资料：起草时最多带前 30000 字，审核时最多带前 20000 字（截取时提示词里会注明“已截取前 N 字”，确认框也会告诉用户） */
+  const MATERIALS = Object.freeze({ draft: 30000, review: 20000, perFileBytes: 200 });
   const TIER_ORDER = { high: 0, mid: 1, low: 2 };
   const TIER_TEXT = { low: '便宜快速', mid: '均衡', high: '擅长分析推理' };
   const OUTPUTS = Object.freeze({
@@ -81,11 +83,17 @@
     }
     return roles;
   }
-  function cost(roles, goal) {
+  /* B9a: what each step will carry from the uploaded materials (chars; CJK counted at 3 bytes, the engine reserves by bytes) */
+  function materialShare(list) {
+    const files = (list || []).filter(Boolean), total = files.reduce((n, f) => n + (readableFile(f) ? fileChars(f) : 0), 0);
+    return { files: files.length, readable: files.filter(readableFile).length, total, draft: Math.min(total, MATERIALS.draft), review: Math.min(total, MATERIALS.review) };
+  }
+  const matBytes = (chars, share) => share.files ? chars * 3 + share.files * MATERIALS.perFileBytes + 200 : 0;
+  function cost(roles, goal, share = materialShare([])) {
     const goalTok = Math.ceil(String(goal).length * 1.2);
     const steps = [
-      { m: roles[0].model, inTok: EXPECT.systemTokens + goalTok, outTok: EXPECT.draftOut, inBytes: EXPECT.systemBytes + bytes(goal) },
-      { m: roles[1].model, inTok: EXPECT.systemTokens + goalTok + EXPECT.draftOut, outTok: EXPECT.reviewOut, inBytes: EXPECT.systemBytes + bytes(goal) + MAX_OUTPUT * 4 },
+      { m: roles[0].model, inTok: EXPECT.systemTokens + goalTok + Math.ceil(share.draft * 1.2), outTok: EXPECT.draftOut, inBytes: EXPECT.systemBytes + bytes(goal) + matBytes(share.draft, share) },
+      { m: roles[1].model, inTok: EXPECT.systemTokens + goalTok + EXPECT.draftOut + Math.ceil(share.review * 1.2), outTok: EXPECT.reviewOut, inBytes: EXPECT.systemBytes + bytes(goal) + MAX_OUTPUT * 4 + matBytes(share.review, share) },
     ];
     let estimate = 0, reserveNeed = 0, firstNeed = 0;
     steps.forEach((s, i) => {
@@ -98,8 +106,8 @@
     });
     return { estimate: yuan(estimate), needed: yuan10(Math.max(3 * estimate, reserveNeed)), firstNeed: yuan(firstNeed) };
   }
-  function option(roles, goal, capCny, kind, budgetCny = null) {
-    const c = cost(roles, goal), free = roles.every(r => isLocal(r.model));
+  function option(roles, goal, capCny, kind, budgetCny = null, share) {
+    const c = cost(roles, goal, share), free = roles.every(r => isLocal(r.model));
     // B5-F2：用户自己填了人民币上限就按它（不超过管理员设的单次上限）；没填就“自动”= 需要的金额与单次上限取小
     const fixed = budgetCny != null && !free;
     // a user amount is floored to the fen and never raised; below what the first step needs it is flagged, not lifted
@@ -124,7 +132,8 @@
       '按内容选最合适的 layout（并列的 3–4 个概念用 cards，先后步骤用 timeline，对比用 two-column，最后一页用 summary）；每页要点不超过 6 条，每条不超过 30 个字；' +
       '标题写给听众看，不要写“第N页”；不要写视觉建议、配色、配图或排版说明；不要使用 # * - 等 Markdown 符号。';
   }
-  function plan({ models, goal, output = 'word', deadline = '', capCny = 5, picks = {}, choice = 'quality', budgetCny = null } = {}) {
+  function plan({ models, goal, output = 'word', deadline = '', capCny = 5, picks = {}, choice = 'quality', budgetCny = null, materials = [] } = {}) {
+    const share = materialShare(materials);
     // empty = automatic; anything else must be a positive amount (0, negative or text is an error, never "automatic")
     const blank = budgetCny == null || String(budgetCny).trim() === '';
     const budget = blank ? null : Number(budgetCny);
@@ -140,10 +149,10 @@
     else if (!pool.length) problems.push({ code: 'no_priced_model', text: '现在的模型都来自没有登记价格的平台，按规定不调用：' + skipped.join('、') + '。请管理员添加已登记价格平台的模型。' });
     if (problems.length) return { ok: false, problems, skipped, roles: [], summary: '', options: {} };
     const cap = Math.max(0.1, Number(capCny) || 5), specs = roleSet(output);
-    const quality = option(assign(pool, specs, picks, false), text, cap, 'quality', budget);
+    const quality = option(assign(pool, specs, picks, false), text, cap, 'quality', budget, share);
     const options = { quality };
     if (quality.overCap) {
-      const saving = option(assign(pool, specs, picks, true), text, cap, 'saving');
+      const saving = option(assign(pool, specs, picks, true), text, cap, 'saving', null, share);
       if (saving.summary !== quality.summary) options.saving = saving;
     }
     const chosen = options[choice] || quality;
@@ -152,20 +161,22 @@
     const project = {
       name: text.replace(/\s+/g, ' ').slice(0, 30),
       description: text + '\n\n想要的成果：' + out.label + (String(deadline || '').trim() ? '\n希望完成时间：' + String(deadline).trim() : ''),
-      standards: ['使用中文', '不编造事实或数据'], deliverables: [out.label], maxReworks: 3,
+      standards: ['使用中文', '不编造事实或数据', ...(share.files ? ['引用上传资料时注明出处文件名'] : [])], deliverables: [out.label], maxReworks: 3,
+      materials: { mode: share.files ? 'all' : 'none', fileIds: [], maxChars: MATERIALS.draft },
       roles: chosen.roles.map(r => ({ roleId: r.spec.roleId, name: r.spec.name, duty: r.spec.duty, boundary: r.spec.boundary, standard: r.spec.standard, connectionId: r.model.connectionId, requiredCapabilities: [] })),
       steps: [
         { stepId: 'draft', roleId: 'drafter', title: '写出初稿', prompt: '任务：' + text + '\n' + out.ask, checks: [{ type: 'minLength', value: 20 }] },
-        { stepId: 'review', roleId: 'reviewer', title: '审核并定稿', prompt: output === 'ppt' ? slidesAsk(text) : '审核上一步的初稿，修正错误与遗漏。只输出修订后的完整最终成果，不要附加审核过程。' + out.ask, checks: [{ type: 'minLength', value: 20 }], handoff: 'previous' },
+        { stepId: 'review', roleId: 'reviewer', title: '审核并定稿', prompt: output === 'ppt' ? slidesAsk(text) : '审核上一步的初稿，修正错误与遗漏' + (share.files ? '，并对照资料核实引用的内容和出处' : '') + '。只输出修订后的完整最终成果，不要附加审核过程。' + out.ask, checks: [{ type: 'minLength', value: 20 }], handoff: 'previous', materialsMaxChars: MATERIALS.review },
       ],
     };
     const approval = { approvePaid: Object.keys(prices).length > 0, maxCost: Math.floor(chosen.maxCny / FX * 10000) / 10000, maxTokens: 200000, maxOutputTokens: MAX_OUTPUT, prices, allowedTools: [], approveExternalTools: false };
     return { ok: true, problems: [], skipped, options, chosen, roles: chosen.roles, summary: chosen.summary, project, approval, format: out.format, outputLabel: out.label, confirmText: confirmText(chosen, chosen.roles.some(r => estimated(r.model))), estimatedNote: estimatedNote(chosen.roles.map(r => r.model)), capCny: cap,
-      budgetCny: budget, suggestedCny: chosen.autoCny, minCny: chosen.minCny, underBudget: !!chosen.underBudget, belowMin: !!chosen.belowMin, budgetClipped: budget != null && fen(budget) > cap };
+      materialsNote: materialsNote(share), budgetCny: budget, suggestedCny: chosen.autoCny, minCny: chosen.minCny, underBudget: !!chosen.underBudget, belowMin: !!chosen.belowMin, budgetClipped: budget != null && fen(budget) > cap };
   }
   /* QA-B7-01 返工：只重做"审核并定稿"这一步（沿用已完成的初稿），按审核员单价重新估算，再确认一次人民币。
    * 每轮返工都是新的显式批准，不继承上一次。snapshot = run.projectSnapshot. */
-  function rework({ models, snapshot, feedback = '', capCny = 5 } = {}) {
+  function rework({ models, snapshot, feedback = '', capCny = 5, materials = [] } = {}) {
+    const share = materialShare(materials), mBytes = matBytes(share.review, share);
     const byId = new Map((models || []).map(m => [m.connectionId, m]));
     const roles = (snapshot && snapshot.roles) || [], reviewer = roles.find(r => r.roleId === 'reviewer') || roles[roles.length - 1];
     const text = String(feedback || '').trim();
@@ -173,9 +184,9 @@
     const missing = roles.map(r => byId.get(r.connectionId)).filter(m => !m || !cnyRate(m));
     if (!reviewer || missing.length) return { ok: false, problems: [{ code: 'no_priced_model', text: '这个任务用到的模型现在没有登记价格或已被移除，按规定不调用。请点“＋ 新建任务”重新开始。' }] };
     const m = byId.get(reviewer.connectionId), r = cnyRate(m), goal = String(snapshot.description || '');
-    const inTok = EXPECT.systemTokens + Math.ceil((goal.length + text.length) * 1.2) + EXPECT.draftOut, outTok = EXPECT.reviewOut;
+    const inTok = EXPECT.systemTokens + Math.ceil((goal.length + text.length + share.review) * 1.2) + EXPECT.draftOut, outTok = EXPECT.reviewOut;
     const est = (inTok * r.input + outTok * r.output) / 1e6;
-    const bound = ((EXPECT.systemBytes + bytes(goal) + bytes(text) + MAX_OUTPUT * 4 + 256) * r.input + (MAX_OUTPUT + (thinkingHost(m) ? MAX_OUTPUT / 2 : 0)) * r.output) / 1e6;
+    const bound = ((EXPECT.systemBytes + bytes(goal) + bytes(text) + MAX_OUTPUT * 4 + mBytes + 256) * r.input + (MAX_OUTPUT + (thinkingHost(m) ? MAX_OUTPUT / 2 : 0)) * r.output) / 1e6;
     const cap = Math.max(0.1, Number(capCny) || 5), free = isLocal(m);
     const needed = yuan10(Math.max(3 * est, bound)), maxCny = free ? 0 : Math.max(0.1, Math.min(cap, needed));
     const option = { kind: 'quality', roles: [], summary: reviewer.name + ' → ' + Hints.platformLabel(m), estimateCny: free ? 0 : Math.max(0.01, yuan(est)), maxCny, neededCny: needed, overCap: !free && needed > cap, free };
@@ -204,6 +215,63 @@
       return r.spec.name + ' → ' + Hints.platformLabel(r.model) + '（' + why.join('，') + '）';
     }).join('｜');
   }
+  /* ---------- B9a 资料上传：人话状态（不显示英文代码和 JSON） ---------- */
+  const ACCEPT = ['docx', 'xlsx', 'pptx', 'pdf', 'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'png', 'jpg', 'jpeg', 'gif', 'webp'];
+  const OLD_OFFICE = { doc: 'Word', xls: 'Excel', ppt: 'PPT', wps: 'WPS 文字', et: 'WPS 表格', dps: 'WPS 演示' };
+  const NEW_EXT = { doc: 'docx', xls: 'xlsx', ppt: 'pptx', wps: 'docx', et: 'xlsx', dps: 'pptx' };
+  const extOf = name => (/\.([a-z0-9]{1,10})$/i.exec(String(name || '')) || [])[1]?.toLowerCase() || '';
+  const fileChars = f => Number((f && f.extraction ? f.extraction.chars : f && f.chars) || 0);
+  const readableFile = f => ((f && f.extraction ? f.extraction.status : f && f.status) === 'ok');
+  const mb = n => (Math.round(n / 1024 / 1024 * 10) / 10) + ' MB';
+  function charsText(n) {
+    n = Math.max(0, Math.floor(Number(n) || 0));
+    return n >= 10000 ? (Math.round(n / 1000) / 10) + ' 万字' : n + ' 字';
+  }
+  /* 上传完成后的一句人话状态；ok=false 表示岗位读不到文字（会如实告诉岗位“存在但读不到”） */
+  function fileStatus(f) {
+    const x = (f && f.extraction) || {}, meta = x.meta || {}, chars = fileChars(f), kind = f && f.kind;
+    if (x.status === 'ok') {
+      if (kind === 'pdf') return { ok: true, text: '已读取 ' + (meta.pages || 1) + ' 页 / ' + charsText(chars) };
+      if (kind === 'xlsx') return { ok: true, text: '表格 ' + ((meta.sheets || []).length || 1) + ' 张，已读取 ' + charsText(chars) };
+      if (kind === 'pptx') return { ok: true, text: '已读取 ' + (meta.slides || 1) + ' 页幻灯片 / ' + charsText(chars) };
+      if (kind === 'table') return { ok: true, text: '表格 1 张，已读取 ' + charsText(chars) };
+      return { ok: true, text: '已读取 ' + charsText(chars) };
+    }
+    if (kind === 'image' || x.status === 'metadata_only') return { ok: false, text: '图片已保存（当前模型不会看图）' };
+    if (kind === 'pdf' && x.status === 'no_text') return { ok: false, text: '这个 PDF 是扫描件，读不到文字' };
+    if (kind === 'pdf' && x.status === 'tool_unavailable') return { ok: false, text: 'PDF 已保存，但服务器暂时读不了 PDF 里的文字' };
+    return { ok: false, text: '文件里没有能读的文字' };
+  }
+  /* 选文件后、上传前的检查：不支持的类型、超过大小上限，用人话说明 */
+  function checkUpload(file, { maxFileBytes = 8 * 1024 * 1024 } = {}) {
+    const name = String(file && file.name || ''), ext = extOf(name), size = Number(file && file.size) || 0;
+    if (OLD_OFFICE[ext]) return '「' + name + '」是旧版 ' + OLD_OFFICE[ext] + ' 格式，请先另存为 .' + NEW_EXT[ext] + ' 再上传。';
+    if (!ACCEPT.includes(ext)) return '「' + name + '」这种文件暂时读不了。可以上传 Word、Excel、PPT、PDF、TXT、MD、CSV 和图片。';
+    if (!size) return '「' + name + '」是空文件。';
+    if (size > maxFileBytes) return '「' + name + '」有 ' + mb(size) + '，超过了单个文件 ' + mb(maxFileBytes) + ' 的上限，请压缩或拆分后再传。';
+    return '';
+  }
+  /* 服务器拒绝时：中文原因直接说；其它（英文、代码）一律换成人话 */
+  function uploadError(err, name) {
+    const msg = String(err && err.message || ''), status = err && err.status, code = err && err.code;
+    const known = { type_mismatch: '文件内容和它的类型对不上（可能改过扩展名，或者文件已损坏），请用原来的软件重新另存后再传',
+      corrupt_file: '文件好像损坏了，打不开', zip_limit: '文件内容异常（解压后过大或压缩比异常），为安全起见没有读取', unsupported_file: '文件里有暂时不支持的内容，没有读取',
+      encoding: '文字文件不是通用编码，请用记事本另存为“UTF-8”后再传', text_limit: '文件里的文字太多了，请拆成几个小文件再传', invalid_json: '文件格式不正确，读不了' };
+    if (known[code]) return '「' + name + '」没有上传成功：' + known[code] + '。';
+    if (status === 413 && !/[\u4e00-\u9fff]/.test(msg)) return '「' + name + '」太大了，单个文件不能超过 8 MB。';
+    if (/[\u4e00-\u9fff]/.test(msg)) return '「' + name + '」没有上传成功：' + msg.replace(/[。.]$/, '') + '。';
+    return '「' + name + '」没有上传成功，请再试一次。';
+  }
+  function materialsNote(share) {
+    if (!share || !share.files) return '';
+    const unread = share.files - share.readable;
+    let t = '资料：' + share.files + ' 个文件' + (share.total ? '，能读到的文字共 ' + charsText(share.total) : '') + '。' + (share.readable ? '每个岗位都会拿到资料摘录。' : '');
+    if (share.total > MATERIALS.review) t += share.total > MATERIALS.draft
+      ? '资料比较长：起草时带上前 ' + charsText(MATERIALS.draft) + '，审核时带上前 ' + charsText(MATERIALS.review) + '，截取的地方会注明“已截取前 N 字”。'
+      : '审核时带上前 ' + charsText(MATERIALS.review) + '，截取的地方会注明“已截取前 N 字”。';
+    if (unread) t += '有 ' + unread + ' 个文件读不到文字（图片或扫描件），岗位只知道它存在，不会编造其中内容。';
+    return t;
+  }
   const spentCny = usd => Math.round((Number(usd) || 0) * FX * 100) / 100;
   function explain(err, ctx = {}) {
     const code = err && err.code, msg = String(err && err.message || '');
@@ -224,5 +292,5 @@
     if (/^[^A-Za-z]*$/.test(msg) && msg) return { text: msg, fix: null };
     return { text: '启动没有成功。', fix: { action: 'retry', label: '再试一次' }, detail: msg };
   }
-  return { plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
+  return { fileStatus, checkUpload, uploadError, materialsNote, materialShare, charsText, MATERIALS, ACCEPT, plan, rework, explain, summary, estimatedNote, pageCount, slidesAsk, usable, chat, cnyRate, usdRate, spentCny, confirmText, OUTPUTS, FX, CNY_PER_USD: FX, MAX_OUTPUT, TIER_TEXT, EXPECT };
 });
