@@ -85,6 +85,7 @@
       <div id="s-drop" class="drop" role="button" tabindex="0" aria-describedby="s-files-hint"><strong>把文件拖到这里</strong>，或者点这里选择文件（可以一次选多个）<input id="s-files" type="file" multiple hidden accept=".docx,.xlsx,.pptx,.pdf,.txt,.md,.markdown,.csv,.tsv,.json,.png,.jpg,.jpeg,.gif,.webp,.doc,.xls,.ppt"></div>
       <p id="s-files-hint" class="hint">支持 Word、Excel、PPT、PDF、TXT、MD、CSV 和图片；单个文件不超过 8 MB，每个任务最多 50 个。每个岗位都会拿到资料内容。</p>
       <ul id="s-file-list" class="files" aria-live="polite"></ul>
+      <p id="s-draft-row" class="hint" hidden><span id="s-draft-text">这是一个还没开始的草稿，资料已保存（30 天不动会自动清理）。</span> <button id="s-draft-del" type="button" class="small">放弃这个草稿（连同资料一起删除）</button></p>
       <label>想要什么成果</label><div class="chips" id="s-output" role="radiogroup" aria-label="想要什么成果"></div>
       <label for="s-deadline">什么时候要（可选）</label><input id="s-deadline" maxlength="60" placeholder="例如：本周五前">
       <label for="s-budget-cny">最多花多少钱（可选）</label>

@@ -224,6 +224,22 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
     assert.equal(bodies.length - before, 2);
     for (const b of bodies.slice(before)) assert.match(b, /华东\\t120/);
     noEnglish(await up.innerText('#s-progress'), ['sales.xlsx', 'report.docx'], 'user progress page');
+    // AUD-FEB8-01: an unfinished draft is on 我的任务, opens with its materials, and can be discarded
+    await up.click('#aij-new'); await up.waitForSelector('#s-drop');
+    await up.setInputFiles('#s-files', [{ name: '草稿资料.md', mimeType: 'text/markdown', buffer: Buffer.from('# 草稿\n还没想好要做什么') }]);
+    await up.waitForFunction(() => /已读取/.test(document.querySelector('#s-file-list').textContent));
+    const keep = await up.evaluate(() => sessionStorage.getItem('aij.b9.draft'));
+    assert.match(await up.innerText('#s-draft-row'), /这是一个还没开始的草稿，资料已保存（30 天不动会自动清理）/);
+    await up.evaluate(() => sessionStorage.clear()); // a later visit: only 我的任务 knows the draft
+    await up.click('#aij-home'); await up.waitForSelector(`#home-groups a[href*="draft=${keep}"]`);
+    await up.click(`#home-groups a[href*="draft=${keep}"]`); await up.waitForURL(/\?draft=/);
+    await up.waitForFunction(() => /草稿资料\.md/.test(document.querySelector('#s-file-list').textContent));
+    assert.equal(await up.isVisible('#simple'), true);
+    await up.click('#s-draft-del'); assert.equal(await up.innerText('#s-draft-del'), '确定删除？再点一次');
+    await up.click('#s-draft-del'); await up.waitForFunction(() => /草稿和资料已删除/.test(document.querySelector('#s-busy').textContent));
+    assert.equal(await up.locator('#s-file-list li').count(), 0);
+    assert.equal(await up.evaluate(async id => (await fetch('/api/v2/projects/' + id)).status, keep), 404, 'the draft and its files are gone on the server');
+    ok('AUD-FEB8-01: a user\'s unfinished draft is on 我的任务, reopens with its materials, and 放弃这个草稿 deletes it (two clicks)');
     // the user's draft is theirs only: another account cannot read its files
     const stranger = await app.call('POST', '/api/v2/users', { username: 'xiaoli', password: PASS, monthlyCapCny: 5 });
     assert.equal(stranger.status, 201);

@@ -214,7 +214,7 @@
     if(!state.projects.length)target.append(node('p',{class:'empty',text:document.body.dataset.role==='user'?'还没有任务。点上面的“＋ 新建任务”开始。':'还没有项目。从智能立项开始，或点击新建。'}));// QA-B8-01: users cannot open 智能立项
     for(const project of state.projects){
       const task=(state.tasks||[]).find(t=>t.projectId===project.projectId);
-      const open=()=>{if(task&&task.runId&&document.body.dataset.mode!=='advanced'){location.assign('/workspace.html?run='+encodeURIComponent(task.runId));return;}if(document.body.dataset.role==='user'){location.assign('/workspace.html?new=1');return;}return openProject(project.projectId);};
+      const open=()=>{if(task&&task.runId&&document.body.dataset.mode!=='advanced'){location.assign('/workspace.html?run='+encodeURIComponent(task.runId));return;}if(document.body.dataset.role==='user'){location.assign('/workspace.html?draft='+encodeURIComponent(project.projectId));return;}/* AUD-FEB8-01: a user resumes the draft (its materials), not a blank form */return openProject(project.projectId);};
       const small=task?(task.runId?(task.group==='running'?'第 '+Math.min(task.stepsDone+1,task.stepsTotal||1)+'/'+(task.stepsTotal||1)+' 步':'完成 '+task.stepsDone+'/'+(task.stepsTotal||1)+' 步')+(task.downloadable&&task.group!=='running'?' · 有成果可下载':''):'还没开始'):(project.roles || []).length+' 个岗位';
       const button=node('button',{type:'button',class:'project-button','data-project-id':project.projectId,'aria-current':String(state.project && state.project.projectId===project.projectId),onclick:work(open)},[node('strong',{},[project.name,...(task?[node('span',{class:'pstate '+task.group,text:TASK_STATE[task.group]})]:[])]),node('small',{text:small})]);
       target.append(button);

@@ -237,3 +237,49 @@ test('B9c API: a revision starts from the previous version, makes version N+1, o
   const n1 = prompts.length, limit = await ask('再改一次');
   assert.equal(limit.status, 409); assert.equal(limit.json.code, 'rework_limit'); assert.equal(prompts.length, n1);
 });
+
+/* ---------------- AUD-FEB8-01: drafts are bounded, resumable, deletable and expire ---------------- */
+test('AUD-FEB8-01: per-user draft limit; storage counted per owner; abandoned drafts expire, never a project with a run', async t => {
+  const mock = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: '好的成果文字，内容足够长。' } }] }) + '\n\ndata: [DONE]\n\n'); }); });
+  await new Promise(r => mock.listen(0, '127.0.0.1', r));
+  const mp = mock.address().port;
+  const S = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mp } });
+  t.after(async () => { await S.stop(); await new Promise(r => mock.close(r)); });
+  const PASS = 'user-password-123';
+  await S.call('POST', '/api/v2/users', { username: 'erin', password: PASS, monthlyCapCny: 5 });
+  const ck = (await S.call('POST', '/api/auth/user-login', { username: 'erin', password: PASS }, { cookie: false })).headers['set-cookie'][0].split(';')[0];
+  const E = (m, u, b) => S.call(m, u, b, { cookie: ck });
+  const draft = { name: '新任务（正在准备资料）', description: '还没开始的新任务，正在上传资料。', roles: [{ roleId: 'drafter', name: '起草员' }], steps: [{ stepId: 'draft', roleId: 'drafter', title: '写出初稿' }] };
+  const ids = [];
+  for (let i = 0; i < 20; i++) { const r = await E('POST', '/api/v2/projects', draft); assert.equal(r.status, 201, r.text); ids.push(r.json.project.projectId); }
+  const over = await E('POST', '/api/v2/projects', draft);
+  assert.equal(over.status, 429); assert.equal(over.json.code, 'draft_limit'); assert.match(over.json.error, /还没开始的任务最多 20 个/);
+  assert.equal((await S.call('POST', '/api/v2/projects', draft)).status, 201, 'the admin is not limited');
+  assert.equal((await E('POST', `/api/v2/projects/${ids[0]}/files`, { filename: 'a.txt', contentBase64: Buffer.from('资料内容').toString('base64') })).status, 201);
+  assert.equal((await E('DELETE', `/api/v2/projects/${ids[1]}`)).status, 200, 'a user deletes her own draft');
+  assert.equal((await E('POST', '/api/v2/projects', draft)).status, 201, 'room again after deleting');
+  // expiry: age everything, then keep the recent ones / the ones with a run / the admin's own non-placeholder projects
+  const { DatabaseSync } = require('node:sqlite'), path = require('node:path');
+  const models = (await S.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'w', pricingMode: 'local', capabilities: ['writing'] })).json.connection.connectionId;
+  await S.call('POST', '/api/models/' + models + '/test', {});
+  const withRun = (await E('PUT', `/api/v2/projects/${ids[2]}`, { ...draft, name: '已运行', roles: [{ roleId: 'drafter', name: '起草员', connectionId: models }], expectedVersion: 1 })).json.project;
+  assert.equal((await E('POST', `/api/v2/projects/${withRun.projectId}/runs`, { maxTokens: 20000, maxOutputTokens: 100, maxCost: 0 })).status, 202);
+  const adminOwn = (await S.call('POST', '/api/v2/projects', { ...draft, name: '管理员自己的项目', description: '高级设置里配的项目' })).json.project.projectId;
+  const adminPlaceholder = (await S.call('POST', '/api/v2/projects', draft)).json.project.projectId;
+  const before = (await S.call('GET', '/api/v2/projects')).json.projects.length;
+  for (let i = 0; i < 100; i++) { const r = (await S.call('GET', '/api/v2/projects/' + withRun.projectId)).json.runs[0]; if (!r.executionActive && r.status !== 'running') break; await H.sleep(30); }
+  // the sweep runs at start-up and every 6 h: stop the server, age the rows, start it again on the same data
+  await new Promise(r => { if (S.child.exitCode !== null) return r(); S.child.once('exit', r); S.child.kill('SIGTERM'); });
+  const old = Date.now() - 31 * 86400e3, db = new DatabaseSync(path.join(S.dir, 'projects.sqlite')); db.exec('PRAGMA busy_timeout=5000');
+  db.prepare('UPDATE projects SET updated_at=?').run(old); db.prepare('UPDATE project_files SET created_at=?').run(old); db.prepare('UPDATE runs SET created_at=?').run(old);
+  const fresh = ids[3]; db.prepare('UPDATE projects SET updated_at=? WHERE id=?').run(Date.now(), fresh);
+  db.close();
+  const S2 = await H.boot({ dir: S.dir, env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mp } }); t.after(() => S2.kill());
+  const after = (await S2.call('GET', '/api/v2/projects')).json.projects.map(p => p.projectId);
+  assert.ok(after.includes(withRun.projectId), 'a project with a run is never removed');
+  assert.ok(after.includes(adminOwn), "the admin's own project is not a draft to expire");
+  assert.ok(after.includes(fresh), 'a recently touched draft stays');
+  assert.ok(!after.includes(ids[0]) && !after.includes(ids[4]), 'abandoned user drafts (and their files) expired');
+  assert.ok(!after.includes(adminPlaceholder), 'an abandoned new-task placeholder draft expired');
+  assert.equal(after.length, before - 20, 'exactly the 18 old user drafts and the 2 old placeholder drafts');
+});

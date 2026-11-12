@@ -35,7 +35,9 @@
   }
   const fileBase64 = file => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1] || ''); r.onerror = () => reject(Error('无法读取这个文件')); r.readAsDataURL(file); });
   function asEntry(file) { const st = window.SmartPlan.fileStatus(file); return { key: ++fileSeq, name: file.filename, state: 'done', file, text: st.text, warn: !st.ok }; }
+  const DRAFT_NAME = '新任务（正在准备资料）';
   function renderFiles() {
+    $('s-draft-row').hidden = !S.draft; $('s-draft-del').textContent = '放弃这个草稿（连同资料一起删除）'; S.delArmed = false;
     $('s-file-list').replaceChildren(...S.files.map(f => el('li', { className: 'file-' + f.state }, [
       el('span', { className: 'fname', text: f.name }),
       el('span', { className: 'fstate ' + (f.state === 'busy' ? 'busy' : f.state === 'error' ? 'bad' : f.warn ? 'warn' : ''), text: f.text }),
@@ -67,6 +69,13 @@
   }
   function materialsChanged() { if (!$('s-plan').hidden) preview(true); showAuto(); }
   function clearDraft() { S.draft = null; S.files = []; remember(null); renderFiles(); }
+  /* AUD-FEB8-01：放弃草稿 = 删除这个还没开始的任务和它的资料（点两次，防误删） */
+  async function discardDraft() {
+    if (!S.draft) return;
+    if (!S.delArmed) { S.delArmed = true; $('s-draft-del').textContent = '确定删除？再点一次'; return; }
+    try { await api('/api/v2/projects/' + encodeURIComponent(S.draft.projectId), 'DELETE'); clearDraft(); $('s-busy').textContent = '草稿和资料已删除。'; window.AIJWorkspace?.refreshProjects(); }
+    catch { $('s-draft-del').textContent = '删除没有成功，请再试一次'; S.delArmed = false; }
+  }
   /* 用一个已有任务的资料（调整团队、刷新页面后恢复草稿） */
   async function useProjectFiles(projectId, { onlyDraft = false } = {}) {
     const d = await api('/api/v2/projects/' + encodeURIComponent(projectId));
@@ -444,7 +453,9 @@
   const GROUPS = [['running', '进行中'], ['review', '等你审核'], ['stopped', '已停下'], ['done', '已完成'], ['draft', '草稿']];
   const GTEXT = Object.fromEntries(GROUPS);
   let TASKS = null;
-  const taskHref = t => t.runId ? '/workspace.html?run=' + encodeURIComponent(t.runId) : '/workspace.html?project=' + encodeURIComponent(t.projectId);
+  // AUD-FEB8-01：使用者（以及新建任务页留下的草稿）点草稿卡片 = 回到新建任务页继续，资料都在
+  const taskHref = t => t.runId ? '/workspace.html?run=' + encodeURIComponent(t.runId)
+    : (document.body.dataset.role === 'user' || t.name === DRAFT_NAME) ? '/workspace.html?draft=' + encodeURIComponent(t.projectId) : '/workspace.html?project=' + encodeURIComponent(t.projectId);
   const when = ts => { const d = Date.now() - ts; return d < 60e3 ? '刚刚' : d < 3600e3 ? Math.floor(d / 60e3) + ' 分钟前' : d < 86400e3 ? Math.floor(d / 3600e3) + ' 小时前' : new Date(ts).toLocaleDateString('zh-CN'); };
   const progressText = t => { if (!t.runId) return '还没开始'; const total = t.stepsTotal || 1; return t.group === 'running' ? '第 ' + Math.min(t.stepsDone + 1, total) + '/' + total + ' 步' + (t.currentRole ? ' · ' + t.currentRole + '正在做' : '') : '完成 ' + t.stepsDone + '/' + total + ' 步'; };
   const running = () => (TASKS ? TASKS.tasks.filter(t => t.group === 'running').sort((a, b) => b.updatedAt - a.updatedAt) : []);
@@ -537,7 +548,7 @@
   }
   window.AIJSimple = { reset };
   addEventListener('DOMContentLoaded', async () => {
-    build(); bindDrop();
+    build(); bindDrop(); $('s-draft-del').addEventListener('click', discardDraft);
     $('s-go').addEventListener('click', go);
     $('s-preview').addEventListener('click', async () => { $('s-error').hidden = true; await loadModels(); const p = preview(true); if (!p.ok) showError($('s-error'), p.problems[0], () => preview(true)); });
     $('s-advanced').addEventListener('click', () => { document.body.dataset.mode = 'advanced'; });
@@ -555,9 +566,11 @@
     try { await loadModels(); showAuto(); } catch { /* 页面其余部分仍可用 */ }
     // B9a：刷新页面后恢复还没开始的草稿里的资料
     let kept = null; try { kept = sessionStorage.getItem(DRAFT_KEY); } catch { /* 无痕模式 */ }
-    if (kept && !q.get('run') && !q.get('project')) useProjectFiles(kept, { onlyDraft: true }).then(okd => { if (!okd) remember(null); }).catch(() => remember(null));
+    if (q.get('draft')) kept = q.get('draft'); // 从“我的任务”的草稿卡片进来
+    const gone = () => { remember(null); if (q.get('draft')) { $('s-busy').textContent = '这个草稿已经不在了（可能已删除，或超过 30 天没动被自动清理），请重新新建任务。'; } };
+    if (kept && !q.get('run') && !q.get('project')) useProjectFiles(kept, { onlyDraft: true }).then(okd => { if (!okd) gone(); }).catch(gone);
     if (q.get('run')) { S.runId = q.get('run'); try { const run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; S.projectId = run.projectId; restoreFormat(run); showProgress(null); } catch { reset(); } }
-    else if ((user || !q.get('project')) && q.get('new') !== '1') {
+    else if ((user || !q.get('project')) && q.get('new') !== '1' && !q.get('draft')) {
       // B5-F2：默认落点永远是“我的任务”（顶栏“我的任务”在任何页面点了都显示任务列表）；
       // 一个任务都没有时显示空状态：一句引导 + 大号“＋ 新建任务”（首屏可见，不用滚动）
       $('simple').hidden = true; $('home').hidden = false;
