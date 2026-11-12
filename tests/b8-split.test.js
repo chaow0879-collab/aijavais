@@ -60,6 +60,9 @@ test('B8: two account types, 403 on the back end, per-user isolation, monthly CN
   for (const u of ['/admin.html', '/admin', '/capabilities.html', '/project-intake.html', '/capabilities.js', '/project-intake/app.js', '/haloflux-workbench-r52/index.html']) {
     assert.equal((await A('GET', u)).status, 403, 'page ' + u);
   }
+  const page403 = await A('GET', '/admin.html'), js403 = await A('GET', '/capabilities.js');
+  assert.match(page403.headers['content-type'], /text\/html/); assert.match(page403.text, /href="\/workspace\.html"[^>]*>回到我的任务/, 'P3-2: readable 403 page with a way back');
+  assert.match(js403.headers['content-type'], /text\/plain/, 'scripts keep a plain 403');
   for (const u of ['/workspace.html', '/panel.html', '/topbar.js', '/role.js', '/workspace-simple.js', '/smart-plan.js']) assert.equal((await A('GET', u)).status, 200, 'front ' + u);
   assert.equal((await A('GET', '/')).headers.location, '/workspace.html');
   const backend = [['GET', '/api/config'], ['GET', '/api/catalog'], ['GET', '/api/models'], ['POST', '/api/models'], ['POST', '/api/models/batch'], ['POST', '/api/models/discover'], ['POST', '/api/models/probe'],

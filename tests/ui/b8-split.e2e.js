@@ -118,6 +118,9 @@ const PASS = 'user-password-123';
     for (const u of ['/admin.html', '/capabilities.html', '/project-intake.html']) {
       const r = await up.goto(base + u); assert.equal(r.status(), 403, u);
     }
+    // QA-B8 P3-2: the 403 page is readable and leads back to my tasks
+    assert.match(await up.innerText('h1'), /这是管理后台，使用者账号不能访问/);
+    await up.click('#back'); await up.waitForURL(/\/workspace\.html/); await up.waitForSelector('#aij-topbar[data-role=user]');
     await up.goto(base + '/panel.html');
     await up.waitForSelector('#aij-topbar[data-role=user]');
     await up.waitForFunction(() => document.body.dataset.role === 'user');

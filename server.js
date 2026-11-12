@@ -1199,6 +1199,12 @@ async function api(req, res, url) {
 }
 
 const PUBLIC_PAGES = new Set(['/login.html', '/admin-login.html']);
+const FORBIDDEN_PAGE = '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>不能访问 · AIJAVAIS</title>'
+  + '<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#08111c;color:#e0edf6;font:15px/1.7 system-ui,"PingFang SC","Microsoft YaHei",sans-serif;padding:16px}'
+  + '.box{max-width:420px;padding:28px;border:1px solid #2a4359;border-radius:12px;background:#101f30}h1{font-size:20px;margin:0 0 8px}p{color:#9bb2c6;margin:0 0 18px}'
+  + 'a{display:inline-block;padding:8px 16px;border:1px solid #66dfd2;border-radius:999px;color:#66dfd2;text-decoration:none}</style></head>'
+  + '<body><div class="box"><h1>这是管理后台，使用者账号不能访问</h1><p>你的账号可以新建任务、查看进度和下载成果。需要改模型或设置，请联系管理员。</p>'
+  + '<a id="back" href="/workspace.html">回到我的任务</a></div></body></html>';
 /* B8: the only pages a front-end user may open; every other page (admin.html, capabilities, intake wizard, old workbench) is the back end */
 const USER_PAGES = new Set(['/workspace.html', '/panel.html']);
 const BACKEND_ASSETS = ['/capabilities.js', '/project-intake/', '/haloflux-workbench-r52/'];
@@ -1225,7 +1231,11 @@ function serveStatic(req, res, url) {
   if (!PUBLIC_PAGES.has(pth)) {
     const who = access.identify(req);
     /* B8: back-end pages and their scripts answer 403 to a front-end user (logged in, but not allowed) */
-    if (who.kind === 'user' && isBackendPath(pth)) { res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('这是管理后台，使用者账号不能访问'); }
+    if (who.kind === 'user' && isBackendPath(pth)) {
+      // QA-B8 P3-2: an HTML page gets a readable page with a way back; scripts keep a plain-text 403
+      if (/\.html$/.test(pth)) { res.writeHead(403, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(FORBIDDEN_PAGE); }
+      res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('这是管理后台，使用者账号不能访问');
+    }
     const ok = pth === '/admin.html' ? who.kind === 'admin' : (who.kind === 'admin' || who.kind === 'display' || who.kind === 'user');
     if (!ok) {
       const backend = pth === '/admin.html' || isBackendPath(pth);
