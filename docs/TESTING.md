@@ -1,6 +1,6 @@
 # 测试方法与证据
 
-需要 Node 24+。生产无第三方 npm 依赖。统一入口 `npm test` 引入全部旧测试及立项、代理、SQLite执行、工具、Skills、文件、V2 HTTP和认证并发测试。不得用零子测试的 exit 0 冒充验证；受限云环境可能需要支持的执行权限才能真实开启本地socket/子进程。
+需要 Node 24+。生产无第三方 npm 依赖。统一入口 `npm test` 引入全部旧测试及立项、代理、SQLite执行、工具、Skills、文件、V2 HTTP和认证并发测试。C1 起 `npm test` 也包含交付检查（delivery checks/HTTP）、通用立项（universal intake）、R53 通用工作流节点套件和 #15 P2 守卫（2026-11-12：372 项）；CI 里这些套件原有的单独步骤保持不变。不得用零子测试的 exit 0 冒充验证；受限云环境可能需要支持的执行权限才能真实开启本地socket/子进程。
 
 ```sh
 npm test

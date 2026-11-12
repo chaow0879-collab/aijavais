@@ -40,3 +40,10 @@ require('./code-exec.test.js');
 require('./industry-mock-e2e.test.js');
 require('./fault-regression.test.js');
 require('./regression-guard.test.js');
+// C1: product node suites that CI also runs as separate steps are part of the single npm test entry too
+// (the separate CI steps stay unchanged; relay/R-scoped suites with special flags are not included here)
+require('./claude-delivery-checks.test.js'); require('./claude-delivery-http.test.js');
+require('./claude-universal-intake.test.js');
+require('./universal-workflow-r53/protocol.test.js'); require('./universal-workflow-r53/workflow.test.js');
+require('./universal-workflow-r53/faults.test.js'); require('./universal-workflow-r53/interop.test.js'); require('./universal-workflow-r53/r55-contract.test.js');
+require('./p2/guards.test.js'); require('./p2/preflight.test.js');
