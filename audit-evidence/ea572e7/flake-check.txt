@@ -1,0 +1,2 @@
+R49 'in-scope committed QA test accepted' local loop: 0/40 single, 0/24 full-file runs (8 parallel x3) on ea572e7
+     24 # fail 0
