@@ -61,6 +61,11 @@ const PASS = 'user-password-123';
     /* admin 使用者 page */
     await ap.reload(); await ap.click('#nav-users');
     await ap.waitForSelector('#pane-users.on');
+    // QA-B8-03: a blank monthly cap is refused with a plain sentence, never silently ¥0
+    await ap.fill('#uName', 'kongbai'); await ap.fill('#uPw', PASS); await ap.fill('#uCap', ''); await ap.click('#uAdd');
+    await ap.waitForFunction(() => /请填每月上限（元）。填 0 表示这个人不能用收费模型。/.test(document.querySelector('#uRes').textContent));
+    assert.equal((await app.call('GET', '/api/v2/users')).json.users.length, 0, 'nothing created');
+    assert.equal((await app.call('POST', '/api/v2/users', { username: 'kongbai', password: PASS, monthlyCapCny: '' })).json.code, 'cap_required', 'the server refuses a blank cap too');
     for (const [name, cap] of [['xiaowang', '5'], ['xiaoli', '5']]) {
       await ap.fill('#uName', name); await ap.fill('#uPw', PASS); await ap.fill('#uCap', cap); await ap.click('#uAdd');
       await ap.waitForFunction(n => [...document.querySelectorAll('#uBody tr')].some(r => r.cells[0].textContent === n), name);

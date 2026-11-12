@@ -62,6 +62,10 @@ test('B8 users: scrypt only (no plaintext), unique names, disable, reset passwor
   await assert.rejects(users.create({ username: 'a', password: 'good-password-1', monthlyCapCny: 10 }), e => e.code === 'invalid_username');
   await assert.rejects(users.create({ username: 'alice', password: 'short', monthlyCapCny: 10 }), e => e.code === 'weak_password');
   await assert.rejects(users.create({ username: 'alice', password: 'good-password-1', monthlyCapCny: -1 }), e => e.code === 'invalid_cap');
+  // QA-B8-03: blank / missing cap is refused, never silently ¥0; 0 typed on purpose is allowed
+  for (const blank of ['', '  ', undefined, null]) await assert.rejects(users.create({ username: 'alice', password: 'good-password-1', monthlyCapCny: blank }), e => e.code === 'cap_required' && /请填每月上限/.test(e.message));
+  assert.equal(users.list().length, 0);
+  assert.equal((await users.create({ username: 'zero', password: 'good-password-1', monthlyCapCny: '0' })).monthlyCapFen, 0);
   const a = await users.create({ username: 'alice', password: 'good-password-1', monthlyCapCny: 12.345 });
   assert.equal(a.monthlyCapFen, 1234, 'cap is floored to the fen');
   await assert.rejects(users.create({ username: 'ALICE', password: 'good-password-1', monthlyCapCny: 1 }), e => e.code === 'username_taken');

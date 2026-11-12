@@ -378,8 +378,12 @@ async function loadUsers() {
 $('#uAdd').addEventListener('click', async () => {
   $('#uRes').textContent = '';
   try {
-    const r = await api('/api/v2/users', 'POST', { username: $('#uName').value, password: $('#uPw').value, monthlyCapCny: Number($('#uCap').value) });
-    $('#uPw').value = ''; $('#uName').value = ''; $('#uRes').textContent = '已新增：' + r.user.username; loadUsers();
+    // QA-B8-03: send what was typed; blank is refused (server and here), never silently ¥0
+    if ($('#uCap').value.trim() === '') { $('#uRes').textContent = '请填每月上限（元）。填 0 表示这个人不能用收费模型。'; return; }
+    const r = await api('/api/v2/users', 'POST', { username: $('#uName').value, password: $('#uPw').value, monthlyCapCny: $('#uCap').value.trim() });
+    $('#uPw').value = ''; $('#uName').value = '';
+    $('#uRes').textContent = '已新增：' + r.user.username + '，每月上限 ' + yuan(r.user.monthlyCapCny) + (r.user.monthlyCapFen === 0 ? '（上限是 ¥0：这个人不能用收费模型）' : '');
+    loadUsers();
   } catch (e) { $('#uRes').textContent = e.message; }
 });
 $('#uBody').addEventListener('click', async e => {
@@ -392,7 +396,10 @@ $('#uBody').addEventListener('click', async e => {
       await api('/api/v2/users/' + id, 'POST', { enabled: enable }); toast(enable ? '已启用' : '已停用，并已登出这个账号');
     } else if (act === 'cap') {
       modal(`<h2>修改每月上限：${esc(name)}</h2><label>每月上限（元）<input id="uCapNew" type="number" min="0" max="100000" step="0.01"></label><div class="row" style="margin-top:10px"><button class="pri" id="uCapSave">保存</button><button data-close>取消</button><span class="note" id="uCapRes"></span></div>`);
-      $('#uCapSave').onclick = async () => { try { await api('/api/v2/users/' + id, 'POST', { monthlyCapCny: Number($('#uCapNew').value) }); closeModal(); toast('已修改上限'); loadUsers(); } catch (err) { $('#uCapRes').textContent = err.message; } };
+      $('#uCapSave').onclick = async () => {
+        if ($('#uCapNew').value.trim() === '') { $('#uCapRes').textContent = '请填每月上限（元）。填 0 表示这个人不能用收费模型。'; return; }
+        try { const r = await api('/api/v2/users/' + id, 'POST', { monthlyCapCny: $('#uCapNew').value.trim() }); closeModal(); toast('已修改上限：' + yuan(r.user.monthlyCapCny) + (r.user.monthlyCapFen === 0 ? '（不能用收费模型）' : '')); loadUsers(); } catch (err) { $('#uCapRes').textContent = err.message; }
+      };
       return;
     } else if (act === 'pw') {
       modal(`<h2>重置密码：${esc(name)}</h2><label>新密码（至少 10 个字符）<input id="uPwNew" type="password" maxlength="200" autocomplete="new-password"></label><p class="note">重置后，这个账号已登录的设备会全部登出。</p><div class="row" style="margin-top:10px"><button class="pri" id="uPwSave">重置</button><button data-close>取消</button><span class="note" id="uPwRes"></span></div>`);
