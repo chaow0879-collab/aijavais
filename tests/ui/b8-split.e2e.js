@@ -103,10 +103,14 @@ const PASS = 'user-password-123';
     await up.waitForSelector('#s-confirm[open]');
     assert.match(await up.innerText('#s-confirm'), /你本月额度还剩 ¥5\.00（每月上限 ¥5\.00，由管理员设置）/);
     assert.doesNotMatch(await up.innerText('#s-confirm'), /只重做/, 'QA-B8-02: no rework sentence when confirming a new task');
+    const MODEL_NAMES = /local-writer|priced-writer|本地写手|收费写手|Ollama|本地模型 ·/;
+    assert.doesNotMatch(await up.innerText('#s-confirm'), MODEL_NAMES, 'P3-1: the confirmation names roles, not models');
+    assert.match(await up.innerText('#s-confirm'), /团队：起草员（[^）]+）｜审核员（/);
     await up.click('#s-confirm-ok');
     await up.waitForSelector('#s-result:not([hidden])', { timeout: 30000 });
     assert.deepEqual(await visibleBackendLinks(up), [], 'no back-end entry on the progress page');
     assert.deepEqual(await backendWords(up), [], 'QA-B8-01: no back-end words on the progress page');
+    assert.doesNotMatch(await up.innerText('body'), MODEL_NAMES, 'P3-1: no model names on the user\'s progress page');
     await shot(up, '3-user-result');
     ok('user: new task → RMB confirmation (with remaining monthly quota) → result, all in the front end');
 

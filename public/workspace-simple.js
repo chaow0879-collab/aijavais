@@ -84,13 +84,18 @@
       const i = r.candidates.indexOf(r.model.connectionId); S.picks[r.spec.roleId] = r.candidates[(i + 1) % r.candidates.length]; preview(true);
     } }));
   }
-  function skippedText(p) { return p.skipped && p.skipped.length ? '这些模型所在的平台没有登记价格，按规定不调用，已换成其它模型：' + p.skipped.join('、') + '。' : ''; }
+  /* QA-B8 P3-1：使用者看不到模型名，只看岗位和档次（“起草员（均衡）”）；模型属于后台信息 */
+  const isUserPage = () => document.body.dataset.role === 'user';
+  const team = s => (!isUserPage() ? s : String(s || '').replace(/ → [^（｜]+/g, ''));
+  const estNote = s => (!isUserPage() || !s ? s : String(s).replace(/^[\s\S]*? 还没有官方单价/, '所选模型还没有官方单价'));
+  function skippedText(p) { if (isUserPage() && p.skipped && p.skipped.length) return '有些模型没有登记价格，按规定不调用，已自动换成其它模型。';
+    return p.skipped && p.skipped.length ? '这些模型所在的平台没有登记价格，按规定不调用，已换成其它模型：' + p.skipped.join('、') + '。' : ''; }
   function preview(show) {
     S.plan = makePlan();
     if (show) {
       $('s-plan').hidden = !S.plan.ok;
-      $('s-plan-team').textContent = S.plan.ok ? '智能分配：' + S.plan.summary : '';
-      $('s-plan-note').textContent = S.plan.ok ? [S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : ''), S.plan.estimatedNote, skippedText(S.plan)].filter(Boolean).join(' ') : '';
+      $('s-plan-team').textContent = S.plan.ok ? '智能分配：' + team(S.plan.summary) : '';
+      $('s-plan-note').textContent = S.plan.ok ? [S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : ''), estNote(S.plan.estimatedNote), skippedText(S.plan)].filter(Boolean).join(' ') : '';
       if (S.plan.ok) renderSwap(S.plan);
     }
     return S.plan;
@@ -104,10 +109,10 @@
         body.append(el('p', { text: '按现在的分配，预计会超过单次上限 ¥' + p.capCny.toFixed(2) + '。请选一个：' }));
         for (const o of opts) body.append(el('label', { className: 'choice' }, [el('input', { type: 'radio', name: 's-choice', value: o.kind, checked: o.kind === 'quality' }),
           el('span', { text: (o.kind === 'quality' ? '效果优先 约¥' + o.estimateCny.toFixed(2) : '省钱 约¥' + o.estimateCny.toFixed(2) + '（效果可能稍差）') + (p.estimatedNote ? '，估计上限 ¥' : '，最多 ¥') + o.maxCny.toFixed(2) + (o.overCap ? '，可能中途停下' : '') + '。' + o.summary })]));
-      } else body.append(el('p', { className: 'team', text: p.confirmText }), el('p', { text: '团队：' + p.summary }));
+      } else body.append(el('p', { className: 'team', text: p.confirmText }), el('p', { text: '团队：' + team(p.summary) }));
       if (p.budgetCny != null && !p.isRework) body.append(el('p', { className: 'hint', id: 's-confirm-budget', text: p.budgetClipped ? '你填的 ¥' + p.budgetCny.toFixed(2) + ' 超过了单次上限 ¥' + p.capCny.toFixed(2) + '，按 ¥' + p.capCny.toFixed(2) + ' 计算。' : '上限按你填的金额：¥' + p.chosen.maxCny.toFixed(2) + (p.underBudget ? '（比建议金额低，可能做到一半会停下）' : '') + '。' }));
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
-      if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: p.estimatedNote }));
+      if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: estNote(p.estimatedNote) }));
       body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : '¥0.00') + '（估算，以厂商账单为准）。' }));
       if (S.me && S.me.kind === 'user') body.append(el('p', { className: 'hint', id: 's-confirm-quota', text: '你本月额度还剩 ¥' + (Number(S.me.month.remainingCny) || 0).toFixed(2) + '（每月上限 ¥' + (Number(S.me.month.capCny) || 0).toFixed(2) + '，由管理员设置）。' }));
       // QA-B8-02: the rework sentence belongs to a rework only; a user's models are already tested, so no connection-check sentence
@@ -166,7 +171,7 @@
   }
   function showProgress(p) {
     $('simple').hidden = true; $('s-progress').hidden = false;
-    $('s-team').textContent = p ? '团队：' + p.summary + '。' + p.confirmText : '';
+    $('s-team').textContent = p ? '团队：' + team(p.summary) + '。' + p.confirmText : '';
     $('s-download').textContent = DL[S.format] || '下载成果'; $('s-download').hidden = false;
     $('s-result').hidden = true; $('s-run-error').hidden = true; $('s-stop').hidden = true; $('s-steps').replaceChildren();
     history.replaceState(null, '', '/workspace.html?run=' + encodeURIComponent(S.runId));
