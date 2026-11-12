@@ -2,7 +2,8 @@
 const {execFileSync}=require('node:child_process'),path=require('node:path'),M=require('./sources.json');
 const root=path.resolve(__dirname,'../..'),git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 const POST_R57=Object.freeze({base:'049a3376a2d08042fcac1833b324bc87b0137ba1',changes:Object.freeze({
-  "docs/TESTING.md":{from:"100644 blob 60cd644d64c8b576659fc4f46d02387a4ea14b51",to:"100644 blob 4397a9a5143b06cc727c49827e8f89d939b15279",reason:"C1 docs consolidation (no behaviour change)"},
+  "docs/INDUSTRY-MOCK-RUNBOOK.md":{from:"100644 blob 6b88a09c9cae0dc19aa0d4c369f916b7cabd67c1",to:null,reason:"C1 docs consolidation (no behaviour change)"},
+  "docs/TESTING.md":{from:"100644 blob 60cd644d64c8b576659fc4f46d02387a4ea14b51",to:"100644 blob d8aefafcc8a8d195e1fffa923adcfa1279339520",reason:"C1 docs consolidation (no behaviour change); C1 docs consolidation (no behaviour change)"},
   "docs/ARCHITECTURE.md":{from:"100644 blob d171c90c72a86b62798302a85f06ed156aeab9c7",to:"100644 blob 14718ae7632ac1d792265872d9cc926e3a72fed1",reason:"C1 docs consolidation (no behaviour change)"},
   "docs/AI-DRAFT.md":{from:"100644 blob 806079c904ad238dd6616eeaf173ed86ed442ce1",to:null,reason:"C1 docs consolidation (no behaviour change)"},
   "docs/USER-GUIDE.md":{from:"100644 blob 058e66d01a44b3635eb8d82950f62bf2fd679439",to:null,reason:"C1 docs consolidation (no behaviour change)"},
