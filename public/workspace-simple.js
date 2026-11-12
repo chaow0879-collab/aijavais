@@ -13,7 +13,7 @@
   async function api(path, method = 'GET', body) {
     const res = await fetch(path, { method, credentials: 'same-origin', headers: { accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 401) { location.assign('/login.html?next=/workspace.html'); throw Error('请重新登录'); }
+    if (res.status === 401) { location.assign('/login.html?next=/workspace.html&expired=1'); throw Error('请重新登录'); }
     if (!res.ok) throw Object.assign(Error(data.error || '请求失败'), { code: data.code, status: res.status });
     return data;
   }

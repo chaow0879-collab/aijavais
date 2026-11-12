@@ -47,6 +47,8 @@ button:disabled{opacity:.5;cursor:default}
 const $ = s => document.querySelector(s);
 const next = (() => { const n = new URLSearchParams(location.search).get('next') || '/workspace.html'; return /^\/(?!\/)[\w./-]*$/.test(n) ? n : '/workspace.html'; })();
 const msg = (t, c = 'bad') => { $('#msg').className = 'msg ' + c; $('#msg').textContent = t; };
+const expiredMsg = '登录已失效：可能是登录时间到了，或者管理员停用了这个账号、重置了密码。请重新登录；登录不上请联系管理员。';
+if (new URLSearchParams(location.search).get('expired') === '1') msg(expiredMsg, 'warn'); // QA-B8 P3-4
 (async () => {
   const s = await fetch('/api/auth/status', { credentials: 'same-origin' }).then(r => r.json()).catch(() => null);
   if (!s) return msg('无法连接服务器');

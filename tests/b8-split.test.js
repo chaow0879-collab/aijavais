@@ -147,6 +147,8 @@ test('B8: two account types, 403 on the back end, per-user isolation, monthly CN
   /* ---- disable / reset password revoke sessions at once; admin features keep working ---- */
   assert.equal((await admin('POST', '/api/v2/users/' + bob.userId, { enabled: false })).json.user.enabled, false);
   assert.equal((await B('GET', '/api/v2/projects')).status, 401, 'disabled user is logged out');
+  assert.equal((await B('GET', '/workspace.html')).headers.location, '/login.html?next=%2Fworkspace.html&expired=1', 'P3-4: the login page is told why');
+  assert.equal((await anon('GET', '/workspace.html')).headers.location, '/login.html?next=%2Fworkspace.html', 'no cookie: plain redirect');
   assert.equal((await anon('POST', '/api/auth/user-login', { username: 'bob', password: PASS })).status, 401);
   await admin('POST', '/api/v2/users/' + alice.userId + '/password', { password: 'new-password-456' });
   assert.equal((await A('GET', '/api/v2/me')).status, 401, 'password reset ends the old session');

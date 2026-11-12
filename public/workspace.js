@@ -25,7 +25,7 @@
   async function api(path, method = 'GET', body) {
     const res = await fetch(path, { method, credentials:'same-origin', headers:{ Accept:'application/json', ...(body === undefined ? {} : {'content-type':'application/json'}) }, body:body === undefined ? undefined : JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 401) { location.assign('/login.html?next=/workspace.html'); throw Error('会话已过期，请重新登录'); }
+    if (res.status === 401) { location.assign('/login.html?next=/workspace.html&expired=1'); throw Error('会话已过期，请重新登录'); }
     if (!res.ok) throw Object.assign(Error(data.error || data.message || '请求失败（HTTP ' + res.status + '）'), { code: data.code, status: res.status });
     return data;
   }

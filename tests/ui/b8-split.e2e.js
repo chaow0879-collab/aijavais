@@ -194,6 +194,7 @@ const PASS = 'user-password-123';
     await ap.locator('#uBody tr', { hasText: 'xiaoli' }).locator('button[data-u-act=toggle]').click();
     await ap.waitForFunction(() => [...document.querySelectorAll('#uBody tr')].some(r => /xiaoli/.test(r.textContent) && /已停用/.test(r.textContent)));
     await lp.reload(); await lp.waitForURL(/\/login\.html/);
+    await lp.waitForFunction(() => /登录已失效：可能是登录时间到了，或者管理员停用了这个账号、重置了密码/.test(document.querySelector('#msg').textContent)); // QA-B8 P3-4
     await ap.locator('#uBody tr', { hasText: 'xiaowang' }).locator('button[data-u-act=pw]').click();
     await ap.fill('#uPwNew', 'brand-new-password-9'); await ap.click('#uPwSave');
     await ap.waitForFunction(() => !document.querySelector('#modal').classList.contains('on') && /密码已重置/.test(document.querySelector('#toast').textContent));

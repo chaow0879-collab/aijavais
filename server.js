@@ -1239,7 +1239,8 @@ function serveStatic(req, res, url) {
     const ok = pth === '/admin.html' ? who.kind === 'admin' : (who.kind === 'admin' || who.kind === 'display' || who.kind === 'user');
     if (!ok) {
       const backend = pth === '/admin.html' || isBackendPath(pth);
-      if (/\.html$/.test(pth)) { res.writeHead(302, { location: (backend ? '/admin-login.html' : '/login.html') + '?next=' + encodeURIComponent(pth === '/panel.html' ? '/' : pth), 'cache-control': 'no-store' }); return res.end(); }
+      // QA-B8 P3-4: a cookie that no longer works (timed out, account disabled, password reset) is told so on the login page
+      if (/\.html$/.test(pth)) { res.writeHead(302, { location: (backend ? '/admin-login.html' : '/login.html') + '?next=' + encodeURIComponent(pth === '/panel.html' ? '/' : pth) + (who.expired ? '&expired=1' : ''), 'cache-control': 'no-store' }); return res.end(); }
       res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('请先登录');
     }
   }
