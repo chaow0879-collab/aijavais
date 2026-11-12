@@ -1,0 +1,212 @@
+{
+ "draft_create": 201,
+ "up": {
+  "ok_docx": {
+   "s": 201,
+   "name": "ok.docx",
+   "kind": "docx",
+   "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+   "st": "ok",
+   "err": ""
+  },
+  "long_txt": {
+   "s": 201,
+   "name": "长资料.txt",
+   "kind": "text",
+   "mime": "text/plain; charset=utf-8",
+   "st": "ok",
+   "err": ""
+  },
+  "traversal": {
+   "s": 201,
+   "name": "x.txt",
+   "kind": "text",
+   "mime": "text/plain; charset=utf-8",
+   "st": "ok",
+   "err": ""
+  },
+  "win_traversal": {
+   "s": 201,
+   "name": "boot.ini.txt",
+   "kind": "text",
+   "mime": "text/plain; charset=utf-8",
+   "st": "ok",
+   "err": ""
+  },
+  "ctrl_name": {
+   "s": 201,
+   "name": "a_b____.txt",
+   "kind": "text",
+   "mime": "text/plain; charset=utf-8",
+   "st": "ok",
+   "err": ""
+  },
+  "no_ext": {
+   "s": 422,
+   "code": "invalid_filename",
+   "err": "文件名需要包含扩展名，例如 资料.pdf"
+  },
+  "exe": {
+   "s": 422,
+   "code": "unsupported_type",
+   "err": "暂不支持该文件类型。支持：PDF、DOCX、XLSX、PPTX、TXT/MD/CSV/TSV/JSON、常见代码与配置文"
+  },
+  "mz_as_txt": {
+   "s": 422,
+   "code": "type_mismatch",
+   "err": "文本文件中含有二进制内容"
+  },
+  "png_as_docx": {
+   "s": 422,
+   "code": "type_mismatch",
+   "err": "文件内容不是 DOCX（缺少 ZIP 容器）"
+  },
+  "docx_as_png": {
+   "s": 422,
+   "code": "type_mismatch",
+   "err": "文件内容与图片扩展名不符"
+  },
+  "html": {
+   "s": 201,
+   "name": "x.html",
+   "kind": "text",
+   "mime": "text/plain; charset=utf-8",
+   "st": "ok",
+   "err": ""
+  },
+  "svg": {
+   "s": 422,
+   "code": "unsupported_type",
+   "err": "暂不支持该文件类型。支持：PDF、DOCX、XLSX、PPTX、TXT/MD/CSV/TSV/JSON、常见代码与配置文"
+  },
+  "bomb": {
+   "s": 201,
+   "name": "bomb.docx",
+   "kind": "docx",
+   "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+   "st": "ok",
+   "err": ""
+  },
+  "macro": {
+   "s": 201,
+   "name": "macro.docx",
+   "kind": "docx",
+   "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+   "st": "ok",
+   "err": ""
+  },
+  "xxe": {
+   "s": 422,
+   "code": "unsupported_file",
+   "err": "文件中的 XML 包含 DTD，拒绝读取"
+  },
+  "pdf_inject_name": {
+   "s": 201,
+   "name": "$(touch PWNED); `id`.pdf",
+   "kind": "pdf",
+   "mime": "application/pdf",
+   "st": "ok",
+   "err": ""
+  },
+  "over8mb": {
+   "s": 422,
+   "code": "file_limit",
+   "err": "单个文件不能超过 8 MB"
+  }
+ },
+ "pwned": false,
+ "files_stored": [
+  "ok.docx:docx:ok",
+  "长资料.txt:text:ok",
+  "x.txt:text:ok",
+  "boot.ini.txt:text:ok",
+  "a_b____.txt:text:ok",
+  "x.html:text:ok",
+  "bomb.docx:docx:ok",
+  "macro.docx:docx:ok",
+  "$(touch PWNED); `id`.pdf:pdf:ok"
+ ],
+ "html_download": {
+  "ct": "text/plain; charset=utf-8",
+  "cd": "attachment; filename*=UTF-8''x.html",
+  "nosniff": "nosniff"
+ },
+ "file51": {
+  "s": 413,
+  "code": "file_limit",
+  "err": "每个项目最多 50 个资料文件"
+ },
+ "iso_b": {
+  "list": 404,
+  "get": 404,
+  "dl": 404,
+  "del": 404,
+  "up": 404,
+  "put": 404,
+  "projects_has": false,
+  "tasks_has": false
+ },
+ "display": {
+  "files": 403,
+  "state": 200,
+  "state_has_material": false,
+  "anon_files": 401
+ },
+ "plan": {
+  "ok": true,
+  "maxCny": 4.6,
+  "est": 1.52,
+  "base_maxCny": 1,
+  "note": "资料：9 个文件，能读到的文字共 3.5 万字。每个岗位都会拿到资料摘录。资料比较长：起草时带上前 3 万字，审核时带上前 2 万字，截取的地方会注明“已截取前"
+ },
+ "put": 200,
+ "low_approval": {
+  "start": 202,
+  "status": "failed",
+  "err": "\"Cost budget cannot cover this call; no request sent\"",
+  "calls": 0,
+  "cost": 0
+ },
+ "run": {
+  "start": 202,
+  "status": "review_required",
+  "calls": 2,
+  "tools": [],
+  "cost": 0.0002666666666666666,
+  "maxCost": 0.6133,
+  "materials": [
+   "54/29946/0/0/0/0/0/0/0",
+   "54/19946/0/0/0/0/0/0/0"
+  ],
+  "untrusted_before_injection": [
+   true,
+   true
+  ],
+  "cut_notes": [
+   "已截取前 29946 字，原文共 35000 字;已截取前 0 字，原文共 2 字;已截取前 0 字，原文共 2 字;已截取前 0 字，原文共 2 字;已截取前 0 字，原文共 25 字;已截取前 0 字，原文共 1 字;已截取前 0 字，原文共 5 字;已截取前 0 字，原文共 22 字",
+   "已截取前 19946 字，原文共 35000 字;已截取前 0 字，原文共 2 字;已截取前 0 字，原文共 2 字;已截取前 0 字，原文共 2 字;已截取前 0 字，原文共 25 字;已截取前 0 字，原文共 1 字;已截取前 0 字，原文共 5 字;已截取前 0 字，原文共 22 字"
+  ],
+  "system_untrusted": true,
+  "cite": true,
+  "maxPromptLen": 31599
+ },
+ "quota": {
+  "maxCny": 4.6,
+  "start": 402,
+  "code": "monthly_quota_insufficient",
+  "calls": 0
+ },
+ "tasks": {
+  "counts": {
+   "running": 0,
+   "review": 1,
+   "stopped": 0,
+   "done": 0,
+   "draft": 1
+  },
+  "drafts": [
+   "新任务（正在准备资料）"
+  ]
+ },
+ "delete_draft_api": 200
+}

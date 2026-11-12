@@ -1,0 +1,10 @@
+PASS click to choose, multi-select: docx / xlsx / image each show a plain status (字数、表格张数、图片不会看)
+PASS drag and drop uploads too
+PASS size limit, old Office formats, unsupported and mismatched files are explained in plain Chinese
+PASS 删除 removes the file from the task (server) and error rows from the list
+PASS reloading the new-task page restores the uploaded materials
+PASS MOCK request bodies of BOTH roles contain the docx and xlsx content plus the cite-the-source instruction; the run uses the draft task
+PASS ＋ 新建任务 starts with an empty materials list
+PASS user account: uploads materials to their own task, roles receive them; another user gets 404 on those files
+
+B9 BROWSER CHECKS PASSED: 8
