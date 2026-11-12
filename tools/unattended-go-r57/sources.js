@@ -2,6 +2,13 @@
 const {execFileSync}=require('node:child_process'),path=require('node:path'),M=require('./sources.json');
 const root=path.resolve(__dirname,'../..'),git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 const POST_R57=Object.freeze({base:'049a3376a2d08042fcac1833b324bc87b0137ba1',changes:Object.freeze({
+  "tests/project-files.test.js":{from:"100644 blob b5e8331e82c9a222a5bd5a2892fb12a41cc45162",to:"100644 blob cc0a5a7c54d03583fb2472bbedea1d4435e8fa1a",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
+  "tests/model-request-recovery.test.js":{from:"100644 blob b5b7256969097e3cc1fe5d5c92f84d8fc762d2c6",to:"100644 blob 397d1907244d83811a96e3891965fc04ea3eaf9b",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
+  "tests/migration-backup-security.test.js":{from:"100644 blob d98b35310db151134b31a92ece4efdf055099d0c",to:"100644 blob c059fcc18f78e49ff6b58d34c78ee0312b15f8a7",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
+  "tests/backup-operations-security.test.js":{from:"100644 blob efb859dd5fec0f1590f9322d3383e1609634d75c",to:"100644 blob e982bac32cde445f06a8ae61b8d154c9e7f4155b",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
+  "tests/b8-users-store.test.js":{from:null,to:"100644 blob 02b0e1387c616a1d2781d72c9af43a7187e21da5",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
+  "lib/users.js":{from:null,to:"100644 blob f4f05070d5d2c97eee88ce74cc404c70216f2827",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
+  "lib/project-store.js":{from:"100644 blob d218aa46591bc08a9ca52fdc0ae58dbb1839186e",to:"100644 blob a40ad58f0d0e78da3024dd111bf166d7b8e538dc",reason:"B8: front/back split, schema v5 users table, user accounts and monthly CNY cap"},
   "tests/fixtures/ppt/owner-5-pages-script.md":{from:null,to:"100644 blob b1ae74acfd08b82d1fa9137f0321d5ac3076b728",reason:"B5-F2 A-E: structured slide decks with real layouts"},
   "tests/deliverables.test.js":{from:"100644 blob 80debdc3869d611230d855f73542471e7f4d3b9b",to:"100644 blob b17a49c25da3831c8ddd338ef6d20fd43c64a3c7",reason:"B5-F2 A-E: structured slide decks with real layouts"},
   "tests/slides.test.js":{from:null,to:"100644 blob 6767a902f3b714a5d028bb5b7a77bdb76be8c0cf",reason:"B5-F2 A-E: structured slide decks with real layouts; AUD-6BBD-01: linear slide parsing; QA-F2-1/QA-F2-2: no silent shell PPT; preview equals the deck; QA-F2 P3: summary kept/deduped, footer title+date; B5-F3 (3): one-paragraph replies paged by sentences with a notice"},

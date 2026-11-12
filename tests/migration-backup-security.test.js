@@ -9,7 +9,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { once } = require('node:events');
 const { DatabaseSync } = require('node:sqlite');
-const { ProjectStore } = require('../lib/project-store');
+const { ProjectStore, SCHEMA_VERSION } = require('../lib/project-store');
 const CHILD = path.join(__dirname, 'fixtures', 'migration-backup-child.cjs');
 function mode(filename) { return fs.lstatSync(filename).mode & 0o777; }
 function snapshot(filename) {
@@ -36,7 +36,7 @@ function fixture(t, { migrationFailure = false } = {}) {
   store.close();
   for (const file of oldBackups) fs.unlinkSync(file);
   const filename = path.join(dir, 'projects.sqlite'), db = new DatabaseSync(filename);
-  db.exec('DROP TABLE model_requests; DROP INDEX system_usage_status; DELETE FROM schema_migrations WHERE version=4; PRAGMA user_version=3;');
+  db.exec('DROP TABLE users; DROP INDEX projects_owner; DROP INDEX runs_created; DROP TABLE model_requests; DROP INDEX system_usage_status; DELETE FROM schema_migrations WHERE version>=4; PRAGMA user_version=3;'); // B8: a true v3 shape (no v4/v5 objects)
   if (migrationFailure) db.exec("CREATE TRIGGER deny_v4 BEFORE INSERT ON schema_migrations WHEN NEW.version=4 BEGIN SELECT RAISE(ABORT,'MOCK migration failure'); END;");
   db.close();
   fs.chmodSync(dir, 0o755);
@@ -81,17 +81,17 @@ function assertPrivateCopy(f) {
 
 test('backup security: existing DATA0755 and umask022 remain protected from VACUUM creation through atomic publication', t => {
   const f = fixture(t), result = run('success', f.dir);
-  assert.equal(result.ok, true); assert.equal(result.schemaVersion, 4); assert.equal(mode(f.dir), 0o755);
+  assert.equal(result.ok, true); assert.equal(result.schemaVersion, SCHEMA_VERSION); assert.equal(mode(f.dir), 0o755);
   const created = protectedCreation(result.events);
   t.diagnostic('Observed real VACUUM pre-chmod file mode=' + created.mode.toString(8).padStart(4, '0') + '; enclosing directory=0700; existing DATA=0755; child umask=0022.');
   const publish = result.events.find(e => e.phase === 'before_publish'); assert.equal(publish.mode, 0o600); assert.equal(publish.directoryMode, 0o700);
   const final = result.events.find(e => e.phase === 'published'); assert.equal(final.mode, 0o600);
-  assert.equal(result.migrationBackups.length, 1);
+  assert.equal(result.migrationBackups.length, 2, 'B8: v3 -> v4 -> v5, one protected copy before each step');
   assert.equal(path.dirname(result.migrationBackups[0]), f.dir); assert.equal(mode(result.migrationBackups[0]), 0o600);
   assert.deepEqual(snapshot(result.migrationBackups[0]), f.before);
   assert.deepEqual(privateCopies(f.dir), [], 'only successfully published copies are cleaned up');
   const db = new DatabaseSync(f.filename, { readOnly: true }); t.after(() => db.close());
-  assert.equal(Number(db.prepare('PRAGMA user_version').get().user_version), 4);
+  assert.equal(Number(db.prepare('PRAGMA user_version').get().user_version), SCHEMA_VERSION);
   const row = JSON.parse(db.prepare('SELECT doc FROM system_usage').get().doc);
   assert.equal(row.cost, null); assert.equal(row.status, 'interrupted_unknown'); assert.equal(row.reservedCost, 0.25);
 });
