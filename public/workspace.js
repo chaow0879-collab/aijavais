@@ -205,13 +205,18 @@
     feedback('已上传 '+done.length+' 个文件'+(failed.length?'；失败：'+failed.join('；'):'。'),failed.length>0);
   }
   async function refreshProjects() {
-    const data=await api('/api/v2/projects');state.projects=list(data,'projects');renderProjectList();
+    const [data,tasks]=await Promise.all([api('/api/v2/projects'),api('/api/v2/tasks').catch(()=>null)]);state.projects=list(data,'projects');state.tasks=tasks?tasks.tasks:[];renderProjectList();
   }
+  /* B5-F1：左侧任务列表显示人话状态；简单模式下点任务进它的进度/成果页，配置页只从“高级设置/调整团队”进入 */
+  const TASK_STATE={running:'进行中',review:'需要你处理',stopped:'已停下',done:'已完成',draft:'草稿'};
   function renderProjectList() {
     const target=$('projects');target.replaceChildren();
     if(!state.projects.length)target.append(node('p',{class:'empty',text:'还没有项目。从智能立项开始，或点击新建。'}));
     for(const project of state.projects){
-      const button=node('button',{type:'button',class:'project-button','aria-current':String(state.project && state.project.projectId===project.projectId),onclick:work(()=>openProject(project.projectId))},[node('strong',{text:project.name}),node('small',{text:'版本 '+(project.version || 1)+' · '+(project.roles || []).length+' 个岗位'})]);
+      const task=(state.tasks||[]).find(t=>t.projectId===project.projectId);
+      const open=()=>{if(task&&task.runId&&document.body.dataset.mode!=='advanced'){location.assign('/workspace.html?run='+encodeURIComponent(task.runId));return;}return openProject(project.projectId);};
+      const small=task?(task.runId?(task.group==='running'?'第 '+Math.min(task.stepsDone+1,task.stepsTotal||1)+'/'+(task.stepsTotal||1)+' 步':'完成 '+task.stepsDone+'/'+(task.stepsTotal||1)+' 步')+(task.downloadable&&task.group!=='running'?' · 有成果可下载':''):'还没开始'):(project.roles || []).length+' 个岗位';
+      const button=node('button',{type:'button',class:'project-button','data-project-id':project.projectId,'aria-current':String(state.project && state.project.projectId===project.projectId),onclick:work(open)},[node('strong',{},[project.name,...(task?[node('span',{class:'pstate '+task.group,text:TASK_STATE[task.group]})]:[])]),node('small',{text:small})]);
       target.append(button);
     }
   }
@@ -342,6 +347,7 @@
     stream.onopen=()=>{$('stream-status').textContent='实时事件已连接';};stream.onerror=()=>{$('stream-status').textContent='事件流重连中；任务状态继续轮询';};
     stream.onmessage=event=>{
       let value;try{value=JSON.parse(event.data);}catch{return;}
+      try{dispatchEvent(new CustomEvent('aij:event',{detail:value}));}catch{/* 首页实时动态卡只是展示 */}
       const payload=value.payload || value.data || value;
       if(state.run && (payload.runId===state.run.runId || value.runId===state.run.runId))periodicRefresh();
     };
@@ -349,6 +355,7 @@
     state.timer=setInterval(periodicRefresh,1800);
   }
   window.AIJWorkspace={refreshProjects:()=>refreshProjects().catch(()=>{})};
+  addEventListener('aij:tasks',e=>{if(!e.detail||!Array.isArray(e.detail.tasks))return;state.tasks=e.detail.tasks;if(e.detail.tasks.some(t=>!state.projects.some(p=>p.projectId===t.projectId)))refreshProjects().catch(()=>{});else renderProjectList();});
   /* QA-B7-04：人民币为主值，美元上限（专业设置里）自动换算，两边保持一致 */
   const FXR=window.SmartPlan?SmartPlan.FX:7.5;
   $('max-cost-cny').addEventListener('input',()=>{const y=Number($('max-cost-cny').value);if(Number.isFinite(y)&&y>=0)$('max-cost').value=String(Math.floor(y/FXR*100)/100);});

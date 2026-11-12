@@ -18,7 +18,8 @@
     "test:release-industry": "AIJ_RELEASE_VALIDATION=1 node --test tests/industry-mock-e2e.test.js",
     "test:delivery": "node --test tests/claude-delivery-checks.test.js tests/claude-delivery-http.test.js",
     "test:release-delivery": "AIJ_RELEASE_VALIDATION=1 node --test tests/claude-delivery-checks.test.js tests/claude-delivery-http.test.js",
-    "test:delivery-ui": "node tests/ui/claude-delivery.e2e.js"
+    "test:delivery-ui": "node tests/ui/claude-delivery.e2e.js",
+    "test:b5": "node tests/ui/b5-home.e2e.js"
   },
   "engines": {
     "node": ">=24.0.0"

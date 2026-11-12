@@ -65,12 +65,13 @@ test('PPTX produces connected slide master/layout/theme and paginates without lo
   assert.ok(zip.has('ppt/slideMasters/slideMaster1.xml'));
   assert.ok(zip.has('ppt/slideLayouts/slideLayout1.xml'));
   assert.ok(zip.has('ppt/slides/_rels/slide1.xml.rels'));
-  assert.equal([...zip.keys()].filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).length, 3);
+  // B5-F2: a cover, then at most 6 points per slide (23 points -> 4 content slides): 5 slides
+  assert.equal([...zip.keys()].filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).length, 5);
   const allSlides = [...zip.entries()].filter(([n]) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).map(([, v]) => v.toString()).join('');
   for (const line of lines) assert.ok(allSlides.includes(line));
-  assert.match(allSlides, /3 \/ 3/);
+  assert.match(allSlides, /5 \/ 5/);
   const custom = entries(createDeliverable('pptx', { title: '报告', slides: [{ title: '检查点', bullets: ['凭据隔离', '预算控制'] }] }).buffer);
-  assert.match(custom.get('ppt/slides/slide1.xml').toString(), /• 凭据隔离/);
+  assert.match(custom.get('ppt/slides/slide2.xml').toString(), /<a:buChar char="●"\/><\/a:pPr><a:r>[\s\S]*?<a:t>凭据隔离<\/a:t>/, 'legacy {title, bullets} input: real bullets after a cover');
 });
 
 test('CSV quotes delimiters/newlines and neutralizes spreadsheet formulas', () => {
@@ -178,7 +179,7 @@ p=pathlib.Path(sys.argv[1])
 assert any('实际正文' in q.text for q in Document(p/'actual.docx').paragraphs)
 assert load_workbook(p/'actual.xlsx').active['B2'].value==3
 s=Presentation(p/'actual.pptx')
-assert len(s.slides)==2
+assert len(s.slides)==3  # B5-F2: cover + text slide + section slide
 assert any('实际正文' in shape.text for slide in s.slides for shape in slide.shapes if shape.has_text_frame)
 print('Independent Office parsers read actual document, workbook and presentation content')
 `;

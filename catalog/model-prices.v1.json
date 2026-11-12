@@ -1,29 +1,51 @@
 {
   "schema": "aijavais.model-prices/v1",
-  "note": "Built-in list prices used ONLY to estimate and cap simple-mode runs. Each entry deliberately takes the HIGHER of the known figures (peak rate or pre-cut price) as a safety margin. Not a bill: always reconcile with the vendor console. Models not listed here have an unknown price and are not called by simple mode unless an administrator enters a price for that connection.",
-  "checkedAt": "2026-11-10",
+  "note": "Built-in official list prices used ONLY to estimate and cap simple-mode runs. Where a vendor has peak/off-peak or tiered prices, the HIGHEST applicable figure is kept as a safety margin (peak hours; the up-to-1M-token input tier). Not a bill: always reconcile with the vendor console. Simple mode converts CNY to USD at the fixed rate public/smart-plan.js FX = 7.5 CNY per USD. Models not listed here have no catalog price (see lib/prices.js for the conservative estimated ceiling of known platforms).",
+  "checkedAt": "2026-11-11",
   "prices": [
     {
       "providerId": "deepseek",
       "modelIds": ["deepseek-flash"],
-      "currency": "USD",
-      "inputPerMillion": 0.30,
-      "outputPerMillion": 1.20,
-      "basis": "peak-hour cache-miss rate (off-peak is half: 0.15 / 0.60)",
-      "sources": ["https://www.maximem.ai/blog/deepseek-api-pricing-2026", "https://www.morphllm.com/deepseek-api"],
-      "verified": "BLOCKED: official page https://api-docs.deepseek.com/quick_start/pricing could not be read (2026-11-10: build proxy 403; fetch agent DNS failure). Values come from secondary sources only and keep the higher peak rate.",
-      "officialPage": "https://api-docs.deepseek.com/quick_start/pricing"
+      "currency": "CNY",
+      "inputPerMillion": 2,
+      "outputPerMillion": 8,
+      "basis": "official peak-hour cache-miss input and output (off-peak is half: 1 / 4; cache-hit input 0.04). Thinking and non-thinking are the same price.",
+      "sources": ["https://api-docs.deepseek.com/zh-cn/quick_start/pricing"],
+      "verified": "official page fetched 2026-11-11T05:16:59Z by server operations (server-side curl, no login, no key)",
+      "fetchedAt": "2026-11-11T05:16:59Z"
+    },
+    {
+      "providerId": "deepseek",
+      "modelIds": ["deepseek-v4-pro"],
+      "currency": "CNY",
+      "inputPerMillion": 9,
+      "outputPerMillion": 27,
+      "basis": "official peak-hour cache-miss input and output (off-peak is half: 4.5 / 13.5; cache-hit input 0.30). Thinking and non-thinking are the same price.",
+      "sources": ["https://api-docs.deepseek.com/zh-cn/quick_start/pricing"],
+      "verified": "official page fetched 2026-11-11T05:16:59Z by server operations (server-side curl, no login, no key)",
+      "fetchedAt": "2026-11-11T05:16:59Z"
     },
     {
       "providerId": "dashscope",
       "modelIds": ["qwen3.8-flash"],
       "currency": "CNY",
-      "inputPerMillion": 1.0,
-      "outputPerMillion": 3.0,
-      "basis": "pre-2026-08-27 list price; a lower current price (0.8 / 2.7, output including thinking) was reported by a search summary but not read on the official page",
-      "sources": ["https://help.aliyun.com/zh/model-studio/model-pricing", "https://developer.aliyun.com/article/1761526"],
-      "verified": "BLOCKED: official page could not be read directly (2026-11-10: build proxy 403; fetch agent DNS failure). Earlier 0.8 / 2.7 came from a web-search summary citing the official page, not a direct read; the higher pre-cut 1.0 / 3.0 is kept.",
-      "officialPage": "https://help.aliyun.com/zh/model-studio/model-pricing"
+      "inputPerMillion": 0.8,
+      "outputPerMillion": 2.7,
+      "basis": "official Beijing-region price, input tier up to 1M tokens; thinking output is the same price. The free quota is ignored for estimates.",
+      "sources": ["https://help.aliyun.com/zh/model-studio/model-pricing"],
+      "verified": "official page fetched 2026-11-11T05:16:59Z by server operations (server-side curl, no login, no key)",
+      "fetchedAt": "2026-11-11T05:16:59Z"
+    },
+    {
+      "providerId": "dashscope",
+      "modelIds": ["qwen3.8-max"],
+      "currency": "CNY",
+      "inputPerMillion": 12,
+      "outputPerMillion": 36,
+      "basis": "official Beijing-region price, input tier up to 1M tokens; thinking output is the same price. The free quota is ignored for estimates.",
+      "sources": ["https://help.aliyun.com/zh/model-studio/model-pricing"],
+      "verified": "official page fetched 2026-11-11T05:16:59Z by server operations (server-side curl, no login, no key)",
+      "fetchedAt": "2026-11-11T05:16:59Z"
     }
   ]
 }

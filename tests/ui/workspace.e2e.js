@@ -46,7 +46,7 @@ const H = require('../helpers');
     await context.addCookies([{name:'aij_session',value:app.cookie.split('=').slice(1).join('='),url:base}]);
     const page=await context.newPage(),errors=[];
     page.on('pageerror',error=>errors.push(error.message));
-    await page.goto(base+'/workspace.html');
+    await page.goto(base+'/workspace.html?new=1');
     await page.waitForSelector('#roles-editor select option[value="'+models[0]+'"]',{state:'attached'});
     // B7e: the workspace opens in simple mode; this walkthrough covers the advanced form behind 高级设置.
     await page.click('#s-advanced');

@@ -4,7 +4,7 @@
  * 规则见 public/smart-plan.js；服务端的预算、Token、审批与就绪门禁全部不变。页面只显示中文，不显示原始 JSON。 */
 (() => {
   const $ = id => document.getElementById(id);
-  const S = { models: [], capCny: 5, picks: {}, plan: null, runId: null, projectId: null, snapshot: null, timer: null, format: 'docx', outputLabel: 'Word 文档', busy: false, choice: 'quality' };
+  const S = { models: [], excluded: new Set(), capCny: 5, picks: {}, plan: null, runId: null, projectId: null, snapshot: null, timer: null, format: 'docx', outputLabel: 'Word 文档', busy: false, choice: 'quality' };
   const OUT = window.SmartPlan.OUTPUTS, STATUS = { pending: '等待中', running: '进行中', done: '已完成', quality_failed: '质量检查没通过', failed: '没有完成', cancelled: '已取消', skipped: '已跳过' };
   /* O11：累计花费（估算，人民币；不足 1 分显示“不到 ¥0.01”） */
   const spentText = usd => { const c = window.SmartPlan.spentCny(usd); return c > 0 && c < 0.01 ? '不到 ¥0.01' : '¥' + c.toFixed(2); };
@@ -20,7 +20,8 @@
   const output = () => document.querySelector('input[name=s-output]:checked')?.value || 'word';
   function build() {
     $('s-output').replaceChildren(...Object.entries(OUT).map(([k, o]) => el('label', {}, [el('input', { type: 'radio', name: 's-output', value: k, checked: k === 'word' }), o.label])));
-    for (const id of ['s-output', 's-goal', 's-deadline']) $(id).addEventListener('input', () => { S.picks = {}; if (!$('s-plan').hidden) preview(true); });
+    for (const id of ['s-output', 's-goal', 's-deadline']) $(id).addEventListener('input', () => { S.picks = {}; if (!$('s-plan').hidden) preview(true); showAuto(); });
+    $('s-budget-cny').addEventListener('input', () => { $('s-budget-warn').hidden = true; S.budgetAck = null; if (!$('s-plan').hidden) preview(true); });
   }
   async function loadModels() {
     const [m, c] = await Promise.all([api('/api/models'), api('/api/config').catch(() => null)]);
@@ -28,16 +29,42 @@
     if (c && c.settings && Number(c.settings.simpleRunCapCny) > 0) S.capCny = Number(c.settings.simpleRunCapCny);
     $('ws-guide').hidden = window.SmartPlan.chat(S.models).length > 0;
   }
-  function showError(box, info, retry) {
+  /* B5-2：普通用户不被赶去管理中心。模型不能用时，在当前页一键换成其它可用模型；
+   * 只有一个可用模型都没有时，才提示“请管理员添加模型”。 */
+  const pool = () => S.models.filter(m => !S.excluded.has(m.connectionId));
+  function showError(box, info, retry, ctx = {}) {
     box.replaceChildren(el('div', { text: info.text }));
     const fix = info.fix;
-    if (fix && (fix.action === 'add_model' || fix.action === 'fix_model')) box.append(el('a', { className: 'fixbtn', href: '/admin.html', text: fix.label }));
+    if (fix && fix.action === 'fix_model') {
+      const others = window.SmartPlan.usable(pool()).filter(m => m.connectionId !== ctx.connectionId);
+      if (ctx.connectionId && others.length && retry) box.append(el('button', { type: 'button', className: 'fixbtn', text: '自动换成其它可用模型', onclick: () => { S.excluded.add(ctx.connectionId); for (const k of Object.keys(S.picks)) if (S.picks[k] === ctx.connectionId) delete S.picks[k]; box.hidden = true; retry(); } }));
+      else box.append(el('div', { className: 'hint', text: '没有其它可用的模型了，请管理员添加模型。' }));
+    } else if (fix && fix.action === 'add_model') box.append(el('a', { className: 'fixbtn', href: '/admin.html', text: fix.label })); // 一个模型都没有：只能先添加
     else if (fix && retry) box.append(el('button', { type: 'button', className: 'fixbtn', text: fix.label, onclick: () => { box.hidden = true; retry(); } }));
     if (info.detail) box.append(el('details', {}, [el('summary', { text: '给管理员看的详细信息' }), el('div', { text: info.detail })]));
     box.hidden = false; box.scrollIntoView({ block: 'center' });
   }
+  /* B5-F2：可选预算（人民币）。空着=自动；填了就按它做上限（不超过管理员的单次上限），引擎门禁不变 */
+  const budget = () => $('s-budget-cny').value.trim() === '' ? null : $('s-budget-cny').value.trim(); // validated in SmartPlan.plan (0/负数/文字 -> 提示)
   function makePlan(choice) {
-    return window.SmartPlan.plan({ models: S.models, goal: $('s-goal').value, output: output(), deadline: $('s-deadline').value, capCny: S.capCny, picks: S.picks, choice: choice || S.choice });
+    return window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value, output: output(), deadline: $('s-deadline').value, capCny: S.capCny, picks: S.picks, choice: choice || S.choice, budgetCny: budget() });
+  }
+  function showAuto() {
+    const p = window.SmartPlan.plan({ models: pool(), goal: $('s-goal').value || '写一份文字成果', output: output(), capCny: S.capCny, picks: S.picks });
+    $('s-budget-auto').textContent = !p.ok ? '自动：添加模型后会自动估算' : p.chosen.free ? '自动：本机模型，不花钱' : '自动：约 ¥' + p.suggestedCny.toFixed(2) + '（建议金额）';
+  }
+  /* 填的金额比建议金额低：一句人话 + 两个按钮，用户选了“就用这个金额”才继续 */
+  function budgetCheck(p) {
+    if (!p.underBudget || (!p.belowMin && S.budgetAck === p.budgetCny)) return true;
+    // 低于第一步所需：不能开始，也不悄悄抬高，只给“改成建议金额”
+    $('s-budget-keep').hidden = p.belowMin;
+    $('s-budget-warn-text').textContent = p.belowMin
+      ? '这个金额连第一步都不够（第一步最少约 ¥' + p.minCny.toFixed(2) + '），开始后会马上停下，所以先不开始。建议金额约 ¥' + p.suggestedCny.toFixed(2) + '。'
+      : '预算可能不够，做到一半会停下（已完成的部分仍可下载）。建议金额约 ¥' + p.suggestedCny.toFixed(2) + '，你填的是 ¥' + p.chosen.maxCny.toFixed(2) + '。';
+    $('s-budget-suggest').onclick = () => { $('s-budget-cny').value = p.suggestedCny.toFixed(2); $('s-budget-warn').hidden = true; S.budgetAck = null; if (!$('s-plan').hidden) preview(true); };
+    $('s-budget-keep').onclick = () => { S.budgetAck = p.budgetCny; $('s-budget-warn').hidden = true; go(); };
+    $('s-budget-warn').hidden = false; $('s-budget-warn').scrollIntoView({ block: 'center' });
+    return false;
   }
   function renderSwap(p) {
     const box = $('s-swap'); box.replaceChildren();
@@ -45,13 +72,13 @@
       const i = r.candidates.indexOf(r.model.connectionId); S.picks[r.spec.roleId] = r.candidates[(i + 1) % r.candidates.length]; preview(true);
     } }));
   }
-  function skippedText(p) { return p.skipped && p.skipped.length ? '这些模型的价格未知，按规定不调用，已换成其它模型：' + p.skipped.join('、') + '。' : ''; }
+  function skippedText(p) { return p.skipped && p.skipped.length ? '这些模型所在的平台没有登记价格，按规定不调用，已换成其它模型：' + p.skipped.join('、') + '。' : ''; }
   function preview(show) {
     S.plan = makePlan();
     if (show) {
       $('s-plan').hidden = !S.plan.ok;
       $('s-plan-team').textContent = S.plan.ok ? '智能分配：' + S.plan.summary : '';
-      $('s-plan-note').textContent = S.plan.ok ? S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : '') + ' ' + skippedText(S.plan) : '';
+      $('s-plan-note').textContent = S.plan.ok ? [S.plan.confirmText + (S.plan.options.saving ? ' 预计超过单次上限 ¥' + S.plan.capCny + '，开始前会请你选择。' : ''), S.plan.estimatedNote, skippedText(S.plan)].filter(Boolean).join(' ') : '';
       if (S.plan.ok) renderSwap(S.plan);
     }
     return S.plan;
@@ -64,9 +91,11 @@
       if (opts.length > 1) {
         body.append(el('p', { text: '按现在的分配，预计会超过单次上限 ¥' + p.capCny.toFixed(2) + '。请选一个：' }));
         for (const o of opts) body.append(el('label', { className: 'choice' }, [el('input', { type: 'radio', name: 's-choice', value: o.kind, checked: o.kind === 'quality' }),
-          el('span', { text: (o.kind === 'quality' ? '效果优先 约¥' + o.estimateCny.toFixed(2) : '省钱 约¥' + o.estimateCny.toFixed(2) + '（效果可能稍差）') + '，最多 ¥' + o.maxCny.toFixed(2) + (o.overCap ? '，可能中途停下' : '') + '。' + o.summary })]));
+          el('span', { text: (o.kind === 'quality' ? '效果优先 约¥' + o.estimateCny.toFixed(2) : '省钱 约¥' + o.estimateCny.toFixed(2) + '（效果可能稍差）') + (p.estimatedNote ? '，估计上限 ¥' : '，最多 ¥') + o.maxCny.toFixed(2) + (o.overCap ? '，可能中途停下' : '') + '。' + o.summary })]));
       } else body.append(el('p', { className: 'team', text: p.confirmText }), el('p', { text: '团队：' + p.summary }));
+      if (p.budgetCny != null && !p.isRework) body.append(el('p', { className: 'hint', id: 's-confirm-budget', text: p.budgetClipped ? '你填的 ¥' + p.budgetCny.toFixed(2) + ' 超过了单次上限 ¥' + p.capCny.toFixed(2) + '，按 ¥' + p.capCny.toFixed(2) + ' 计算。' : '上限按你填的金额：¥' + p.chosen.maxCny.toFixed(2) + (p.underBudget ? '（比建议金额低，可能做到一半会停下）' : '') + '。' }));
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
+      if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: p.estimatedNote }));
       body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : '¥0.00') + '（估算，以厂商账单为准）。' }));
       if (!p.isRework) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
       else body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' }));
@@ -83,6 +112,7 @@
     await loadModels();
     const first = preview(false);
     if (!first.ok) return showError($('s-error'), first.problems[0], go);
+    if (!budgetCheck(first)) return;
     const choice = await confirm(first);
     if (!choice) return;
     S.choice = choice;
@@ -96,7 +126,7 @@
         if (m && m.status === 'available') continue;
         $('s-busy').textContent = '正在检查「' + window.ModelHints.platformLabel(r.model) + '」能否连接…';
         const t = await api('/api/providers/' + encodeURIComponent(r.model.connectionId) + '/test', 'POST', { approvePaid: true });
-        if (!t.ok) throw Object.assign(Error(t.error || ''), { code: 'model_unverified', modelName: window.ModelHints.platformLabel(r.model) });
+        if (!t.ok) throw Object.assign(Error(t.error || ''), { code: 'model_unverified', modelName: window.ModelHints.platformLabel(r.model), connectionId: r.model.connectionId });
         if (m) m.status = 'available';
       }
       $('s-busy').textContent = '正在开始执行…';
@@ -105,13 +135,13 @@
       showProgress(p);
       window.AIJWorkspace?.refreshProjects();
     } catch (e) {
-      showError($('s-error'), window.SmartPlan.explain(e, { modelName: e.modelName }), go);
+      showError($('s-error'), window.SmartPlan.explain(e, { modelName: e.modelName }), go, { connectionId: e.connectionId });
     } finally { S.busy = false; $('s-go').disabled = false; $('s-busy').textContent = ''; }
   }
   function showProgress(p) {
     $('simple').hidden = true; $('s-progress').hidden = false;
     $('s-team').textContent = p ? '团队：' + p.summary + '。' + p.confirmText : '';
-    $('s-download').textContent = DL[S.format] || '下载成果';
+    $('s-download').textContent = DL[S.format] || '下载成果'; $('s-download').hidden = false;
     $('s-result').hidden = true; $('s-run-error').hidden = true; $('s-stop').hidden = true; $('s-steps').replaceChildren();
     history.replaceState(null, '', '/workspace.html?run=' + encodeURIComponent(S.runId));
     scrollTo(0, 0);
@@ -131,7 +161,8 @@
     if (active) return;
     clearInterval(S.timer);
     const last = [...steps].reverse().find(st => st.status === 'done' && typeof st.output === 'string' && st.output.trim());
-    if (last) { $('s-final').textContent = last.output; $('s-result').hidden = false; }
+    // B5-F3 (2): a fresh result (e.g. after 重新生成) brings the download back at once; deckPreview hides it again only if the deck is unusable
+    if (last) { $('s-final').textContent = readable(last.output); $('s-result').hidden = false; $('s-download').hidden = false; if (S.format === 'pptx' && run.status !== 'failed' && run.status !== 'cancelled') deckPreview(); }
     $('s-accept').hidden = $('s-rework').hidden = run.status !== 'review_required';
     if (run.status !== 'review_required') $('s-rework-box').hidden = true;
     if (run.status === 'failed' || run.status === 'cancelled') {
@@ -145,12 +176,22 @@
         $('s-result').hidden = true; $('s-stop').scrollIntoView({ block: 'center' });
         return;
       }
+      // B5-F3 (1): a PPT whose final page step was refused by the quality check (apology / empty reply) is the
+      // same case as a cover-only deck: say so first, never offer a download, offer 重新生成
+      if (S.format === 'pptx' && run.status === 'failed' && bad && (bad.status === 'quality_failed' || /empty or oversized output/i.test(bad.error || ''))) {
+        $('s-result').hidden = true;
+        return unusableDeck('这次 PPT 没能生成合格的页面：模型的回复是空的、太短、超长或者是道歉，不是演示稿内容。', { failed: true });
+      }
       showError($('s-run-error'), info, () => { $('s-progress').hidden = true; $('simple').hidden = false; go(); });
     }
   }
   async function download() {
     const res = await fetch('/api/v2/runs/' + encodeURIComponent(S.runId) + '/export', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ format: S.format }) });
-    if (!res.ok) { showError($('s-run-error'), { text: '成果文件暂时生成不了，请稍后再试。', fix: { action: 'retry', label: '再试一次' } }, download); return; }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (err.code === 'pptx_unusable') return unusableDeck(err.error);
+      showError($('s-run-error'), { text: '成果文件暂时生成不了，请稍后再试。', fix: { action: 'retry', label: '再试一次' } }, download); return;
+    }
     const blob = await res.blob(), a = el('a', { href: URL.createObjectURL(blob), download: (S.outputLabel || '成果') + '.' + S.format });
     document.body.append(a); a.click(); a.remove();
   }
@@ -161,7 +202,7 @@
     const r = window.SmartPlan.rework({ models: S.models, snapshot: S.snapshot, feedback: $('s-rework-text').value, capCny: S.capCny });
     if (!r.ok) return showError($('s-run-error'), r.problems[0], rework);
     if (!(await confirm({ ...r, isRework: true }))) return;
-    $('s-result').hidden = true; $('s-state').textContent = '正在按你的意见修改…';
+    $('s-result').hidden = true; $('s-run-error').hidden = true; $('s-state').textContent = '正在按你的意见修改…';
     try {
       await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/review', 'POST', r.approval);
       $('s-rework-box').hidden = true; $('s-rework-text').value = '';
@@ -182,8 +223,104 @@
   }
   function reset() {
     clearInterval(S.timer); S.runId = null; S.picks = {}; S.choice = 'quality';
-    $('s-progress').hidden = true; $('simple').hidden = false; $('s-error').hidden = true; $('s-plan').hidden = true;
-    history.replaceState(null, '', '/workspace.html');
+    $('home').hidden = true; $('s-progress').hidden = true; $('simple').hidden = false; $('s-error').hidden = true; $('s-plan').hidden = true;
+    history.replaceState(null, '', '/workspace.html?new=1');
+  }
+  /* B5-1 我的任务：一句话汇总 + 按“进行中 / 等你审核 / 已停下 / 已完成 / 草稿”分组的卡片，点卡片进该任务的进度页。
+   * 数据来自管理员接口 /api/v2/tasks（顶栏每 5 秒刷新一次并广播 aij:tasks）。 */
+  const GROUPS = [['running', '进行中'], ['review', '等你审核'], ['stopped', '已停下'], ['done', '已完成'], ['draft', '草稿']];
+  const GTEXT = Object.fromEntries(GROUPS);
+  let TASKS = null;
+  const taskHref = t => t.runId ? '/workspace.html?run=' + encodeURIComponent(t.runId) : '/workspace.html?project=' + encodeURIComponent(t.projectId);
+  const when = ts => { const d = Date.now() - ts; return d < 60e3 ? '刚刚' : d < 3600e3 ? Math.floor(d / 60e3) + ' 分钟前' : d < 86400e3 ? Math.floor(d / 3600e3) + ' 小时前' : new Date(ts).toLocaleDateString('zh-CN'); };
+  const progressText = t => { if (!t.runId) return '还没开始'; const total = t.stepsTotal || 1; return t.group === 'running' ? '第 ' + Math.min(t.stepsDone + 1, total) + '/' + total + ' 步' + (t.currentRole ? ' · ' + t.currentRole + '正在做' : '') : '完成 ' + t.stepsDone + '/' + total + ' 步'; };
+  const running = () => (TASKS ? TASKS.tasks.filter(t => t.group === 'running').sort((a, b) => b.updatedAt - a.updatedAt) : []);
+  function card(t) {
+    const a = el('a', { className: 'tcard ' + t.group, href: taskHref(t) }, [el('strong', { text: t.name }),
+      el('div', { className: 'meta' }, [el('span', { className: 'tag', text: GTEXT[t.group] }), progressText(t)]),
+      el('div', { className: 'meta', text: '已花约 ' + spentText(t.costUsd) + ' · ' + when(t.updatedAt) + (t.downloadable && t.group !== 'running' ? ' · 有成果可下载' : '') })]);
+    a.dataset.projectId = t.projectId; if (t.runId) a.dataset.runId = t.runId;
+    return a;
+  }
+  function renderHome() {
+    const empty = !TASKS || !TASKS.tasks.length;
+    $('home-empty').hidden = !empty; $('home-sum').hidden = empty; $('home-groups').hidden = empty;
+    $('home-guide').hidden = !(empty && !window.SmartPlan.chat(S.models).length);
+    if (!TASKS) return;
+    const c = TASKS.counts;
+    $('home-sum').textContent = '正在运行 ' + c.running + ' 个（最多同时 ' + TASKS.maxConcurrent + ' 个）· 等你审核 ' + c.review + ' 个 · 已完成 ' + c.done + ' 个' + (c.stopped ? ' · 已停下 ' + c.stopped + ' 个' : '') + (c.draft ? ' · 草稿 ' + c.draft + ' 个' : '');
+    $('home-groups').replaceChildren(...GROUPS.map(([g, name]) => { const list = TASKS.tasks.filter(t => t.group === g).sort((a, b) => b.updatedAt - a.updatedAt); return list.length ? el('section', { className: 'tgroup' }, [el('h3', { text: name + '（' + list.length + '）' }), el('div', { className: 'tcards' }, list.map(card))]) : null; }).filter(Boolean));
+  }
+  function renderRunNav() {
+    const list = running(), i = list.findIndex(t => t.runId === S.runId), go = t => location.assign(taskHref(t));
+    const others = list.filter(t => t.runId !== S.runId);
+    $('s-prev').hidden = $('s-next').hidden = !others.length;
+    if (!others.length) return;
+    const n = list.length, prev = i >= 0 ? list[(i - 1 + n) % n] : others[others.length - 1], next = i >= 0 ? list[(i + 1) % n] : others[0];
+    $('s-prev').onclick = () => go(prev); $('s-next').onclick = () => go(next);
+    const mine = TASKS.tasks.find(t => t.runId === S.runId);
+    if (mine && !$('s-team').textContent) $('s-team').textContent = '任务：' + mine.name;
+  }
+  function onTasks(data) {
+    if (!data || !Array.isArray(data.tasks)) return;
+    TASKS = data; renderHome();
+    if (!$('s-progress').hidden) renderRunNav();
+  }
+  addEventListener('aij:tasks', e => onTasks(e.detail));
+  /* B5-F2 F：首页右侧“实时动态”小卡——大屏同一条真实事件流（/api/events），点标题进完整大屏 */
+  const LIVE_TEXT = { model_start: '开始调用模型', model_done: '模型完成', model_error: '模型出错', handoff: '交接给下一岗位', task_start: '任务开始', task_done: '任务完成',
+    task_error: '任务出错', tool_start: '开始用工具', tool_done: '工具完成', review: '审核', planning: '规划', file_change: '生成文件', test_start: '开始检查', test_result: '检查结果', activity: '动态' };
+  const liveItems = [];
+  addEventListener('aij:event', e => {
+    const v = e.detail; if (!v || v.type !== 'event' || !LIVE_TEXT[v.eventType]) return;
+    const when = new Date(v.t || v.timestamp || Date.now()), hh = n => String(n).padStart(2, '0');
+    liveItems.unshift({ time: hh(when.getHours()) + ':' + hh(when.getMinutes()) + ':' + hh(when.getSeconds()), who: String(v.label || v.agent || '').slice(0, 24) + (v.role ? ' · ' + String(v.role).slice(0, 12) : ''),
+      what: LIVE_TEXT[v.eventType] + (v.source === 'demo' ? '（演示）' : ''), cls: /error/.test(v.eventType) ? 'err' : /done/.test(v.eventType) ? 'ok' : '' });
+    liveItems.splice(12);
+    $('home-live-list').replaceChildren(...liveItems.map(x => el('li', {}, [el('span', { className: 't', text: x.time }), el('span', { className: 'k ' + x.cls, text: x.what }), el('span', { text: x.who })])));
+  });
+  /* 从进度页链接直接打开时，按任务当初选的成果格式下载 */
+  function restoreFormat(run) {
+    const label = ((/想要的成果：(.+)/.exec(run.projectSnapshot && run.projectSnapshot.description || '') || [])[1] || '').split('\n')[0];
+    const o = Object.values(OUT).find(x => x.label === label); if (o) { S.format = o.format; S.outputLabel = o.label; }
+  }
+  /* B5-F2：PPT 的最终输出是幻灯片 JSON——页面上显示成人能读的提纲，不显示原始 JSON */
+  /* QA-F2-2：PPT 预览用服务端同一套解析（和下载的 PPT 一致：每页标题 + 要点，不含提示语和 Markdown 符号）
+   * QA-F2-1：解析不出合格页面时明确告诉用户，不把空壳当成果，并提供“重新生成” */
+  async function deckPreview() {
+    let d; try { d = await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/deck'); } catch { return; }
+    if (!d.usable) return unusableDeck('这次 PPT 没能生成合格的页面：' + d.reason + '。');
+    // B5-F3 (3): say plainly when the reply had no page structure and how it was paged
+    let note = $('s-deck-notice'); if (!note) { note = el('p', { id: 's-deck-notice', className: 'hint', role: 'status' }); $('s-final').before(note); }
+    note.textContent = d.notice || ''; note.hidden = !d.notice;
+    $('s-final').textContent = d.slides.map((s, i) => {
+      const pts = [s.subtitle, s.quote, ...s.bullets, ...s.cards.map(c => c.title + (c.text ? '：' + c.text : '')), ...s.steps.map(c => c.title + (c.text ? '：' + c.text : '')),
+        ...[s.left, s.right].filter(Boolean).flatMap(c => [c.title + '：', ...c.bullets.map(b => '  ' + b)])].filter(Boolean);
+      return '第 ' + (i + 1) + ' 页　' + s.title + '\n' + pts.map(p => '　· ' + p).join('\n');
+    }).join('\n\n');
+  }
+  function unusableDeck(message, { failed = false } = {}) {
+    $('s-download').hidden = true;
+    // 等你审核的运行：返工重做审核步骤；已失败的运行不能返工：回到同一目标和团队，重新确认费用后再开始
+    const box = $('s-run-error'); box.replaceChildren(el('div', { text: (message || '这次 PPT 没能生成合格的页面。') + ' 没有把空白文件当成成果。' + (failed ? '可以点“重新生成”，用同样的需求和团队再做一次（开始前会再请你确认费用）。' : '可以点“重新生成”，让审核岗位按幻灯片格式重做一遍（会再请你确认一次费用）。') }));
+    box.append(el('button', { type: 'button', className: 'fixbtn', id: 's-regenerate', text: '重新生成', onclick: () => { box.hidden = true;
+      if (failed) { adjust(); return; }
+      $('s-rework-box').hidden = false; $('s-rework-text').value = '上次没有生成合格的演示稿页面，请严格按要求的幻灯片 JSON 格式重新输出完整的演示稿，每页都要有标题和要点。'; $('s-rework-text').focus(); } }));
+    box.hidden = false; box.scrollIntoView({ block: 'center' });
+  }
+  /* 非 PPT 的文字预览：去掉 Markdown 符号（#、**、`），列表符号换成“·” */
+  const plain = t => String(t).split('\n').map(l => l.replace(/^\s{0,3}#{1,6}\s+/, '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1').replace(/`([^`]*)`/g, '$1')
+    .replace(/^(\s*)[-*+]\s+/, '$1· ').replace(/^\s*([-*_])(\s*\1){2,}\s*$/, '')).join('\n').replace(/\n{3,}/g, '\n\n');
+  function readable(text) {
+    try {
+      const j = JSON.parse(String(text).replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, ''));
+      if (!j || !Array.isArray(j.slides)) return plain(text);
+      return j.slides.map((s, i) => {
+        const pts = [...(s.subtitle ? [s.subtitle] : []), ...(s.quote ? [s.quote] : []), ...(s.bullets || []), ...(s.cards || []).map(c => (c.title || '') + (c.text ? '：' + c.text : '')),
+          ...(s.steps || []).map(c => (c.title || '') + (c.text ? '：' + c.text : '')), ...['left', 'right'].filter(k => s[k]).flatMap(k => [(s[k].title || '') + '：', ...(s[k].bullets || []).map(b => '  ' + b)])];
+        return '第 ' + (i + 1) + ' 页　' + (s.title || '') + '\n' + pts.filter(Boolean).map(p => '　· ' + p).join('\n');
+      }).join('\n\n');
+    } catch { return plain(text); }
   }
   window.AIJSimple = { reset };
   addEventListener('DOMContentLoaded', async () => {
@@ -202,7 +339,14 @@
     $('s-accept').addEventListener('click', async () => { await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/review', 'POST', { decision: 'approve', feedback: '用户在简单模式确认成果' }); poll(); });
     const q = new URLSearchParams(location.search);
     if (q.get('project')) document.body.dataset.mode = 'advanced';
-    try { await loadModels(); } catch { /* 页面其余部分仍可用 */ }
-    if (q.get('run')) { S.runId = q.get('run'); try { const run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; S.projectId = run.projectId; showProgress(null); } catch { reset(); } }
+    try { await loadModels(); showAuto(); } catch { /* 页面其余部分仍可用 */ }
+    if (q.get('run')) { S.runId = q.get('run'); try { const run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; S.projectId = run.projectId; restoreFormat(run); showProgress(null); } catch { reset(); } }
+    else if (!q.get('project') && q.get('new') !== '1') {
+      // B5-F2：默认落点永远是“我的任务”（顶栏“我的任务”在任何页面点了都显示任务列表）；
+      // 一个任务都没有时显示空状态：一句引导 + 大号“＋ 新建任务”（首屏可见，不用滚动）
+      $('simple').hidden = true; $('home').hidden = false;
+      try { onTasks(await api('/api/v2/tasks')); } catch { TASKS = null; renderHome(); }
+    }
+    try { if (!TASKS) onTasks(await api('/api/v2/tasks')); else renderRunNav(); } catch { /* 顶栏会继续刷新 */ }
   });
 })();

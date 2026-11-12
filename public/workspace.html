@@ -16,6 +16,24 @@
     .guide{border:1px solid var(--accent);border-radius:9px;padding:10px 14px;margin:0 0 12px;background:#0b2023}
     .team{font-size:15px;line-height:1.9}.steps-list{list-style:none;padding:0;margin:10px 0}.steps-list li{padding:8px 10px;border-left:3px solid var(--line);margin:6px 0;background:#0d1a29}
     .steps-list li.done{border-color:var(--accent)}.steps-list li.running{border-color:var(--warn)}.steps-list li.failed{border-color:var(--bad)}
+    /* B5-1 我的任务（任务中心） */
+    .home-sum{font-size:16px;margin:4px 0 12px}.home-sum b{color:var(--accent)}
+    .budget-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.budget-row input{width:140px}.budget-row .yen{font-weight:700}
+    .btn-outline{display:inline-block;border:1px solid var(--accent);color:var(--accent);background:rgba(102,223,210,.08);border-radius:8px;padding:6px 14px;font-weight:600;text-decoration:none}.btn-outline:hover{background:rgba(102,223,210,.18);text-decoration:none}
+    .home-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+    .home-live{border:1px solid var(--line);border-radius:10px;padding:12px;background:#0b1622}.home-live h3{margin:0;font-size:15px}
+    .live-list{list-style:none;margin:8px 0;padding:0;max-height:320px;overflow:auto;font-size:13px}.live-list li{padding:5px 0;border-bottom:1px solid #1a2c3f;display:flex;gap:6px}
+    .live-list .t{color:var(--dim);font-variant-numeric:tabular-nums}.live-list .k{font-weight:600}.live-list .err{color:var(--bad)}.live-list .ok{color:var(--accent)}.live-list .dim{color:var(--dim)}
+    @media (max-width:900px){.home-grid{grid-template-columns:1fr}}
+    .home-empty{text-align:center;padding:24px 8px}.home-empty .newtask{display:inline-block;margin-top:10px}.home-empty .guide{text-align:left}
+    .tgroup h3{margin:16px 0 8px;font-size:15px;color:var(--dim)}.tcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+    .tcard{display:block;border:1px solid var(--line);border-radius:10px;padding:12px;background:#0d1a29;color:var(--text);text-decoration:none}.tcard:hover{border-color:var(--accent);text-decoration:none}
+    .tcard strong{display:block;font-size:15px;margin-bottom:4px}.tcard .meta{color:var(--dim);font-size:13px}.tcard .tag{display:inline-block;border-radius:999px;padding:1px 8px;font-size:12px;margin-right:6px;border:1px solid var(--line)}
+    .tcard.running{border-left:4px solid var(--warn)}.tcard.review{border-left:4px solid var(--accent)}.tcard.stopped{border-left:4px solid var(--bad)}
+    .runnav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}.runnav a,.runnav button{width:auto}
+    .projects .pstate{display:inline-block;font-size:12px;border-radius:999px;padding:0 7px;margin-left:6px;border:1px solid var(--line);color:var(--dim)}
+    .projects .pstate.running{color:var(--warn);border-color:var(--warn)}.projects .pstate.review{color:var(--accent);border-color:var(--accent)}.projects .pstate.stopped{color:var(--bad);border-color:var(--bad)}
+    @media (max-width:720px){.shell{display:block}.shell aside{display:none}}
     dialog{max-width:560px;background:var(--card);color:var(--text);border:1px solid var(--accent);border-radius:12px;padding:20px}dialog::backdrop{background:#000a}
     .choice{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:10px;margin:8px 0;cursor:pointer}.choice input{width:auto;margin-top:5px}
     .final{white-space:pre-wrap;background:#0d1a29;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:420px;overflow:auto}
@@ -24,25 +42,47 @@
   <script src="/smart-plan.js" defer></script>
   <script src="/workspace.js" defer></script>
   <script src="/workspace-simple.js" defer></script>
+  <script src="/topbar.js" defer></script>
 </head>
 <body data-mode="simple">
-<header><div><strong>AIJAVAIS <span style="color:var(--accent)">V2</span></strong><small>项目协作与成果交付工作台</small></div><nav><a class="newtask" id="s-newtask" href="/workspace.html?new=1">＋ 新建任务</a><a href="/project-intake.html">智能立项</a><a href="/capabilities.html">能力中心</a><a href="/admin.html">模型与团队</a><a href="/panel.html">实时大屏</a><button class="small" id="logout" type="button">退出登录</button></nav></header>
+<header><div><strong>AIJAVAIS <span style="color:var(--accent)">V2</span></strong><small>项目协作与成果交付工作台</small></div><nav><a href="/project-intake.html">智能立项</a><a href="/capabilities.html">能力中心</a><button class="small" id="logout" type="button">退出登录</button></nav></header>
 <div class="shell">
-  <aside><div class="side-head"><span class="side-title">我的项目</span><button id="new-project" class="small" type="button">＋ 新建</button></div><div id="projects" class="projects" aria-label="项目列表"><p class="empty">正在读取项目…</p></div></aside>
+  <aside><div class="side-head"><span class="side-title">我的任务</span><button id="new-project" class="small" type="button">＋ 新建</button></div><div id="projects" class="projects" aria-label="项目列表"><p class="empty">正在读取项目…</p></div></aside>
   <main>
-        <section id="simple" class="card simple-only" aria-labelledby="s-title">
+    <section id="home" class="card simple-only" hidden aria-labelledby="home-title">
+      <div class="row-head"><h2 id="home-title">我的任务</h2><a class="btn-outline" id="home-new" href="/workspace.html?new=1">＋ 新建任务</a></div>
+      <div class="home-grid"><div class="home-main">
+      <p class="home-sum" id="home-sum" role="status" aria-live="polite">正在读取任务…</p>
+      <div id="home-empty" class="home-empty" hidden>
+        <p class="home-sum">还没有任务。说说想让 AI 帮你做什么，系统会自动配好团队、先请你确认费用再开始。</p>
+        <p id="home-guide" class="guide" hidden><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里点“＋ 新建任务”。</p>
+        <a class="newtask big" id="home-empty-new" href="/workspace.html?new=1">＋ 新建任务</a>
+      </div>
+      <div id="home-groups"></div>
+      </div>
+      <aside id="home-live" class="home-live" aria-labelledby="home-live-title">
+        <div class="row-head"><h3 id="home-live-title">实时动态</h3><a id="home-live-open" href="/panel.html">打开实时大屏 →</a></div>
+        <ol id="home-live-list" class="live-list"><li class="dim">等待模型信号…</li></ol>
+        <p class="hint">只显示服务器真实记录的模型调用与交接；本机演示信号会标明“演示”。</p>
+      </aside></div>
+    </section>
+    <section id="simple" class="card simple-only" aria-labelledby="s-title">
       <div class="row-head"><h2 id="s-title">新建任务</h2><button id="s-advanced" type="button" class="small">高级设置</button></div>
       <div id="ws-guide" class="guide" hidden><strong>首次使用，两步开始：</strong>① <a href="/admin.html">添加模型</a>（填一次密钥，点“连接并全部添加”）→ ② 回到这里，说说想做什么，点“一键智能配置并开始”。</div>
       <label for="s-goal">想做什么</label><textarea id="s-goal" rows="3" maxlength="4000" placeholder="例如：给社区咖啡店写一份周末促销方案"></textarea>
       <label>想要什么成果</label><div class="chips" id="s-output" role="radiogroup" aria-label="想要什么成果"></div>
       <label for="s-deadline">什么时候要（可选）</label><input id="s-deadline" maxlength="60" placeholder="例如：本周五前">
-      <p class="hint">不用选模型、不用设预算：点开始后系统会估算费用，请你确认一次。</p>
+      <label for="s-budget-cny">最多花多少钱（可选）</label>
+      <div class="budget-row"><span class="yen">¥</span><input id="s-budget-cny" type="number" min="0.1" step="0.1" inputmode="decimal" placeholder="不填就自动" aria-describedby="s-budget-auto"><span id="s-budget-auto" class="hint" role="status">自动：先说说想做什么</span></div>
+      <div id="s-budget-warn" class="alert" role="alert" hidden><div id="s-budget-warn-text"></div><button id="s-budget-suggest" type="button" class="fixbtn">改成建议金额</button><button id="s-budget-keep" type="button" class="fixbtn">就用这个金额</button></div>
+      <p class="hint">不用选模型；预算可以不填，系统会自动估算。点开始后会请你确认一次费用。</p>
       <div id="s-plan" hidden><p class="team" id="s-plan-team"></p><p class="hint" id="s-plan-note"></p><div id="s-swap"></div></div>
       <div id="s-error" class="alert" role="alert" hidden></div>
       <p id="s-busy" class="hint" role="status" aria-live="polite"></p>
       <div class="toolbar"><button id="s-go" type="button" class="primary big">一键智能配置并开始</button><button id="s-preview" type="button">先看看配置</button></div>
     </section>
     <section id="s-progress" class="card simple-only" hidden aria-labelledby="s-progress-title">
+      <nav class="runnav" aria-label="任务切换"><a id="s-home" href="/workspace.html">← 返回我的任务</a><button id="s-prev" type="button" class="small" hidden>上一个运行中的任务</button><button id="s-next" type="button" class="small" hidden>下一个运行中的任务</button></nav>
       <div class="row-head"><h2 id="s-progress-title">执行进度</h2><button id="s-adjust" type="button" class="small">调整团队</button></div>
       <p class="team" id="s-team"></p>
       <ol class="steps-list" id="s-steps"></ol>
@@ -52,7 +92,7 @@
       <div id="s-stop" class="alert" role="alert" hidden><div id="s-stop-text"></div><button id="s-stop-download" type="button" class="fixbtn">到此为止，下载已完成部分</button><button id="s-stop-more" type="button" disabled title="即将支持：追加预算后从停下的步骤继续">追加 ¥0.50 继续（即将支持）</button></div>
       <div id="s-result" hidden><h3>成果</h3><div class="final" id="s-final"></div><div class="toolbar"><button id="s-download" type="button" class="primary">下载成果</button><button id="s-accept" type="button">满意，确认完成</button><button id="s-rework" type="button">不满意，要修改</button></div>
         <div id="s-rework-box" hidden><label for="s-rework-text">哪里不满意、想怎么改？</label><textarea id="s-rework-text" rows="3" maxlength="2000" placeholder="例如：语气再活泼一些，加上会员日的优惠"></textarea><div class="toolbar"><button id="s-rework-go" type="button" class="primary">按意见修改</button><button id="s-rework-cancel" type="button">先不改了</button></div></div></div>
-      <p class="hint">想看动画？<a href="/" target="_blank" rel="noopener">打开实时大屏</a>，每一步都会同步显示。</p>
+      <p class="hint">想看动画？<a href="/panel.html" target="_blank" rel="noopener">打开实时大屏</a>，每一步都会同步显示。</p>
       <button id="s-new" type="button">＋ 新建任务</button>
     </section>
     <dialog id="s-confirm" aria-labelledby="s-confirm-title"><h2 id="s-confirm-title">确认开始</h2><div id="s-confirm-body"></div><div class="toolbar"><button id="s-confirm-ok" type="button" class="primary">确认开始</button><button id="s-confirm-cancel" type="button">取消</button></div></dialog>
