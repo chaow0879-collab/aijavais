@@ -23,7 +23,16 @@
     for (const id of ['s-output', 's-goal', 's-deadline']) $(id).addEventListener('input', () => { S.picks = {}; if (!$('s-plan').hidden) preview(true); showAuto(); });
     $('s-budget-cny').addEventListener('input', () => { $('s-budget-warn').hidden = true; S.budgetAck = null; if (!$('s-plan').hidden) preview(true); });
   }
+  /* B8：使用者账号不读后台接口：可用模型（只含管理员已测通的）、单次上限和本月额度都来自 /api/v2/me */
+  const isUser = async () => (await (window.AIJRole || Promise.resolve(null))) === 'user';
   async function loadModels() {
+    if (await isUser()) {
+      const me = await api('/api/v2/me');
+      S.models = me.models || []; S.me = me.me;
+      if (me.settings && Number(me.settings.simpleRunCapCny) > 0) S.capCny = Number(me.settings.simpleRunCapCny);
+      $('ws-guide').hidden = window.SmartPlan.chat(S.models).length > 0;
+      return;
+    }
     const [m, c] = await Promise.all([api('/api/models'), api('/api/config').catch(() => null)]);
     S.models = m.models || [];
     if (c && c.settings && Number(c.settings.simpleRunCapCny) > 0) S.capCny = Number(c.settings.simpleRunCapCny);
@@ -39,7 +48,7 @@
       const others = window.SmartPlan.usable(pool()).filter(m => m.connectionId !== ctx.connectionId);
       if (ctx.connectionId && others.length && retry) box.append(el('button', { type: 'button', className: 'fixbtn', text: '自动换成其它可用模型', onclick: () => { S.excluded.add(ctx.connectionId); for (const k of Object.keys(S.picks)) if (S.picks[k] === ctx.connectionId) delete S.picks[k]; box.hidden = true; retry(); } }));
       else box.append(el('div', { className: 'hint', text: '没有其它可用的模型了，请管理员添加模型。' }));
-    } else if (fix && fix.action === 'add_model') box.append(el('a', { className: 'fixbtn', href: '/admin.html', text: fix.label })); // 一个模型都没有：只能先添加
+    } else if (fix && fix.action === 'add_model') box.append(document.body.dataset.role === 'user' ? el('div', { className: 'hint', text: '请联系管理员添加模型。' }) : el('a', { className: 'fixbtn', href: '/admin.html', text: fix.label })); // 一个模型都没有：只能先添加
     else if (fix && retry) box.append(el('button', { type: 'button', className: 'fixbtn', text: fix.label, onclick: () => { box.hidden = true; retry(); } }));
     if (info.detail) box.append(el('details', {}, [el('summary', { text: '给管理员看的详细信息' }), el('div', { text: info.detail })]));
     box.hidden = false; box.scrollIntoView({ block: 'center' });
@@ -97,7 +106,8 @@
       const skip = skippedText(p); if (skip) body.append(el('p', { className: 'hint', text: skip }));
       if (p.estimatedNote) body.append(el('p', { className: 'hint', id: 's-confirm-estimated', text: p.estimatedNote }));
       body.append(el('p', { className: 'hint', id: 's-confirm-spent', text: '这个任务累计已花约 ' + (p.isRework ? spentText(S.spentUsd) : '¥0.00') + '（估算，以厂商账单为准）。' }));
-      if (!p.isRework) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
+      if (S.me && S.me.kind === 'user') body.append(el('p', { className: 'hint', id: 's-confirm-quota', text: '你本月额度还剩 ¥' + (Number(S.me.month.remainingCny) || 0).toFixed(2) + '（每月上限 ¥' + (Number(S.me.month.capCny) || 0).toFixed(2) + '，由管理员设置）。' }));
+      if (!p.isRework && !(S.me && S.me.kind === 'user')) body.append(el('p', { className: 'hint', text: '开始前会先检查要用的模型能否连接（真实调用一次，费用极少）。' }));
       else body.append(el('p', { className: 'hint', text: '只重做“审核并定稿”这一步，沿用已完成的初稿。' }));
       $('s-confirm-title').textContent = p.isRework ? '确认修改' : '确认开始';
       const done = ok => { dlg.close(); resolve(ok ? (document.querySelector('input[name=s-choice]:checked')?.value || 'quality') : null); };
@@ -106,6 +116,14 @@
       dlg.showModal();
     });
   }
+  /* B8：使用者每月有人民币上限。先在页面上用人话拦下来（不创建任务）；服务器开始运行前还会再查一次，以服务器为准 */
+  function quotaProblem(p) {
+    if (!S.me || S.me.kind !== 'user' || !p.approval || !(p.approval.approvePaid || p.chosen.maxCny > 0)) return null;
+    const left = Number(S.me.month.remainingCny) || 0;
+    if (left <= 0) return '本月额度已用完，请联系管理员';
+    if (p.chosen.maxCny > left + 1e-9) return '本月额度只剩 ¥' + left.toFixed(2) + '，这次最多要花 ¥' + p.chosen.maxCny.toFixed(2) + '。请把预算改到 ¥' + left.toFixed(2) + ' 以内，或联系管理员';
+    return null;
+  }
   async function go() {
     if (S.busy) return;
     $('s-error').hidden = true;
@@ -113,10 +131,14 @@
     const first = preview(false);
     if (!first.ok) return showError($('s-error'), first.problems[0], go);
     if (!budgetCheck(first)) return;
+    const q0 = S.me && S.me.kind === 'user' && Number(S.me.month.remainingCny) <= 0 && quotaProblem(first);
+    if (q0) return showError($('s-error'), { text: q0, fix: null });
     const choice = await confirm(first);
     if (!choice) return;
     S.choice = choice;
     const p = makePlan(choice);
+    const q1 = quotaProblem(p);
+    if (q1) return showError($('s-error'), { text: q1, fix: null });
     S.busy = true; $('s-go').disabled = true;
     try {
       $('s-busy').textContent = '正在创建任务…';
@@ -337,11 +359,11 @@
     $('s-download').addEventListener('click', download);
     $('s-stop-download').addEventListener('click', download);
     $('s-accept').addEventListener('click', async () => { await api('/api/v2/runs/' + encodeURIComponent(S.runId) + '/review', 'POST', { decision: 'approve', feedback: '用户在简单模式确认成果' }); poll(); });
-    const q = new URLSearchParams(location.search);
-    if (q.get('project')) document.body.dataset.mode = 'advanced';
+    const q = new URLSearchParams(location.search), user = await isUser();
+    if (q.get('project') && !user) document.body.dataset.mode = 'advanced'; // B8：使用者只有简单模式，没有后台式的高级配置
     try { await loadModels(); showAuto(); } catch { /* 页面其余部分仍可用 */ }
     if (q.get('run')) { S.runId = q.get('run'); try { const run = (await api('/api/v2/runs/' + encodeURIComponent(S.runId))).run; S.projectId = run.projectId; restoreFormat(run); showProgress(null); } catch { reset(); } }
-    else if (!q.get('project') && q.get('new') !== '1') {
+    else if ((user || !q.get('project')) && q.get('new') !== '1') {
       // B5-F2：默认落点永远是“我的任务”（顶栏“我的任务”在任何页面点了都显示任务列表）；
       // 一个任务都没有时显示空状态：一句引导 + 大号“＋ 新建任务”（首屏可见，不用滚动）
       $('simple').hidden = true; $('home').hidden = false;

@@ -72,7 +72,7 @@ const ok = name => { results.push(name); console.log('PASS', name); };
     /* ---- 5-second test: real login, no scroll, no click ---- */
     const fresh = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     const lp = await fresh.newPage();
-    await lp.goto(base + '/'); // not logged in -> login page
+    await lp.goto(base + '/admin-login.html'); // B8: the administrator signs in on the back-end login page (/ now leads to the front login)
     await lp.waitForSelector('#loginForm:not(.hidden)');
     await lp.fill('#pw', H.TEST_PASSWORD);
     const t0 = Date.now(); await lp.click('#loginBtn');

@@ -1,0 +1,154 @@
+'use strict';
+/* B8 前后台分离 in real Chromium against the real server + SQLite and a LOCAL MOCK model (no paid API, no real money).
+ *  admin: back-end login page says 这是管理后台 → 使用者 page: add a user, set a monthly cap, disable, reset password
+ *  user:  front login → only 我的任务 / ＋ 新建任务 / 实时大屏 / 退出, no back-end entry anywhere → creates a task end to end
+ *         → back-end pages answer 403 → cap used up → plain "本月额度已用完，请联系管理员", no task created
+ *  two users never see each other's tasks */
+const assert = require('node:assert/strict');
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const { chromium } = require('playwright');
+const H = require('../helpers');
+
+const SHOTS = process.env.UI_SHOTS || null;
+const results = [];
+const ok = name => { results.push(name); console.log('PASS', name); };
+const PASS = 'user-password-123';
+(async () => {
+  const mock = http.createServer((req, res) => {
+    let body = ''; req.on('data', c => body += c); req.on('end', () => {
+      const j = JSON.parse(body || '{}');
+      const reply = j.max_tokens <= 32 ? '好' : '周末促销方案：一、活动主题；二、优惠内容；三、宣传渠道；四、预算与分工。内容完整，可以直接使用。';
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply } }] }) + '\n\ndata: ' + JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 5 } }) + '\n\ndata: [DONE]\n\n');
+    });
+  });
+  await new Promise(r => mock.listen(0, '127.0.0.1', r));
+  const mp = mock.address().port;
+  const app = await H.boot({ env: { LOCAL_MODEL_TARGETS: '127.0.0.1:' + mp }, login: false });
+  const base = 'http://localhost:' + app.port;
+  const browser = await chromium.launch({ headless: true, env: { ...process.env, LANG: process.env.LANG || 'C.UTF-8' }, ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}) });
+  const shot = async (page, name) => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, 'b8-' + name + '.png'), fullPage: false }); } };
+  const visibleBackendLinks = page => page.evaluate(() => [...document.querySelectorAll('a,button')].filter(n => n.offsetParent !== null || getComputedStyle(n).position === 'fixed')
+    .filter(n => /admin|capabilities|project-intake/.test(n.getAttribute('href') || '') || /模型设置|管理中心|能力中心|智能立项|高级设置|管理后台/.test(n.textContent)).map(n => n.textContent.trim() || n.getAttribute('href')));
+  try {
+    /* ---------------- admin: separate back-end login ---------------- */
+    const ac = await browser.newContext({ viewport: { width: 1280, height: 860 } }), ap = await ac.newPage();
+    await ap.goto(base + '/admin.html');
+    await ap.waitForURL(/\/admin-login\.html\?next=/);
+    await ap.waitForSelector('#setupForm:not(.hidden)');
+    assert.match(await ap.innerText('#admin-tag'), /这是管理后台/);
+    const code = /([A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4})/.exec(fs.readFileSync(path.join(app.dir, 'setup-code.txt'), 'utf8'))[1];
+    await ap.fill('#code', code); await ap.fill('#np', H.TEST_PASSWORD); await ap.fill('#np2', H.TEST_PASSWORD); await ap.click('#setupBtn');
+    await ap.waitForURL(/\/admin\.html/);
+    ok('admin: back-end pages go to the separate admin login, which says 这是管理后台');
+    const adminCookie = (await ac.cookies()).find(c => c.name === 'aij_session');
+    H.cookies.set(app.port, 'aij_session=' + adminCookie.value);
+    const add = await app.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'local-writer', displayName: '本地写手', pricingMode: 'local', capabilities: ['writing', 'reasoning'] });
+    assert.equal(add.status, 200, add.text); const localId = add.json.connection.connectionId;
+    assert.equal((await app.call('POST', '/api/models/' + localId + '/test', {})).json.ok, true);
+    const paid = await app.call('POST', '/api/models', { providerId: 'ollama', baseUrl: `http://127.0.0.1:${mp}/v1`, modelId: 'priced-writer', displayName: '收费写手', pricingMode: 'paid_api', capabilities: ['writing', 'reasoning'], price: { currency: 'CNY', inputPerMillion: 1, outputPerMillion: 1 } });
+    const paidId = paid.json.connection.connectionId;
+    assert.equal((await app.call('POST', '/api/models/' + paidId + '/test', { approvePaid: true })).json.ok, true);
+    await app.call('POST', '/api/models/' + paidId + '/disable', {});
+
+    /* admin 使用者 page */
+    await ap.reload(); await ap.click('#nav-users');
+    await ap.waitForSelector('#pane-users.on');
+    for (const [name, cap] of [['xiaowang', '5'], ['xiaoli', '5']]) {
+      await ap.fill('#uName', name); await ap.fill('#uPw', PASS); await ap.fill('#uCap', cap); await ap.click('#uAdd');
+      await ap.waitForFunction(n => [...document.querySelectorAll('#uBody tr')].some(r => r.cells[0].textContent === n), name);
+    }
+    const row = ap.locator('#uBody tr', { hasText: 'xiaowang' });
+    assert.match(await row.innerText(), /正常[\s\S]*¥5\.00[\s\S]*¥0\.00[\s\S]*¥5\.00/);
+    await shot(ap, '1-admin-users');
+    ok('admin 使用者 page: add users with a monthly ¥ cap; list shows status, cap, this month spent and remaining');
+
+    /* ---------------- user: front login, only four entries ---------------- */
+    const uc = await browser.newContext({ viewport: { width: 1280, height: 860 } }), up = await uc.newPage();
+    await up.goto(base + '/workspace.html');
+    await up.waitForURL(/\/login\.html\?next=/);
+    assert.ok(await up.isVisible('#un'), 'front login asks for a username');
+    await up.fill('#un', 'xiaowang'); await up.fill('#upw', 'wrong-password-1'); await up.click('#userBtn');
+    await up.waitForFunction(() => /用户名或密码不正确/.test(document.querySelector('#msg').textContent));
+    await up.fill('#upw', PASS); await up.click('#userBtn');
+    await up.waitForURL(/\/workspace\.html/);
+    await up.waitForSelector('#aij-topbar[data-role=user]');
+    await up.waitForFunction(() => document.body.dataset.role === 'user');
+    const entries = await up.$$eval('#aij-topbar a, #aij-topbar button', ns => ns.map(n => n.textContent.trim()));
+    assert.deepEqual(entries, ['我的任务', '＋ 新建任务', '实时大屏', '退出']);
+    await up.waitForSelector('#home:not([hidden])');
+    assert.deepEqual(await visibleBackendLinks(up), [], 'no back-end entry on the task center');
+    await shot(up, '2-user-home');
+    ok('user: front login with username; top bar only 我的任务 / ＋ 新建任务 / 实时大屏 / 退出; no back-end entry');
+
+    /* user creates a task end to end (free local mock) */
+    await up.click('#aij-new'); await up.waitForSelector('#s-go');
+    assert.deepEqual(await visibleBackendLinks(up), [], 'no back-end entry on the new-task form');
+    await up.fill('#s-goal', '给社区咖啡店写一份周末促销方案');
+    await up.click('#s-go');
+    await up.waitForSelector('#s-confirm[open]');
+    assert.match(await up.innerText('#s-confirm'), /你本月额度还剩 ¥5\.00（每月上限 ¥5\.00，由管理员设置）/);
+    await up.click('#s-confirm-ok');
+    await up.waitForSelector('#s-result:not([hidden])', { timeout: 30000 });
+    assert.deepEqual(await visibleBackendLinks(up), [], 'no back-end entry on the progress page');
+    await shot(up, '3-user-result');
+    ok('user: new task → RMB confirmation (with remaining monthly quota) → result, all in the front end');
+
+    /* back-end pages answer 403; the live screen has no 管理中心 entry */
+    for (const u of ['/admin.html', '/capabilities.html', '/project-intake.html']) {
+      const r = await up.goto(base + u); assert.equal(r.status(), 403, u);
+    }
+    await up.goto(base + '/panel.html');
+    await up.waitForSelector('#aij-topbar[data-role=user]');
+    await up.waitForFunction(() => document.body.dataset.role === 'user');
+    assert.equal(await up.isVisible('a.ov.adm'), false, 'live screen: 管理中心 hidden for a user');
+    assert.deepEqual(await up.$$eval('#aij-topbar a, #aij-topbar button', ns => ns.map(n => n.textContent.trim())), ['我的任务', '＋ 新建任务', '实时大屏', '退出']);
+    ok('user: /admin.html, /capabilities.html, /project-intake.html answer 403; live screen has the same four entries and no 管理中心');
+
+    /* another user never sees this task */
+    const lc = await browser.newContext({ viewport: { width: 1280, height: 860 } }), lp = await lc.newPage();
+    await lp.goto(base + '/login.html'); await lp.fill('#un', 'xiaoli'); await lp.fill('#upw', PASS); await lp.click('#userBtn');
+    await lp.waitForURL(/\/workspace\.html/); await lp.waitForSelector('#home-empty:not([hidden])');
+    assert.doesNotMatch(await lp.innerText('body'), /咖啡店/);
+    ok('two users: the second user sees an empty task list, not the first user\'s task');
+
+    /* cap used up: only the priced model is available, cap set to the amount already spent (¥0) */
+    await app.call('POST', '/api/models/' + localId + '/disable', {}); await app.call('POST', '/api/models/' + paidId + '/enable', {});
+    const users = (await app.call('GET', '/api/v2/users')).json.users, wang = users.find(u => u.username === 'xiaowang');
+    await app.call('POST', '/api/v2/users/' + wang.userId, { monthlyCapCny: 0 });
+    const before = (await app.call('GET', '/api/v2/projects')).json.projects.length;
+    await up.goto(base + '/workspace.html?new=1'); await up.waitForSelector('#s-go');
+    await up.fill('#s-goal', '再写一份会员日活动方案'); await up.click('#s-go');
+    await up.waitForSelector('#s-error:not([hidden])');
+    assert.match(await up.innerText('#s-error'), /本月额度已用完，请联系管理员/);
+    assert.equal(await up.isVisible('#s-confirm[open]'), false);
+    assert.equal((await app.call('GET', '/api/v2/projects')).json.projects.length, before, 'no task was created');
+    await shot(up, '4-user-quota');
+    ok('cap used up: plain 本月额度已用完，请联系管理员, no task created');
+
+    /* admin: disable → the user is logged out at once; reset password works */
+    await ap.click('#nav-users'); await ap.reload(); await ap.click('#nav-users');
+    ap.once('dialog', d => d.accept());
+    await ap.locator('#uBody tr', { hasText: 'xiaoli' }).locator('button[data-u-act=toggle]').click();
+    await ap.waitForFunction(() => [...document.querySelectorAll('#uBody tr')].some(r => /xiaoli/.test(r.textContent) && /已停用/.test(r.textContent)));
+    await lp.reload(); await lp.waitForURL(/\/login\.html/);
+    await ap.locator('#uBody tr', { hasText: 'xiaowang' }).locator('button[data-u-act=pw]').click();
+    await ap.fill('#uPwNew', 'brand-new-password-9'); await ap.click('#uPwSave');
+    await ap.waitForFunction(() => !document.querySelector('#modal').classList.contains('on') && /密码已重置/.test(document.querySelector('#toast').textContent));
+    await up.goto(base + '/workspace.html'); await up.waitForURL(/\/login\.html/);
+    await up.fill('#un', 'xiaowang'); await up.fill('#upw', 'brand-new-password-9'); await up.click('#userBtn'); await up.waitForURL(/\/workspace\.html/);
+    ok('admin: disabling logs the user out at once; reset password ends old sessions and the new password works');
+
+    /* user logout from the top bar; admin can still use the front end with the admin top bar */
+    await up.waitForSelector('#aij-logout'); await up.click('#aij-logout'); await up.waitForURL(/\/login\.html/);
+    await ap.goto(base + '/workspace.html'); await ap.waitForSelector('#aij-models');
+    assert.equal(await ap.isVisible('#aij-models'), true, 'admin top bar keeps 模型设置');
+    ok('user 退出 returns to the front login; the administrator can still enter the front end');
+  } finally {
+    await browser.close(); await app.stop(); mock.close();
+  }
+  console.log(`\nB8 前后台分离 e2e: ${results.length} checks passed`);
+  if (results.length !== 9) { console.error('expected 9 checks'); process.exit(1); }
+})().catch(e => { console.error(e); process.exit(1); });
