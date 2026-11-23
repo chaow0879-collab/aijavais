@@ -1,0 +1,2 @@
+const form=document.getElementById('unlockForm'),message=document.getElementById('message');
+form.addEventListener('submit',async e=>{e.preventDefault();try{const token=location.pathname.split('/').at(-1);const r=await fetch(`/api/unlock/${encodeURIComponent(token)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('sharePassword').value})});const j=await r.json();if(!r.ok)throw Error(j.error||'提取失败');location.assign(j.url)}catch(err){message.textContent=err.message}});

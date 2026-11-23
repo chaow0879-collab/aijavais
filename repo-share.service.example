@@ -1,0 +1,22 @@
+[Unit]
+Description=Repo private file sharing
+After=network.target
+
+[Service]
+Type=simple
+User=repo-share
+Group=repo-share
+WorkingDirectory=/opt/repo-share/app
+EnvironmentFile=/etc/repo-share.env
+ExecStart=/usr/bin/node /opt/repo-share/app/server.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/repo-share
+PrivateTmp=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

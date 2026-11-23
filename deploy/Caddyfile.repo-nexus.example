@@ -1,0 +1,7 @@
+# Reference only: add to Caddy's actual active configuration ONLY after discovering
+# its site organization, backing up original, and validating it.
+# Never overwrite the existing Caddyfile or modify unrelated site blocks.
+repo.ailp.fun {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8891
+}

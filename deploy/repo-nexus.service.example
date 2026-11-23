@@ -1,0 +1,22 @@
+[Unit]
+Description=REPO NEXUS team document vault (independent site)
+After=network.target
+
+[Service]
+Type=simple
+User=repo-nexus
+Group=repo-nexus
+WorkingDirectory=/opt/repo-nexus/app
+EnvironmentFile=/etc/repo-nexus.env
+ExecStart=/usr/bin/node /opt/repo-nexus/app/server.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/repo-nexus
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

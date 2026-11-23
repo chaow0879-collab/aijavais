@@ -1,2 +1,10 @@
-data/
+private-data/
+.env
+.env.*
+*.log
 node_modules/
+.tmp/
+*.sqlite
+*.sqlite-*
+.DS_Store
+coverage/
